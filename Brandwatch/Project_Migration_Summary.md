@@ -16,6 +16,7 @@
 > `& "C:\Users\batchuser\nssm-2.24-101-g897c7ad\win64\nssm.exe" <command>`
 
 ## 2. Architecture Overview
+
 The project migrates three legacy scripts (`channel.py`, `ContentPushSQL.py`, `comments.py`) into a unified Prefect 3.0 orchestration layer with automated monitoring.
 
 ### Core Components
@@ -74,13 +75,29 @@ The project migrates three legacy scripts (`channel.py`, `ContentPushSQL.py`, `c
     * **Idempotency:** Deletes existing SQL records for the target date range before inserting to prevent duplicates.
 * **Outputs:** `C:\BrandwatchOutputs\comment\`
 
-## 5. Verification Checklist
+## 5. Version Control (Git)
+The project is tracked using **Portable Git** (Local Repository).
+
+* **Git Executable:** `C:\Users\batchuser\PortableGit\bin\git.exe`
+* **Repository Root:** `C:\Prefect`
+* **Ignored Items (`.gitignore`):**
+    * `venv/` (Virtual Environment)
+    * `.env` (API Keys & Secrets)
+    * `BrandwatchOutputs/` (Data Files)
+    * `__pycache__/`
+* **Workflow:**
+    1. Make changes in VS Code.
+    2. Open PowerShell in `C:\Prefect`.
+    3. Run: `& "C:\Users\batchuser\PortableGit\bin\git.exe" add .`
+    4. Run: `& "C:\Users\batchuser\PortableGit\bin\git.exe" commit -m "Message"`
+
+## 6. Verification Checklist
 1.  **Dashboard:** Open `http://10.1.50.126:4200`. Ensure 3 Deployments exist.
 2.  **Logs:** Run a "Quick Run" for each flow and verify logs show successful database row insertions.
 3.  **Files:** Check `C:\BrandwatchOutputs\` subdirectories for freshly generated CSVs.
 4.  **Teams:** Verify a Success or Failure card is received in the relevant Teams channel for all three flows.
 
-## 6. Troubleshooting & Common Issues
+## 7. Troubleshooting & Common Issues
 
 ### Issue: Remote Dashboard Access (Port 4200)
 * **Cause:** Windows Firewall blocking inbound traffic to the Prefect UI.
@@ -105,14 +122,6 @@ The project migrates three legacy scripts (`channel.py`, `ContentPushSQL.py`, `c
     Restart-Service <ServiceName>
     ```
 
-### Issue: `Numeric value out of range` (SQL Error)
-* **Cause:** Pandas converting `NaN` (empty values) to `float` (e.g., `nan` or `1.0`), which crashes when inserted into a SQL `INT` column, or an integer exceeding the SQL column limit.
-* **Fix:** Ensure the Python script uses manual tuple generation with `None` handling:
-    ```python
-    # Correct handling
-    row_values = [None if pd.isnull(val) else val for val in row.values]
-    ```
-
 ### Issue: `String data, right truncation: length 2038 buffer 510`
 * **Cause:** `pyodbc`'s `fast_executemany` feature attempts to guess a memory buffer size (usually ~255 chars). It crashes when attempting to bulk insert long strings like social media captions or image URLs.
 * **Fix:** Disable `fast_executemany` on the database cursor before executing the insert.
@@ -127,10 +136,6 @@ The project migrates three legacy scripts (`channel.py`, `ContentPushSQL.py`, `c
     ```python
     df['date'] = pd.to_datetime(df['date'], utc=True, errors='coerce').dt.tz_localize(None)
     ```
-
-### Issue: `Invalid column name '...'` (SQL Error during Insert)
-* **Cause:** The DataFrame columns being inserted do not perfectly match the SQL database schema names.
-* **Fix:** Explicitly define the target columns and map/rename them in Pandas prior to insertion.
 
 ### Issue: Daily metrics perfectly match lifetime metrics (Deltas not calculating)
 * **Cause:** Pandas failed to fetch the previous historical records because the SQL `IN (...)` clause was too large (over 100,000 characters for 4,000+ IDs). `pyodbc` silently dropped the filter, returning 0 historical records. This caused the script to treat every post as "new" `(Lifetime - 0 = Lifetime)`.
