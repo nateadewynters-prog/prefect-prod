@@ -1,0 +1,14 @@
+# Ignore the Virtual Environment
+venv/
+.venv/
+
+# Ignore Secrets (API Keys & Passwords)
+.env
+**/.env
+
+# Ignore Large Data Outputs
+BrandwatchOutputs/
+
+# Ignore Python Cache
+__pycache__/
+*.pyc
