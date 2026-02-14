@@ -17,14 +17,14 @@
 
 ## 2. Architecture Overview
 
-The project migrates three legacy scripts (`channel.py`, `ContentPushSQL.py`, `comments.py`) into a unified Prefect 3.0 orchestration layer with automated monitoring.
+The project migrates three legacy scripts into a unified Prefect 3.0 orchestration layer. To maintain code quality and reduce redundancy (DRY principles), common infrastructure logic has been extracted into a shared utility module.
 
 ### Core Components
 * **Prefect Server:** Runs locally as a Windows Service, exposed to the network on port 4200.
+* **Shared Utilities (`brandwatch_utils.py`):** Centralizes SQL connections, Environment loading, and Teams notifications.
 * **Channel Flow:** Fetches channel-level metrics daily at 07:00 AM.
 * **Content Flow:** Fetches post-level metrics in 3 batches (Last 90 days) daily at 08:00 AM.
 * **Comments Flow:** Fetches comments, replies, and DMs daily at 09:30 AM.
-* **Notifications:** All flows send **Success** cards (with row counts) or **Failure** cards (with error traces) to Microsoft Teams via Webhook.
 
 ## 3. Service Configuration (NSSM)
 * **Service 1: prefect-server**
@@ -53,22 +53,29 @@ The project migrates three legacy scripts (`channel.py`, `ContentPushSQL.py`, `c
 
 ## 4. Codebase Summary
 
-### A. Channel Sync Script (`brandwatch_channel_sync.py`)
+### A. Shared Utilities (`brandwatch_utils.py`)
+* **Purpose:** Eliminates code duplication across the three flows.
+* **Functions:**
+    * `setup_environment()`: Loads `.env`.
+    * `get_db_connection()`: Returns a ready-to-use `pyodbc` connection object.
+    * `send_teams_notification()`: Standardized Success/Failure cards for MS Teams.
+
+### B. Channel Sync Script (`brandwatch_channel_sync.py`)
 * **Logic:** Fetches "Yesterday's" data (2 days ago).
-* **Key Features:** Retries API fetch 3 times; explicit check for empty DataFrames before SQL push.
+* **Key Features:** Retries API fetch 3 times; explicit check for empty DataFrames before SQL push. Uses `utils` for SQL and Alerts.
 * **Outputs:** `C:\BrandwatchOutputs\channel\`
 
-### B. Content Sync Script (`brandwatch_content_sync.py`)
+### C. Content Sync Script (`brandwatch_content_sync.py`)
 * **Logic:** Fetches content metrics in 3 batches (Last 90 days).
 * **Key Features:**
-    * **Idempotent File Generation:** Safely checks for, deletes, and replaces existing daily CSVs if a flow is manually retried on the dashboard, preventing file lock errors.
-    * **Python Delta Calculation:** Completely replaces legacy SQL Stored Procedure (`sp_UpdateReportingTable`). Calculates daily snapshot-to-delta metrics directly in Pandas memory before pushing.
-    * **Chunked SQL History Fetch:** Batches the historical SQL fetch into chunks of 500 `content_id`s to bypass pyodbc character string limits (preventing silent query failures).
-    * **Timezone & Data Cleaning:** Forces timezone-naive datetimes for Pandas math, strips whitespace from IDs, and drops duplicates to guarantee clean Pandas merges. Runs SQL inserts with `fast_executemany` disabled to handle extra-long social media captions safely.
+    * **Idempotent File Generation:** Safely checks for, deletes, and replaces existing daily CSVs.
+    * **Python Delta Calculation:** Replaces legacy SQL Stored Procedure. Calculates daily snapshot-to-delta metrics directly in Pandas memory before pushing.
+    * **Chunked SQL History Fetch:** Batches the historical SQL fetch into chunks of 500 `content_id`s to bypass pyodbc character string limits.
+    * **Timezone & Data Cleaning:** Forces timezone-naive datetimes and strips whitespace.
     * **Rate Limits:** Sleeps 7 minutes between batches.
 * **Outputs:** `C:\BrandwatchOutputs\content\`
 
-### C. Comments Sync Script (`brandwatch_comments_sync.py`)
+### D. Comments Sync Script (`brandwatch_comments_sync.py`)
 * **Logic:** Initiates an asynchronous export Job for comments/replies/DMs (2 days ago).
 * **Key Features:**
     * **Polling:** Polls the API until the CSV export is `COMPLETED`.
@@ -138,5 +145,5 @@ The project is tracked using **Portable Git** (Local Repository).
     ```
 
 ### Issue: Daily metrics perfectly match lifetime metrics (Deltas not calculating)
-* **Cause:** Pandas failed to fetch the previous historical records because the SQL `IN (...)` clause was too large (over 100,000 characters for 4,000+ IDs). `pyodbc` silently dropped the filter, returning 0 historical records. This caused the script to treat every post as "new" `(Lifetime - 0 = Lifetime)`.
+* **Cause:** Pandas failed to fetch the previous historical records because the SQL `IN (...)` clause was too large (over 100,000 characters for 4,000+ IDs). `pyodbc` silently dropped the filter, returning 0 historical records.
 * **Fix:** Chunk the unique IDs into smaller batches (e.g., 500) and iterate the SQL fetch, using `pd.concat()` to rebuild the history dataframe.
