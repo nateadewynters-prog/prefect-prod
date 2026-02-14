@@ -207,6 +207,7 @@ def push_content_to_sql(file_paths):
     # fast_executemany disabled for large text fields
     
     try:
+        # 1. Insert Data
         if 'date_of_upload' in combined_df.columns:
             for u_date in combined_df['date_of_upload'].dropna().unique():
                 cursor.execute("DELETE FROM bwContent WHERE date_of_upload = ?", pd.to_datetime(u_date).strftime('%Y-%m-%d'))
@@ -215,6 +216,36 @@ def push_content_to_sql(file_paths):
         sql = f"INSERT INTO bwContent ({', '.join(combined_df.columns)}) VALUES ({placeholders})"
         cursor.executemany(sql, [tuple(x if pd.notnull(x) else None for x in row) for row in combined_df.values])
         conn.commit()
+        
+        # 2. Log 7-Day History (New Logic)
+        try:
+            logger.info("--- 📊 Verifying Upload History (Last 7 Days) ---")
+            history_sql = """
+                SELECT CAST(date_of_upload AS DATE) as upload_date, COUNT(*) as row_count
+                FROM bwContent
+                WHERE date_of_upload >= DATEADD(day, -7, GETDATE())
+                GROUP BY CAST(date_of_upload AS DATE)
+                ORDER BY upload_date DESC
+            """
+            cursor.execute(history_sql)
+            rows = cursor.fetchall()
+
+            log_msg = "\n" + "-"*35 + "\n"
+            log_msg += f"{'Upload Date':<15} | {'Row Count':<10}\n"
+            log_msg += "-"*35 + "\n"
+            
+            for row in rows:
+                # row[0] is date, row[1] is count
+                date_str = str(row[0])
+                count_str = str(row[1])
+                log_msg += f"{date_str:<15} | {count_str:<10}\n"
+            
+            log_msg += "-"*35
+            logger.info(log_msg)
+            
+        except Exception as history_e:
+            logger.warning(f"⚠️ Data pushed successfully, but failed to fetch history logs: {history_e}")
+
         return len(combined_df)
     finally:
         conn.close()
