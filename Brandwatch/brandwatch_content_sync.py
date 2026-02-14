@@ -6,56 +6,22 @@ import time
 import numpy as np
 from datetime import datetime, timedelta, date
 from collections import defaultdict
-from dotenv import load_dotenv
 from prefect import flow, task, get_run_logger
 
+# Import Shared Utils
+import brandwatch_utils as utils
+
 # --- Configuration ---
+utils.setup_environment()
 API_KEY = '1SfCwWj7AAlGBPSgQFDC5Bf9PBLz6wsn' 
-BASE_URL = "https://api.falcon.io"
 OUTPUT_DIR = r'C:\BrandwatchOutputs\content'
 STATUSES = "published"
-TEAMS_WEBHOOK_URL = "https://dewyntersltd.webhook.office.com/webhookb2/df24aee1-6e35-4412-a954-62d7005cb565@93974508-dded-498b-9c98-7933dd4b0ffa/IncomingWebhook/f7c6f946322e4743b73909889d17bb69/4d94369e-f4c5-4157-8234-21533c1e276c/V2_hG_R7DI3Z9dTZNhgriHkcrG6uh2lO81bBhD3VbRuok1"
 
-load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
-
-# --- Helper Functions (Notifications & Logic) ---
-def send_teams_notification(message, logger):
-    """Sends a notification to MS Teams via Webhook."""
-    if not TEAMS_WEBHOOK_URL:
-        return
-    
-    payload = {
-        "type": "message",
-        "attachments": [
-            {
-                "contentType": "application/vnd.microsoft.card.adaptive",
-                "content": {
-                    "type": "AdaptiveCard",
-                    "body": [
-                        {
-                            "type": "TextBlock",
-                            "text": message,
-                            "wrap": True,
-                            "weight": "Bolder" if "Failed" in message else "Default",
-                            "color": "Attention" if "Failed" in message else "Default"
-                        }
-                    ],
-                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "version": "1.2"
-                }
-            }
-        ]
-    }
-    try:
-        r.post(TEAMS_WEBHOOK_URL, json=payload).raise_for_status()
-        logger.info("✅ Teams Notification Sent.")
-    except Exception as e:
-        logger.error(f"❌ Failed to send Teams notification: {e}")
-
+# --- Helper Logic ---
 def fetch_posts_logic(channel_map, target_date, logger):
     since = target_date.strftime('%Y-%m-%dT00:00:00.00Z')
     until = target_date.strftime('%Y-%m-%dT23:59:59.00Z')
-    url = f"{BASE_URL}/publish/items"
+    url = f"{utils.BASE_URL}/publish/items"
     params = {"apikey": API_KEY, "statuses": STATUSES, "since": since, "until": until, "limit": 100}
     all_posts = []
     try:
@@ -79,25 +45,26 @@ def fetch_posts_logic(channel_map, target_date, logger):
         return []
 
 def get_insights_logic(channel_to_content, since_req, until_req, logger):
-    req_url = f"{BASE_URL}/measure/v2/insights/content"
+    req_url = f"{utils.BASE_URL}/measure/v2/insights/content"
     headers = {"Content-Type": "application/json"}
     insight_request_ids = []
     channel_ids = list(channel_to_content.keys())
-    channel_batches = [channel_ids[x:x+15] for x in range(0, len(channel_ids), 15)]
-    for batch in channel_batches:
+    
+    # Batches of 15 channels
+    for batch in [channel_ids[x:x+15] for x in range(0, len(channel_ids), 15)]:
         all_content_pairs = []
         for ch_id in batch:
             for c_id in channel_to_content[ch_id]:
                 all_content_pairs.append((ch_id, c_id))
-        chunk_size = 300
-        for i in range(0, len(all_content_pairs), chunk_size):
-            chunk = all_content_pairs[i:i + chunk_size]
+        
+        # Chunks of 300 content items
+        for i in range(0, len(all_content_pairs), 300):
+            chunk = all_content_pairs[i:i + 300]
             payload_channels = []
             temp_map = defaultdict(list)
-            for ch_id, c_id in chunk:
-                temp_map[ch_id].append(c_id)
-            for ch_id, c_ids in temp_map.items():
-                payload_channels.append({'id': ch_id, 'contentIds': c_ids})
+            for ch_id, c_id in chunk: temp_map[ch_id].append(c_id)
+            for ch_id, c_ids in temp_map.items(): payload_channels.append({'id': ch_id, 'contentIds': c_ids})
+            
             body = {
                 'since': since_req, 'until': until_req,
                 'metricIds': [
@@ -109,45 +76,36 @@ def get_insights_logic(channel_to_content, since_req, until_req, logger):
                 ],
                 'channels': payload_channels
             }
-            for attempt in range(3):
-                try:
-                    res = r.post(req_url, json=body, params={'apikey': API_KEY}, headers=headers).json()
-                    req_id = res.get('insightsRequestId')
-                    if req_id:
-                        insight_request_ids.append(req_id)
-                        break
-                except Exception:
-                    time.sleep(5)
+            try:
+                res = r.post(req_url, json=body, params={'apikey': API_KEY}, headers=headers).json()
+                if res.get('insightsRequestId'): insight_request_ids.append(res.get('insightsRequestId'))
+            except Exception:
+                time.sleep(5)
+                
     all_results = []
     pending = list(insight_request_ids)
     while pending:
         for req_id in pending[:]:
-            poll_url = f"{BASE_URL}/measure/v2/insights/{req_id}"
             try:
-                res = r.get(poll_url, params={'apikey': API_KEY}).json()
+                res = r.get(f"{utils.BASE_URL}/measure/v2/insights/{req_id}", params={'apikey': API_KEY}).json()
                 status = res.get('status')
                 if status == 'READY':
                     data = res.get('data', {}).get('insights', {})
                     for metric, items in data.items():
-                        for item in items:
-                            all_results.append({'contentId': item['contentId'], 'metric': metric, 'value': item['value']})
+                        for item in items: all_results.append({'contentId': item['contentId'], 'metric': metric, 'value': item['value']})
                     pending.remove(req_id)
-                elif status == 'FAILED':
-                    pending.remove(req_id)
-            except:
-                pass
+                elif status == 'FAILED': pending.remove(req_id)
+            except: pass
             time.sleep(0.5)
         if pending: time.sleep(2)
     return all_results
 
 # --- Tasks ---
-
 @task(name="fetch_channels", retries=3)
 def fetch_channels():
     logger = get_run_logger()
-    url = f"{BASE_URL}/channels"
     try:
-        res = r.get(url, params={'apikey': API_KEY, 'limit': 1000})
+        res = r.get(f"{utils.BASE_URL}/channels", params={'apikey': API_KEY, 'limit': 1000})
         items = res.json().get('items', [])
         logger.info(f"Fetched {len(items)} channels.")
         return {ch['uuid']: ch.get('name', 'No name') for ch in items}
@@ -167,36 +125,27 @@ def process_content_batch(batch_num, start_date, end_date, channel_map):
         all_posts.extend(posts)
         channel_to_content = defaultdict(list)
         for post in posts:
-            c_ids = post.get("channels", [])
-            p_id = post.get("id")
-            if c_ids and p_id:
-                channel_to_content[c_ids[0]].append(p_id)
+            if post.get("channels") and post.get("id"):
+                channel_to_content[post["channels"][0]].append(post["id"])
         if channel_to_content:
-            since_req = current_date.strftime('%Y-%m-%dT00:00:00.00Z')
-            until_req = current_date.strftime('%Y-%m-%dT23:59:59.00Z')
-            results = get_insights_logic(channel_to_content, since_req, until_req, logger)
+            results = get_insights_logic(channel_to_content, current_date.strftime('%Y-%m-%dT00:00:00.00Z'), current_date.strftime('%Y-%m-%dT23:59:59.00Z'), logger)
             all_results.extend(results)
         current_date += timedelta(days=1)
 
-    if not all_posts:
-        logger.warning(f"No posts found for Batch {batch_num}")
-        return None
+    if not all_posts: return None
 
     metrics_map = defaultdict(dict)
-    for item in all_results:
-        metrics_map[item['contentId']][item['metric']] = item['value']
+    for item in all_results: metrics_map[item['contentId']][item['metric']] = item['value']
 
     export_rows = []
     today_date = date.today()
     for post in all_posts:
         c_id = post.get("id", "")
         m = metrics_map.get(c_id, {})
-        ch_ids = post.get("channels", [])
-        ch_uuid = ch_ids[0] if ch_ids else ""
         export_rows.append({
             "date_of_post": post.get("date", ""),
-            "uuid": ch_uuid,
-            "channel_name": channel_map.get(ch_uuid, ""),
+            "uuid": post.get("channels", [""])[0],
+            "channel_name": channel_map.get(post.get("channels", [""])[0], ""),
             "network": post.get("network",""),
             "placement": post.get("placement",""),
             "content_id": c_id,
@@ -222,174 +171,87 @@ def process_content_batch(batch_num, start_date, end_date, channel_map):
 
     df = pd.DataFrame(export_rows)
     df.columns = [c.replace(' ', '_').replace('/', '_') for c in df.columns]
-    today_str = datetime.now().strftime('%d%m%y')
-    filename = f'content_metrics_batch{batch_num}_updated_{today_str}.csv'
+    filename = f'content_metrics_batch{batch_num}_updated_{datetime.now().strftime("%d%m%y")}.csv'
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     full_path = os.path.join(OUTPUT_DIR, filename)
     df.to_csv(full_path, index=False)
-    logger.info(f"✅ Batch {batch_num} Saved: {filename} | Total Rows: {len(df)}")
+    logger.info(f"✅ Batch {batch_num} Saved: {filename} | Rows: {len(df)}")
     return full_path
 
 @task(name="push_content_to_sql")
 def push_content_to_sql(file_paths):
-    """
-    Reads CSVs, cleans data, and performs BULK INSERT into staging table.
-    """
     logger = get_run_logger()
     valid_files = [f for f in file_paths if f and os.path.exists(f)]
-    if not valid_files:
-        logger.warning("No valid batch files to process.")
-        return 0
-
-    server = os.getenv('SQL_SERVER')
-    database = os.getenv('SQL_ORGANICSOCIAL_DATABASE')
-    username = os.getenv('SQL_USERNAME')
-    password = os.getenv('SQL_PASSWORD')
-    conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password};LoginTimeout=30'
-
-    valid_columns = [
-        'date_of_post', 'uuid', 'channel_name', 'network', 'placement',
-        'content_id', 'message', 'picture', 'date_of_upload',
-        'likes_lifetime', 'video_views_lifetime', 'comments_lifetime', 
-        'shares_lifetime', 'clicks_lifetime', 'engagements_lifetime', 
-        'impressions_lifetime', 'reactions_lifetime', 'user_follows_lifetime', 
-        'views_lifetime', 'saves_lifetime', 'profile_clicks_lifetime', 
-        'link_clicks_lifetime', 'reach_lifetime', 'frequency_lifetime'
-    ]
-
-    numeric_cols = [
-        'likes_lifetime', 'video_views_lifetime', 'comments_lifetime',
-        'shares_lifetime', 'clicks_lifetime', 'engagements_lifetime',
-        'impressions_lifetime', 'reactions_lifetime', 'user_follows_lifetime', 
-        'views_lifetime', 'saves_lifetime', 'profile_clicks_lifetime', 
-        'link_clicks_lifetime', 'reach_lifetime', 'frequency_lifetime'
-    ]
+    if not valid_files: return 0
 
     dfs = []
     for fp in valid_files:
         try:
             d = pd.read_csv(fp)
-            logger.info(f"📥 Reading File: {os.path.basename(fp)} | Row Count: {len(d)}")
             d.columns = [c.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_') for c in d.columns]
-            d = d[[c for c in d.columns if c in valid_columns]]
             dfs.append(d)
-        except Exception as e:
-            logger.error(f"Error reading {fp}: {e}")
+        except Exception: pass
 
     if not dfs: return 0
-
     combined_df = pd.concat(dfs, ignore_index=True)
-    initial_count = len(combined_df)
-    logger.info(f"Combined Data for Staging SQL Push: {initial_count} rows total.")
-
+    
+    # Cleaning
     if 'date_of_post' in combined_df.columns:
         combined_df['date_of_post'] = pd.to_datetime(combined_df['date_of_post'], errors='coerce')
         combined_df = combined_df.dropna(subset=['date_of_post'])
-    if 'date_of_upload' in combined_df.columns:
-        combined_df['date_of_upload'] = pd.to_datetime(combined_df['date_of_upload'], errors='coerce')
-
-    for col in numeric_cols:
-        if col in combined_df.columns:
-            combined_df[col] = pd.to_numeric(combined_df[col], errors='coerce')
-
+    
     combined_df = combined_df.replace({np.nan: None})
     
-    conn = pyodbc.connect(conn_str)
+    conn = utils.get_db_connection()
     cursor = conn.cursor()
-    # fast_executemany disabled to prevent string truncation on picture/message columns
+    # fast_executemany disabled for large text fields
     
-    rows_inserted = 0
     try:
         if 'date_of_upload' in combined_df.columns:
-            upload_dates = combined_df['date_of_upload'].dropna().unique()
-            for u_date in upload_dates:
-                u_date_str = pd.to_datetime(u_date).strftime('%Y-%m-%d')
-                logger.info(f"Clearing existing staging data (bwContent) for upload date: {u_date_str}")
-                cursor.execute("DELETE FROM bwContent WHERE date_of_upload = ?", u_date_str)
+            for u_date in combined_df['date_of_upload'].dropna().unique():
+                cursor.execute("DELETE FROM bwContent WHERE date_of_upload = ?", pd.to_datetime(u_date).strftime('%Y-%m-%d'))
         
-        columns = ', '.join(combined_df.columns)
         placeholders = ', '.join(['?'] * len(combined_df.columns))
-        sql = f"INSERT INTO bwContent ({columns}) VALUES ({placeholders})"
-        data = [tuple(x if pd.notnull(x) else None for x in row) for row in combined_df.values]
-        cursor.executemany(sql, data)
+        sql = f"INSERT INTO bwContent ({', '.join(combined_df.columns)}) VALUES ({placeholders})"
+        cursor.executemany(sql, [tuple(x if pd.notnull(x) else None for x in row) for row in combined_df.values])
         conn.commit()
-        
-        rows_inserted = len(data)
-        logger.info(f"✅ Successfully inserted {rows_inserted} rows into bwContent (Archive).")
-    except Exception as e:
-        logger.error(f"SQL Insert Error on staging: {e}")
-        raise
+        return len(combined_df)
     finally:
         conn.close()
-    
-    return rows_inserted
 
 @task(name="calculate_and_push_deltas", retries=2, retry_delay_seconds=30)
 def calculate_and_push_deltas(file_paths):
-    """
-    Reads the fresh CSVs, fetches historical metrics from SQL in chunks, 
-    calculates daily deltas, and pushes directly to bwContent_Reporting.
-    """
     logger = get_run_logger()
-    logger.info("--- Starting Python Delta Calculation ---")
-
     valid_files = [f for f in file_paths if f and os.path.exists(f)]
-    if not valid_files:
-        logger.warning("No valid files found for delta calculation.")
-        return 0
+    if not valid_files: return 0
 
-    dfs = []
-    for fp in valid_files:
-        try:
-            d = pd.read_csv(fp)
-            d.columns = [c.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_') for c in d.columns]
-            dfs.append(d)
-        except Exception as e:
-            logger.error(f"Error reading {fp}: {e}")
-
-    if not dfs: return 0
+    dfs = [pd.read_csv(f) for f in valid_files]
     current_df = pd.concat(dfs, ignore_index=True)
+    current_df.columns = [c.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_') for c in current_df.columns]
     
-    # Clean IDs to prevent mismatches during merge
+    # ID Cleaning & Dedup
     current_df['content_id'] = current_df['content_id'].astype(str).str.strip()
     current_df = current_df.drop_duplicates(subset=['content_id', 'date_of_upload'])
 
-    # Parse dates and strip timezones to prevent Pandas subtraction errors
+    # Timezone strip
     current_df['date_of_post'] = pd.to_datetime(current_df['date_of_post'], utc=True, errors='coerce').dt.tz_localize(None)
     current_df['date_of_upload'] = pd.to_datetime(current_df['date_of_upload'], utc=True, errors='coerce').dt.tz_localize(None)
-    current_df = current_df.dropna(subset=['date_of_post'])
-    
-    # Calculate days since post
     current_df['days_since_post'] = (current_df['date_of_upload'] - current_df['date_of_post']).dt.days
 
-    metrics = [
-        'likes', 'video_views', 'comments', 'shares', 'clicks', 
-        'engagements', 'impressions', 'reactions', 'user_follows', 
-        'views', 'saves', 'profile_clicks', 'link_clicks', 'reach', 'frequency'
-    ]
-
-    server = os.getenv('SQL_SERVER')
-    database = os.getenv('SQL_ORGANICSOCIAL_DATABASE')
-    username = os.getenv('SQL_USERNAME')
-    password = os.getenv('SQL_PASSWORD')
-    conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password};LoginTimeout=30'
+    metrics = ['likes', 'video_views', 'comments', 'shares', 'clicks', 'engagements', 'impressions', 'reactions', 'user_follows', 'views', 'saves', 'profile_clicks', 'link_clicks', 'reach', 'frequency']
     
-    conn = pyodbc.connect(conn_str)
+    conn = utils.get_db_connection()
     cursor = conn.cursor()
 
     try:
         today_str = current_df['date_of_upload'].max().strftime('%Y-%m-%d')
         content_ids = current_df['content_id'].dropna().unique().tolist()
         
-        logger.info(f"Fetching previous lifetimes for {len(content_ids)} unique posts (in chunks of 500)...")
-
-        # BULLETPROOF FETCH: Chunk the IDs to prevent 140,000+ character string limits
+        # Chunked Fetch
         prev_dfs = []
-        chunk_size = 500
-        for i in range(0, len(content_ids), chunk_size):
-            chunk = tuple(content_ids[i:i + chunk_size])
+        for i in range(0, len(content_ids), 500):
+            chunk = tuple(content_ids[i:i + 500])
             in_clause = f"('{chunk[0]}')" if len(chunk) == 1 else str(chunk)
-            
             sql_fetch = f"""
                 SELECT content_id, 
                        likes_lifetime as prev_likes, video_views_lifetime as prev_video_views,
@@ -403,69 +265,36 @@ def calculate_and_push_deltas(file_paths):
                 FROM (
                     SELECT *, ROW_NUMBER() OVER(PARTITION BY content_id ORDER BY date_of_upload DESC) as rn
                     FROM bwContent_Reporting
-                    WHERE date_of_upload < '{today_str}' 
-                    AND content_id IN {in_clause}
-                ) latest_prev
-                WHERE rn = 1
+                    WHERE date_of_upload < '{today_str}' AND content_id IN {in_clause}
+                ) latest_prev WHERE rn = 1
             """
-            chunk_df = pd.read_sql(sql_fetch, conn)
-            prev_dfs.append(chunk_df)
+            prev_dfs.append(pd.read_sql(sql_fetch, conn))
 
-        # Combine all the chunks we found
-        if prev_dfs:
-            prev_df = pd.concat(prev_dfs, ignore_index=True)
-            logger.info(f"✅ Successfully fetched {len(prev_df)} historical records from SQL!")
-        else:
-            prev_df = pd.DataFrame(columns=['content_id'])
-            logger.warning("⚠️ No historical records found! All previous values will default to 0.")
-        
-        logger.info("Calculating Daily Deltas in memory...")
+        prev_df = pd.concat(prev_dfs, ignore_index=True) if prev_dfs else pd.DataFrame(columns=['content_id'])
         final_df = pd.merge(current_df, prev_df, on='content_id', how='left')
         
         for m in metrics:
-            lt_col = f"{m}_lifetime"
-            prev_col = f"prev_{m}"
-            daily_col = f"daily_{m}" # Matches SQL Column schema exactly
-            
-            if lt_col in final_df.columns:
-                final_df[lt_col] = pd.to_numeric(final_df[lt_col], errors='coerce').fillna(0)
-                
-                if prev_col in final_df.columns:
-                    final_df[prev_col] = pd.to_numeric(final_df[prev_col], errors='coerce').fillna(0)
-                else:
-                    final_df[prev_col] = 0
-                
-                final_df[daily_col] = final_df[lt_col] - final_df[prev_col]
+            lt = f"{m}_lifetime"
+            prev = f"prev_{m}"
+            if lt in final_df.columns:
+                final_df[prev] = pd.to_numeric(final_df.get(prev, 0), errors='coerce').fillna(0)
+                final_df[f"daily_{m}"] = pd.to_numeric(final_df[lt], errors='coerce').fillna(0) - final_df[prev]
 
-        # Explicitly define columns so they match bwContent_Reporting
-        target_columns = [
-            'date_of_post', 'uuid', 'channel_name', 'network', 'placement', 'content_id', 
-            'message', 'picture', 'date_of_upload', 'days_since_post'
-        ]
-        for m in metrics:
-            target_columns.extend([f"{m}_lifetime", f"daily_{m}"])
-            
-        final_df = final_df[[c for c in target_columns if c in final_df.columns]]
-        final_df = final_df.replace({np.nan: None}) 
-        
-        logger.info(f"Clearing any existing bwContent_Reporting data for {today_str} to prevent duplicates...")
+        # Cleanup & Push
+        final_df = final_df.replace({np.nan: None})
         cursor.execute("DELETE FROM bwContent_Reporting WHERE date_of_upload = ?", today_str)
-
-        logger.info(f"Pushing {len(final_df)} processed rows to SQL Reporting Table...")
-        columns_str = ', '.join(final_df.columns)
+        
+        cols = [c for c in final_df.columns if c in ['date_of_post', 'uuid', 'channel_name', 'network', 'placement', 'content_id', 'message', 'picture', 'date_of_upload', 'days_since_post'] or '_lifetime' in c or 'daily_' in c]
+        final_df = final_df[cols]
+        
         placeholders = ', '.join(['?'] * len(final_df.columns))
-        insert_sql = f"INSERT INTO bwContent_Reporting ({columns_str}) VALUES ({placeholders})"
-        
-        data_tuples = [tuple(x if pd.notnull(x) else None for x in row) for row in final_df.values]
-        cursor.executemany(insert_sql, data_tuples)
+        sql = f"INSERT INTO bwContent_Reporting ({', '.join(final_df.columns)}) VALUES ({placeholders})"
+        cursor.executemany(sql, [tuple(x if pd.notnull(x) else None for x in row) for row in final_df.values])
         conn.commit()
-        
-        rows_inserted = len(data_tuples)
-        logger.info(f"✅ Successfully inserted {rows_inserted} rows into bwContent_Reporting.")
-        return rows_inserted
+        return len(final_df)
 
     except Exception as e:
-        logger.error(f"❌ Delta Calculation Failed: {e}")
+        logger.error(f"Delta Calculation Failed: {e}")
         raise
     finally:
         conn.close()
@@ -473,11 +302,9 @@ def calculate_and_push_deltas(file_paths):
 @flow(name="Brandwatch Content Sync", log_prints=True)
 def brandwatch_content_flow():
     logger = get_run_logger()
-    
     try:
         channel_map = fetch_channels()
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        
         batches = [
             {"num": 1, "start": today - timedelta(days=90), "end": today - timedelta(days=60)},
             {"num": 2, "start": today - timedelta(days=59), "end": today - timedelta(days=30)},
@@ -485,45 +312,21 @@ def brandwatch_content_flow():
         ]
         
         generated_files = []
-
         for i, batch in enumerate(batches):
-            file_path = process_content_batch(batch["num"], batch["start"], batch["end"], channel_map)
-            generated_files.append(file_path)
-            
-            # Rate Limit Logic in Flow (Best Practice)
+            generated_files.append(process_content_batch(batch["num"], batch["start"], batch["end"], channel_map))
             if i < len(batches) - 1:
-                logger.info("⏳ Rate Limit Cooldown: Sleeping for 7 minutes...")
+                logger.info("⏳ Cooldown: Sleeping for 7 minutes...")
                 time.sleep(420) 
 
-        # Task 1: Insert Raw Data to Staging (Archive)
         raw_rows = push_content_to_sql(generated_files)
+        reporting_rows = calculate_and_push_deltas(generated_files) if raw_rows > 0 else 0
 
-        # Task 2: Calculate Deltas and Update Reporting Table
-        reporting_rows = 0
-        if raw_rows > 0:
-            reporting_rows = calculate_and_push_deltas(generated_files)
-
-        # Success Notification
-        send_teams_notification(
-            f"✅ **Brandwatch Content Sync Successful**\n\n"
-            f"**Date:** {date.today()}\n"
-            f"**Raw Rows Archived:** {raw_rows}\n"
-            f"**Reporting Rows Processed:** {reporting_rows}",
-            logger
+        utils.send_teams_notification(
+            f"✅ **Brandwatch Content Sync Successful**\n\n**Date:** {date.today()}\n**Raw:** {raw_rows}\n**Reporting:** {reporting_rows}", logger
         )
-
     except Exception as e:
-        error_message = str(e)
-        send_teams_notification(
-            f"❌ **Brandwatch Content Sync Failed**\n\n"
-            f"**Error:** {error_message}",
-            logger
-        )
+        utils.send_teams_notification(f"❌ **Brandwatch Content Sync Failed**\n\n**Error:** {str(e)}", logger)
         raise e
 
 if __name__ == "__main__":
-    brandwatch_content_flow.serve(
-        name="brandwatch-content-daily",
-        cron="0 8 * * *",
-        tags=["brandwatch", "content", "production"]
-    )
+    brandwatch_content_flow.serve(name="brandwatch-content-daily", cron="0 8 * * *", tags=["brandwatch", "content"])
