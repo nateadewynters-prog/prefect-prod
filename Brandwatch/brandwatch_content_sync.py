@@ -329,4 +329,4 @@ def brandwatch_content_flow():
         raise e
 
 if __name__ == "__main__":
-    brandwatch_content_flow.serve(name="brandwatch-content-daily", cron="0 8 * * *", tags=["brandwatch", "content"])
+    brandwatch_content_flow.serve(name="brandwatch-content-daily", cron="30 7 * * *", tags=["brandwatch", "content"])
