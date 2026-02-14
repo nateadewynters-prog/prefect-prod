@@ -116,4 +116,4 @@ def brandwatch_comments_flow():
         raise e
 
 if __name__ == "__main__":
-    brandwatch_comments_flow.serve(name="brandwatch-comments-daily", cron="30 9 * * *", tags=["brandwatch", "comments"])
+    brandwatch_comments_flow.serve(name="brandwatch-comments-daily", cron="30 8 * * *", tags=["brandwatch", "comments"])
