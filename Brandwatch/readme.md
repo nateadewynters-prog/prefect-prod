@@ -107,6 +107,13 @@ The project is tracked using **Portable Git** (Local Repository).
 
 ## 7. Troubleshooting & Common Issues
 
+### Mandatory Service Restarts
+> **⚠️ Critical:** Any changes made to the Python scripts (`.py`), the environment file (`.env`), or Prefect deployment configurations **require a manual restart of the Windows Services**. The services load the code into memory at startup; they will not reflect saved changes until restarted.
+
+**Restart all Brandwatch Sync services:**
+```powershell
+Restart-Service -Name "brandwatch-*-service" -Verbose
+
 ### Issue: Remote Dashboard Access (Port 4200)
 * **Cause:** Windows Firewall blocking inbound traffic to the Prefect UI.
 * **Fix:** Added Inbound Rule for TCP Port 4200.
