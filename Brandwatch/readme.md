@@ -95,8 +95,9 @@ The project is tracked using **Portable Git** (Local Repository).
 * **Workflow:**
     1. Make changes in VS Code.
     2. Open PowerShell in `C:\Prefect`.
-    3. Run: `& "C:\Users\batchuser\PortableGit\bin\git.exe" add .`
-    4. Run: `& "C:\Users\batchuser\PortableGit\bin\git.exe" commit -m "Message"`
+    3. $git = "C:\Users\batchuser\PortableGit\bin\git.exe"
+    4. Run: `& "C:\Users\batchuser\PortableGit\bin\git.exe" add .`
+    5. Run: `& "C:\Users\batchuser\PortableGit\bin\git.exe" commit -m "Message"`
 
 ## 6. Verification Checklist
 1.  **Dashboard:** Open `http://10.1.50.126:4200`. Ensure 3 Deployments exist.
