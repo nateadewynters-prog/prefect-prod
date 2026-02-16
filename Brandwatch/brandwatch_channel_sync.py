@@ -130,9 +130,15 @@ def push_to_sql(file_path):
         if df.empty: return 0
     except Exception: return 0
 
+    # Sanitize Columns
     df.columns = [c.replace(' ', '_').replace('(', '').replace(')', '') for c in df.columns]
+    
+    # Prepare data for insertion
     data_to_insert = [tuple(x if pd.notnull(x) else None for x in r) for r in df.values]
     if not data_to_insert: return 0
+
+    # IDEMPOTENCY FIX: Extract the date to ensure we can clear old data
+    target_date = df['date'].iloc[0]
 
     conn = None
     rows_inserted = 0
@@ -142,16 +148,29 @@ def push_to_sql(file_path):
             conn = utils.get_db_connection()
             cursor = conn.cursor()
             
+            # --- START TRANSACTION ---
+            
+            # 1. Delete existing records for this specific date (Idempotency)
+            # This ensures that if we retry, we don't duplicate rows.
+            logger.info(f"🧹 Clearing existing data for {target_date}...")
+            cursor.execute("DELETE FROM bwChannel WHERE date = ?", target_date)
+            
+            # 2. Insert new records
             placeholders = ', '.join(['?'] * len(df.columns))
             sql = f"INSERT INTO bwChannel ({', '.join(df.columns)}) VALUES ({placeholders})"
             cursor.executemany(sql, data_to_insert)
+            
+            # 3. Commit Transaction (Atomic: Both Delete and Insert succeed, or neither do)
             conn.commit()
             
             rows_inserted = len(data_to_insert)
-            logger.info(f"✅ SQL Import Successful: {rows_inserted} rows.")
+            logger.info(f"✅ SQL Import Successful: {rows_inserted} rows inserted for {target_date}.")
             break
+            
         except pyodbc.Error as e:
             logger.warning(f"SQL Insert failed (Attempt {attempt+1}): {e}")
+            if conn:
+                conn.rollback() # Rollback logic if something goes wrong mid-transaction
             if attempt < 4: sleep(5 * (2 ** attempt))
             else: raise
         finally:
