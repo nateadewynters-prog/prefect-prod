@@ -346,8 +346,8 @@ def brandwatch_content_flow():
         for i, batch in enumerate(batches):
             generated_files.append(process_content_batch(batch["num"], batch["start"], batch["end"], channel_map))
             if i < len(batches) - 1:
-                logger.info("⏳ Cooldown: Sleeping for 7 minutes...")
-                time.sleep(420) 
+                logger.info("⏳ Cooldown: Sleeping for 3 minutes...")
+                time.sleep(180) 
 
         raw_rows = push_content_to_sql(generated_files)
         reporting_rows = calculate_and_push_deltas(generated_files) if raw_rows > 0 else 0
@@ -360,4 +360,4 @@ def brandwatch_content_flow():
         raise e
 
 if __name__ == "__main__":
-    brandwatch_content_flow.serve(name="brandwatch-content-daily", cron="15 7 * * *", tags=["brandwatch", "content"])
+    brandwatch_content_flow.serve(name="brandwatch-content-daily", cron="30 7 * * *", tags=["brandwatch", "content"])
