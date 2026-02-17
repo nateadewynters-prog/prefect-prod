@@ -178,7 +178,7 @@ def process_content_batch(batch_num, start_date, end_date, channel_map):
     logger.info(f"✅ Batch {batch_num} Saved: {filename} | Rows: {len(df)}")
     return full_path
 
-@task(name="push_content_to_sql")
+@task(name="push_content_to_sql", retries=3, retry_delay_seconds=60)
 def push_content_to_sql(file_paths):
     logger = get_run_logger()
     valid_files = [f for f in file_paths if f and os.path.exists(f)]
