@@ -1,164 +1,116 @@
-# 📧 Email Extraction Automation (Prefect 3.0)
+# 📧 Medallion Email Extraction Automation (Prefect 3.0)
 
 **Host:** `DEW-DBSYNC01`
 **Status:** 🟢 Active (Polling every 60s)
-**Python:** 3.13.5
-**Memory Constraint:** ⚠️ **CRITICAL: 760MB RAM Limit**
+**Architecture:** JSON-Driven Medallion Pattern
 
 ---
 
 ## 1. Project Overview
 
-This project automates the extraction of financial data from incoming emails, replacing the manual Streamlit "Extraction Portal".
+This service automates financial data extraction from emails. It uses a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
 
-It operates as a **headless background service** that:
-
-1. Polls a specific Outlook inbox via Microsoft Graph API.
-2. Identifies relevant emails based on Sender and Subject.
-3. Downloads attachments immediately to disk (Disk-First Processing).
-4. Parses data using specific logic for **Malvern Theatres** (PDF) and **Sistic** (Excel).
-5. Outputs clean CSVs and sends status notifications to MS Teams.
+The system is **Config-Driven**: Adding a new show or venue does *not* require changing code, only updating `config/show_reporting_rules.json`.
 
 ---
 
-## 2. Architecture & Logic
+## 2. Directory Structure
 
-### 🔄 Stateless Polling (Read-Only Workaround)
-
-Due to security restrictions, the service has **Mail.Read** permissions but **cannot** mark emails as "Read" or move them to subfolders.
-
-To prevent processing the same email twice, the flow maintains a local history file:
-
-* **File:** `data/processed_ids.txt`
-* **Logic:**
-1. Fetch latest 50 emails.
-2. Check if `Message-ID` exists in `processed_ids.txt`.
-3. If **New**: Process -> Append ID to file.
-4. If **Exists**: Skip.
-
-
-
-### 🧠 Routing Logic
-
-The flow routes emails to specific parsers based on the following rules:
-
-| Route Name | Trigger Condition | Parser Module | Input Type |
-| --- | --- | --- | --- |
-| **MALVERN** | **From:** `figures@malvern-theatres.com`<br>
-
-<br>**Subject:** "Contractual Report" | `malvern_theatre_parser.py` | PDF |
-| **SISTIC** | **From:** `sisticadmin@sistic.com.sg`<br>
-
-<br>**Subject:** "Settlement" | `sistic_agency_parser.py` | Excel (XLS/XLSX) |
-
-### 💾 Memory Management (760MB RAM)
-
-The server has extremely limited memory. To prevent `MemoryError`:
-
-* **Disk-First:** Attachments are streamed directly to `data/inbox` and deleted from RAM variables immediately (`del content_bytes`).
-* **Aggressive GC:** `gc.collect()` is invoked manually after every file operation.
-* **Streamed Parsing:** Parsers read files from disk paths, never from in-memory byte buffers.
-
----
-
-## 3. Directory Structure
-
+```text
 C:\Prefect\outlook_automation\
-├── email_extraction_flow.py    # Main Orchestrator (Prefect Flow)
-├── outlook_utils.py            # Shared Utils (Teams, Env) [Renamed from brandwatch_utils]
-├── .env                        # Credentials (API Keys)
-├── parsers\
+├── config\                       # ⚙️ BRAIN
+│   └── show_reporting_rules.json # Defines routing & naming rules
+├── data\                         # 💾 STORAGE
+│   ├── inbox\                    # Temp landing zone
+│   ├── processed\                # Final Output CSVs
+│   ├── archive\                  # Renamed Raw Files (PDF/XLS)
+│   ├── failed\                   # Error files
+│   ├── lookups\                  # Enrichment data ({ShowID}_event_dates.csv)
+│   └── processed_ids.txt         # History log
+├── parsers\                      # 🧠 LOGIC
 │   ├── __init__.py
-│   ├── malvern_theatre_parser.py
-│   └── sistic_agency_parser.py
-└── data\
-    ├── inbox\                  # Raw downloads (Temp)
-    ├── processed\              # Final clean CSVs
-    ├── archive\                # Successfully parsed raw files
-    ├── failed\                 # Files that caused errors
-    └── processed_ids.txt       # Idempotency history tracke
+│   ├── ticketek_event_settlement_excel_parser.py        # Was sistic_agency_parser
+│   └── malvern_theatre_contractual_report_pdf_parser.py # Was malvern_theatre_parser
+├── outlook_utils.py              # Shared Utils
+└── email_extraction_flow.py      # Main Orchestrator
 
 ```
 
 ---
 
-## 4. Parser Technical Details
+## 3. Configuration & Routing
 
-### A. Malvern Theatres (`malvern_theatre_parser.py`)
+All logic is controlled by `config/show_reporting_rules.json`.
 
-* **Input:** "Contractual Report" PDFs.
-* **Technique:** Regex Pattern Matching (Non-coordinate based).
-* **Logic:** Scans for the pattern `Day -> Date -> Time -> Show Name -> Numbers`. It handles variable-length show titles by looking for gaps of 2+ spaces before the "Capacity" column.
-* **Verification:** Compares the sum of extracted rows against the "Summary Totals" footer in the PDF.
+### Current Rules
 
-### B. Sistic Agency (`sistic_agency_parser.py`)
+| Rule Name | Trigger | Target Parser | Output Filename Format |
+| --- | --- | --- | --- |
+| **MALVERN** | **From:** `malvern-theatres.co.uk`<br>
 
-* **Input:** "Event Settlement" Excel Grids.
-* **Technique:** Anchor & Scan.
-* **Logic:**
-1. Scans rows until it finds **"Summary Totals"** (The Anchor).
-2. Scans **Upwards** (approx. 5 rows) to find the Event Code.
-3. Scans **Downwards** to find "Value Total" (Paid) and "Comp Total" (Free).
+<br>**Subj:** "Figures" | `malvern_theatre...pdf_parser.py` | `{Show}_{Venue}_{ShowID}_{VenueID}_{DocID}_{RecDate}.csv` |
+| **TICKETEK** | **From:** `ticketek.com.sg`<br>
 
+<br>**Subj:** "Sales Summary" | `ticketek_event...excel_parser.py` | `{Show}_{Venue}_{ShowID}_{VenueID}_{DocID}_{RecDate}.csv` |
 
-* **Verification:** Compares extracted totals against the "Event Span Total" footer.
+### Example Filename Output
 
----
+If an email was received on **October 15, 2023**:
 
-## 5. Configuration & Setup
-
-### Environment Variables (`.env`)
-
-Create a `.env` file in the root directory:
-
-```ini
-# Azure AD / Graph API
-AZURE_TENANT_ID=your_tenant_id
-AZURE_CLIENT_ID=your_client_id
-AZURE_CLIENT_SECRET=your_client_secret
-TARGET_EMAIL_USER=reports@dewynters.com
-
-# MS Teams Webhook (Shared)
-TEAMS_WEBHOOK_URL=https://dewyntersltd.webhook.office.com/...
-
-```
-
-### Dependencies
-
-Ensure the virtual environment is active (`C:\Prefect\venv`):
-
-```powershell
-pip install msal pandas pdfplumber xlrd openpyxl prefect requests
-
-```
+* **Raw Archive:** `Jesus Christ Superstar_Ticketek SG_287_220_17_15_10_23.xls`
+* **Processed Data:** `Jesus Christ Superstar_Ticketek SG_287_220_17_15_10_23.csv`
 
 ---
 
-## 6. Service Deployment (NSSM)
+## 4. How to Add a New Show
 
-This flow runs as a persistent Windows Service.
+1. Navigate to `config/show_reporting_rules.json`.
+2. Add a new block to the `rules` array:
 
-**Service Name:** `outlook-extraction-service`
-
-To register or update the service:
-
-```powershell
-nssm install outlook-extraction-service "C:\Prefect\venv\Scripts\python.exe" "C:\Prefect\outlook_automation\email_extraction_flow.py"
-nssm set outlook-extraction-service AppDirectory "C:\Prefect\outlook_automation"
-nssm set outlook-extraction-service AppStdout "C:\Prefect\logs\outlook_out.log"
-nssm set outlook-extraction-service AppStderr "C:\Prefect\logs\outlook_err.log"
+```json
+{
+    "rule_name": "NEW_SHOW_RULE",
+    "active": true,
+    "match_criteria": {
+        "sender_domain": "new-venue.com",
+        "subject_keyword": "Settlement"
+    },
+    "metadata": {
+        "show_name": "New Musical",
+        "venue_name": "The Globe",
+        "show_id": "999",
+        "venue_id": "VN-GLOBE",
+        "document_id": "17"
+    },
+    "processing": {
+        "parser_module": "parsers.ticketek_event_settlement_excel_parser",
+        "parser_function": "extract_settlement_data",
+        "needs_lookup": true
+    }
+}
 
 ```
 
-*Note: The script uses `flow.serve()` internally, so it manages its own polling schedule (Cron: `* * * * *`).*
+3. Restart the service.
 
 ---
 
-## 7. Troubleshooting
+## 5. Technical Details
 
-| Issue | Cause | Fix |
-| --- | --- | --- |
-| **Flow crashes silently** | OOM (Out of Memory). | Check `gc.collect()` calls. Ensure no large objects (PDFs/Base64 strings) are held in variables. |
-| **Re-processing old emails** | `processed_ids.txt` deleted or corrupt. | Restore from backup or let it re-process (CSVs will just overwrite with same data). |
-| **Graph API 401 Unauthorized** | Expired Client Secret. | Update `AZURE_CLIENT_SECRET` in `.env` and restart service. |
-| **"Access Denied" on File Move** | File still open in Python. | Ensure `with open(...)` blocks are closed before `shutil.move` is called. |
+### Dynamic Parser Loading
+
+The orchestrator uses Python's `importlib` to load the parser specified in the JSON string `parser_module`. This means you can swap parsers without restarting the flow if the code is updated.
+
+### Date Handling
+
+The filename date (`15_10_23`) is derived strictly from the **Email Received Time** (via Graph API `receivedDateTime`), ensuring that re-running the script on an old email yields the exact same filename.
+
+### Lookups
+
+If `needs_lookup: true` is set, the system looks for:
+`data/lookups/{show_id}_event_dates.csv`
+It attempts to join this data with the parsed results before saving.
+
+```
+
+```

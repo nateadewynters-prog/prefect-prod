@@ -1,39 +1,45 @@
 import os
+import json
 import shutil
 import base64
 import gc
+import importlib
 import pandas as pd
 import requests
 import msal
 from datetime import datetime
 from prefect import flow, task, get_run_logger
+from dateutil import parser as date_parser
 
 # --- Local Imports ---
 import outlook_utils as utils
-from parsers import malvern_theatre_parser, sistic_agency_parser
 
-# --- Configuration ---
+# --- Configuration Load ---
+# Helper to load config relative to this script
+BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(BASE_PATH, "config", "show_reporting_rules.json")
+
+def load_config():
+    with open(CONFIG_PATH, 'r') as f:
+        return json.load(f)
+
+CONFIG = load_config()
+GLOBAL = CONFIG['global_settings']
+
+# Azure Credentials
 utils.setup_environment()
-
-# Azure / Graph API Credentials
 TENANT_ID = os.getenv("AZURE_TENANT_ID")
 CLIENT_ID = os.getenv("AZURE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
-# CRITICAL: Ensure this matches the inbox you sent the email to (e.g., figures@dewynters.com)
-TARGET_EMAIL_USER = os.getenv("TARGET_EMAIL_USER")  
+TARGET_EMAIL_USER = os.getenv("TARGET_EMAIL_USER")
 
-# Directory Setup
-BASE_DIR = r"C:\Prefect\outlook_automation\data"
-INBOX_DIR = os.path.join(BASE_DIR, "inbox")
-PROCESSED_DIR = os.path.join(BASE_DIR, "processed")
-ARCHIVE_DIR = os.path.join(BASE_DIR, "archive")
-FAILED_DIR = os.path.join(BASE_DIR, "failed")
-HISTORY_FILE = os.path.join(BASE_DIR, "processed_ids.txt")
+# --- Directory Setup ---
+# Ensure all directories from JSON exist
+for key, relative_path in GLOBAL['data_dirs'].items():
+    full_path = os.path.join(GLOBAL['base_dir'], relative_path)
+    os.makedirs(full_path, exist_ok=True)
 
-# Ensure directories exist
-for folder in [INBOX_DIR, PROCESSED_DIR, ARCHIVE_DIR, FAILED_DIR]:
-    os.makedirs(folder, exist_ok=True)
-
+HISTORY_FILE = os.path.join(GLOBAL['base_dir'], GLOBAL['history_file'])
 if not os.path.exists(HISTORY_FILE):
     with open(HISTORY_FILE, 'w') as f: pass
 
@@ -57,20 +63,41 @@ def save_processed_id(message_id):
     with open(HISTORY_FILE, 'a') as f:
         f.write(f"{message_id}\n")
 
+def generate_standard_filename(metadata, received_date_str, extension):
+    """
+    Format: {show}_{venue}_{showid}_{venueid}_{documentid}_{dd_mm_yy}.{ext}
+    Crucial: Date is EMAIL RECEIVED DATE, not today.
+    """
+    # Parse ISO date from Graph API (e.g., 2023-10-15T14:30:00Z)
+    dt = date_parser.parse(received_date_str)
+    date_formatted = dt.strftime("%d_%m_%y")
+    
+    filename = (
+        f"{metadata['show_name']}_"
+        f"{metadata['venue_name']}_"
+        f"{metadata['show_id']}_"
+        f"{metadata['venue_id']}_"
+        f"{metadata['document_id']}_"
+        f"{date_formatted}"
+        f"{extension}"
+    )
+    # Sanitize filename
+    return filename.replace(" ", "_").replace("/", "-")
+
 # --- Tasks ---
 
-@task(name="fetch_new_emails", retries=2)
-def fetch_new_emails():
+@task(name="fetch_and_route_emails", retries=2)
+def fetch_and_route_emails():
     logger = get_run_logger()
     token = get_graph_token()
     headers = {'Authorization': f'Bearer {token}'}
     
-    # FIX: Fetch top 50 NEWEST messages (regardless of Read/Unread status)
+    # Fetch top 50 newest messages
     endpoint = f"https://graph.microsoft.com/v1.0/users/{TARGET_EMAIL_USER}/messages"
     params = {
         '$top': 50,
         '$select': 'id,subject,from,hasAttachments,receivedDateTime',
-        '$orderby': 'receivedDateTime DESC'  # <--- Critical: Newest first
+        '$orderby': 'receivedDateTime DESC'
     }
     
     try:
@@ -84,57 +111,50 @@ def fetch_new_emails():
     processed_ids = load_processed_ids()
     candidates = []
 
-    logger.info(f"🔎 Scanned {len(emails)} recent emails (looking for 'Settlement' or 'Contractual').")
+    logger.info(f"🔎 Scanning {len(emails)} emails against {len(CONFIG['rules'])} active rules.")
 
     for email in emails:
         msg_id = email['id']
-        subject = email.get('subject', '') or ""
-        sender_email = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
         
-        # 1. Skip if already processed
-        if msg_id in processed_ids:
+        if msg_id in processed_ids or not email.get('hasAttachments'):
             continue
 
-        # 2. Skip if no attachments
-        if not email.get('hasAttachments'):
-            continue
+        subject = (email.get('subject') or "").lower()
+        sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
+        received_date = email.get('receivedDateTime')
 
-        # 3. Routing Logic (Case Insensitive)
-        route = None
-        subj_lower = subject.lower()
+        # Match against JSON rules
+        matched_rule = None
+        for rule in CONFIG['rules']:
+            if not rule.get('active'): continue
+            
+            crit = rule['match_criteria']
+            # Check Sender Domain (flexible containment check)
+            if crit['sender_domain'].lower() in sender:
+                # Check Subject Keyword
+                if crit['subject_keyword'].lower() in subject:
+                    matched_rule = rule
+                    break
         
-        # Route A: Malvern
-        if "malvern-theatres.com" in sender_email and "contractual report" in subj_lower:
-            route = "MALVERN"
-        
-        # Route B: Sistic (AND generic testing)
-        # Added 'dewynters.com' to sender check so you can test from your own email
-        elif ("sistic.com.sg" in sender_email or "dewynters.com" in sender_email) and "settlement" in subj_lower:
-            route = "SISTIC"
-        
-        if route:
+        if matched_rule:
             candidates.append({
                 "id": msg_id,
-                "subject": subject,
-                "sender": sender_email,
-                "route": route
+                "subject": email.get('subject'),
+                "received_date": received_date,
+                "rule": matched_rule
             })
             
-    if candidates:
-        logger.info(f"✅ Found {len(candidates)} new actionable emails.")
-    else:
-        logger.info("ℹ️  No new matching emails found in the last 50.")
-        
     return candidates
 
 @task(name="process_email_attachment")
 def process_email_attachment(email_meta):
     logger = get_run_logger()
     msg_id = email_meta['id']
-    route = email_meta['route']
-    subject = email_meta['subject']
+    rule = email_meta['rule']
+    meta = rule['metadata']
+    proc_config = rule['processing']
     
-    logger.info(f"🚀 Processing: '{subject}' (Route: {route})")
+    logger.info(f"🚀 Processing Rule: {rule['rule_name']} | Subject: {email_meta['subject']}")
     
     token = get_graph_token()
     headers = {'Authorization': f'Bearer {token}'}
@@ -142,80 +162,106 @@ def process_email_attachment(email_meta):
     # 1. Get Attachments
     att_url = f"https://graph.microsoft.com/v1.0/users/{TARGET_EMAIL_USER}/messages/{msg_id}/attachments"
     resp = requests.get(att_url, headers=headers)
-    
-    if resp.status_code != 200:
-        logger.error(f"Failed to fetch attachments: {resp.text}")
-        return
+    if resp.status_code != 200: return
 
     attachments = resp.json().get('value', [])
     if not attachments:
-        save_processed_id(msg_id) 
+        save_processed_id(msg_id)
         return
 
     # Process first attachment
     att = attachments[0]
-    filename = att['name']
+    original_filename = att['name']
+    file_ext = os.path.splitext(original_filename)[1].lower()
     
-    # 2. Disk-First Save
+    # 2. Download to Inbox (Temp)
+    inbox_dir = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['inbox'])
+    temp_path = os.path.join(inbox_dir, original_filename)
+    
     try:
-        content_b64 = att['contentBytes']
-        content_bytes = base64.b64decode(content_b64)
-        del content_b64 
-        
-        temp_path = os.path.join(INBOX_DIR, filename)
         with open(temp_path, 'wb') as f:
-            f.write(content_bytes)
-        del content_bytes
+            f.write(base64.b64decode(att['contentBytes']))
         gc.collect() 
-
     except Exception as e:
         logger.error(f"❌ Download failed: {e}")
         return
 
-    # 3. Parsing
+    # 3. Dynamic Parsing
     parse_success = False
     try:
-        if route == "MALVERN":
-            parsed_data, parse_logs = malvern_theatre_parser.extract_contractual_report(temp_path)
-        elif route == "SISTIC":
-            parsed_data, parse_logs = sistic_agency_parser.extract_settlement_data(temp_path)
-
-        # Log errors from parser
+        # Import module dynamically from JSON config string
+        module_name = proc_config['parser_module']
+        func_name = proc_config['parser_function']
+        
+        parser_module = importlib.import_module(module_name)
+        parser_function = getattr(parser_module, func_name)
+        
+        # Execute Parser
+        parsed_data, parse_logs = parser_function(temp_path)
+        
+        # Log Parser Feedback
         for line in parse_logs:
             if "CRITICAL" in line or "MISMATCH" in line:
-                logger.warning(f"Parser: {line}")
+                logger.warning(f"[{rule['rule_name']}] {line}")
 
         if parsed_data:
-            parse_success = True
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            csv_name = f"{route}_{timestamp}.csv"
-            csv_path = os.path.join(PROCESSED_DIR, csv_name)
+            df = pd.DataFrame(parsed_data)
             
-            pd.DataFrame(parsed_data).to_csv(csv_path, index=False)
-            logger.info(f"✅ CSV Saved: {csv_name}")
+            # 4. Lookup Enrichment (Optional)
+            if proc_config.get('needs_lookup'):
+                lookup_dir = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['lookups'])
+                lookup_file = os.path.join(lookup_dir, f"{meta['show_id']}_event_dates.csv")
+                
+                if os.path.exists(lookup_file):
+                    logger.info(f"   Using Lookup: {lookup_file}")
+                    lookup_df = pd.read_csv(lookup_file)
+                    # Attempt merge on 'Date' or similar - simplistic join for now
+                    # In production, ensure join keys match parser output
+                    # df = df.merge(lookup_df, on='Date', how='left') 
+                else:
+                    logger.warning(f"   ⚠️ Lookup file needed but missing: {lookup_file}")
+
+            # 5. Generate Standard Filenames
+            std_filename_base = generate_standard_filename(meta, email_meta['received_date'], "")
+            
+            # Save CSV
+            csv_name = f"{std_filename_base}.csv"
+            csv_path = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['processed'], csv_name)
+            df.to_csv(csv_path, index=False)
+            
+            # 6. Archive Original File (Renamed)
+            archive_name = f"{std_filename_base}{file_ext}"
+            archive_path = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['archive'], archive_name)
+            
+            shutil.move(temp_path, archive_path)
+            
+            logger.info(f"✅ Saved CSV: {csv_name}")
+            logger.info(f"✅ Archived Raw: {archive_name}")
             
             utils.send_teams_notification(
-                f"✅ **Extraction Success: {route}**\n\nSubject: {subject}\nRows: {len(parsed_data)}", logger
+                f"✅ **Extraction Success**\n\nRule: {rule['rule_name']}\nRows: {len(df)}\nFile: {csv_name}", logger
             )
+            parse_success = True
         else:
             logger.warning("⚠️ Parser returned 0 rows.")
 
     except Exception as e:
-        logger.error(f"❌ Parsing Error: {e}")
-        utils.send_teams_notification(f"❌ Failed: {route}\n{e}", logger)
+        logger.error(f"❌ Processing Error: {e}")
+        utils.send_teams_notification(f"❌ Failed: {rule['rule_name']}\n{e}", logger)
     
-    # 4. Cleanup & Mark Complete
-    try:
-        dest_dir = ARCHIVE_DIR if parse_success else FAILED_DIR
-        shutil.move(temp_path, os.path.join(dest_dir, filename))
-    except Exception: pass
+    # 7. Cleanup Failed Files
+    if not parse_success and os.path.exists(temp_path):
+        failed_dir = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['failed'])
+        try:
+            shutil.move(temp_path, os.path.join(failed_dir, original_filename))
+        except: pass
 
     save_processed_id(msg_id)
     gc.collect()
 
 @flow(name="Email Extraction Flow", log_prints=True)
 def email_extraction_flow():
-    candidates = fetch_new_emails()
+    candidates = fetch_and_route_emails()
     for email in candidates:
         process_email_attachment(email)
 
