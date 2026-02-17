@@ -15,14 +15,14 @@
             "rule_name": "MALVERN_SILENCE_OF_THE_LAMBS",
             "active": true,
             "match_criteria": {
-                "sender_domain": "malvern-theatres.co.uk",
-                "subject_keyword": "Figures"
+                "sender_domain": "figures@malvern-theatres.co.uk",
+                "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs"
             },
             "metadata": {
                 "show_name": "The Silence of the Lambs",
                 "venue_name": "Malvern Theatres",
                 "show_id": "285",
-                "venue_id": "VN-MALV",
+                "venue_id": "UNKNOWN",
                 "document_id": "17"
             },
             "processing": {
@@ -35,8 +35,8 @@
             "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR",
             "active": true,
             "match_criteria": {
-                "sender_domain": "ticketek.com.sg",
-                "subject_keyword": "Sales Summary"
+                "sender_domain": "info@ticketek.com.sg",
+                "subject_keyword": "Jesus Christ Superstar (Sales Summary)"
             },
             "metadata": {
                 "show_name": "Jesus Christ Superstar",
