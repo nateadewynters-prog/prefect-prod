@@ -155,3 +155,15 @@ Restart-Service -Name "brandwatch-*-service" -Verbose
 ### Issue: Daily metrics perfectly match lifetime metrics (Deltas not calculating)
 * **Cause:** Pandas failed to fetch the previous historical records because the SQL `IN (...)` clause was too large (over 100,000 characters for 4,000+ IDs). `pyodbc` silently dropped the filter, returning 0 historical records.
 * **Fix:** Chunk the unique IDs into smaller batches (e.g., 500) and iterate the SQL fetch, using `pd.concat()` to rebuild the history dataframe.
+
+## 8. Maintenance Logs & Troubleshooting Git
+
+### Issue: `fatal: unable to write new index file` (February 17, 2026)
+* **Symptoms:** During `git add`, the process failed with a rename error: `Rename from '.git/index.lock' to '.git/index' failed`.
+* **Cause:** On Windows Server 10.0.14393, background processes (likely the Prefect Server's file watcher or Windows Defender) seized the temporary `index.lock` file immediately upon creation, preventing Git from finalizing the staging area.
+* **Resolution Steps:**
+    1. **Kill Background Processes:** Ensure all Prefect services and the Prefect UI server are stopped to release folder handles.
+    2. **Manual Lock Removal:** Delete the stale lock file using `del .git\index.lock`.
+    3. **Administrative Execution:** Use a PowerShell session with **Administrator privileges** to override system-level file locks.
+    4. **Wait Policy:** If the `(y/n)` prompt appears during a rename failure, wait 10 seconds before responding 'y' to allow background scanners to release the file.
+* **Portable Git Note:** Always use the full path to the executable: `& "C:\Users\batchuser\PortableGit\bin\git.exe" <command>`.
