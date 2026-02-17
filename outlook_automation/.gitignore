@@ -1,0 +1,34 @@
+# --- Python Basics ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.pytest_cache/
+
+# --- Environment Variables (Crucial for Security) ---
+# Prevents uploading your Azure Client Secrets
+.env
+.env.local
+
+# --- Project Data Directories ---
+# You likely do not want to commit the actual email attachments or processed CSVs
+# Assuming your config points to a 'data' folder:
+data/
+# Or specifically:
+data/inbox/
+data/processed/
+data/archive/
+data/failed/
+
+# Note: You might WANT to keep the 'data/lookups/' folder in git if those 
+# event date files are static reference data. If they change daily, ignore them too.
+# data/lookups/
+
+# --- Runtime History ---
+# Ignore the file that tracks which emails have been processed
+processed_ids.txt
+history.txt
+history.json

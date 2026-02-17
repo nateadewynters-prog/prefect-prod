@@ -207,17 +207,36 @@ def process_email_attachment(email_meta):
         if parsed_data:
             df = pd.DataFrame(parsed_data)
             
-            # 4. Lookup Enrichment (Optional)
+            # 4. Lookup Enrichment (Updated)
             if proc_config.get('needs_lookup'):
                 lookup_dir = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['lookups'])
-                lookup_file = os.path.join(lookup_dir, f"{meta['show_id']}_event_dates.csv")
+                # This constructs "287_220_event_dates.csv" based on metadata in your config
+                lookup_filename = f"{meta['show_id']}_{meta['venue_id']}_event_dates.csv"
+                lookup_file = os.path.join(lookup_dir, lookup_filename)
                 
                 if os.path.exists(lookup_file):
-                    logger.info(f"   Using Lookup: {lookup_file}")
-                    lookup_df = pd.read_csv(lookup_file)
-                    # Attempt merge on 'Date' or similar - simplistic join for now
-                    # In production, ensure join keys match parser output
-                    # df = df.merge(lookup_df, on='Date', how='left') 
+                    logger.info(f"   🔗 Joining with Lookup: {lookup_filename}")
+                    try:
+                        lookup_df = pd.read_csv(lookup_file)
+                        
+                        # Normalize columns to ensure match (strip whitespace)
+                        # The Ticketek parser outputs "Performance/Event Code"
+                        # The Lookup CSV has "Show Code"
+                        df['Performance/Event Code'] = df['Performance/Event Code'].astype(str).str.strip()
+                        lookup_df['Show Code'] = lookup_df['Show Code'].astype(str).str.strip()
+                        
+                        # Perform the Merge
+                        df = df.merge(
+                            lookup_df[['Show Code', 'Performance Date Time']], # Select only needed columns
+                            left_on='Performance/Event Code',
+                            right_on='Show Code',
+                            how='left'
+                        )
+                        
+                        logger.info(f"   ✅ Joined successfully. Added 'Performance Date Time'.")
+                        
+                    except Exception as join_err:
+                        logger.error(f"   ❌ Lookup Join Failed: {join_err}")
                 else:
                     logger.warning(f"   ⚠️ Lookup file needed but missing: {lookup_file}")
 
