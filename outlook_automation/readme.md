@@ -25,7 +25,7 @@ C:\Prefect\outlook_automation\
 │   ├── processed\                # Final Output CSVs
 │   ├── archive\                  # Renamed Raw Files (PDF/XLS)
 │   ├── failed\                   # Error files
-│   ├── lookups\                  # Enrichment data ({ShowID}_event_dates.csv)
+│   ├── lookups\                  # Enrichment data ({ShowID}_{VenueID}_event_dates.csv)
 │   └── processed_ids.txt         # History log
 ├── parsers\                      # 🧠 LOGIC
 │   ├── __init__.py
