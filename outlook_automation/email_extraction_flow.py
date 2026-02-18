@@ -241,7 +241,7 @@ def process_email_attachment(email_meta):
     if not target_att:
         error_msg = f"The attachment type expected was {expected_ext}, but received {', '.join(actual_exts)}"
         logger.warning(f"[{r_name}] {error_msg}")
-        utils.send_teams_notification(f"⚠️ **Attachment Mismatch**\nRule: {r_name}\n{error_msg}", logger)
+        utils.send_teams_notification(f"⚠️ **Attachment Mismatch**\n\n**Rule:** {r_name}\n**Error:** {error_msg}", logger)
         save_processed_id(msg_id, r_name)
         return False, None, r_name
 
@@ -252,30 +252,38 @@ def process_email_attachment(email_meta):
     try:
         with open(temp_path, 'wb') as f:
             f.write(base64.b64decode(target_att['contentBytes']))
+        logger.info(f"   📥 Downloaded matching attachment to inbox directory.")
     except Exception as e:
         logger.error(f"❌ Download failed: {e}")
         return False, None, r_name
 
     try:
+        logger.info(f"   ⚙️ Initializing parser: {proc_config['parser_module']}...")
         parser_module = importlib.import_module(proc_config['parser_module'])
         parser_function = getattr(parser_module, proc_config['parser_function'])
         
-        parsed_data, parse_logs = parser_function(temp_path)
+        # UNPACKING 3 VARIABLES NOW (Data, Logs, Summary Metrics)
+        parsed_data, parse_logs, summary_stats = parser_function(temp_path)
         
+        # Echo Parser Logs to Prefect
         for line in parse_logs:
-            if "CRITICAL" in line or "MISMATCH" in line:
-                logger.warning(f"[{r_name}] {line}")
+            if "CRITICAL" in line or "MISMATCH" in line or "❌" in line:
+                logger.warning(f"   [{r_name} Parser] {line}")
+            else:
+                logger.info(f"   [{r_name} Parser] {line}")
 
         if not parsed_data:
-            raise ValueError("Parser returned 0 rows.")
+            raise ValueError("Parser completed but returned 0 rows.")
 
         df = pd.DataFrame(parsed_data)
+        matched_lookup_count = "N/A"
         
         if proc_config.get('needs_lookup'):
             lookup_dir = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['lookups'])
             lookup_file = os.path.join(lookup_dir, f"{meta['show_id']}_{meta['venue_id']}_event_dates.csv")
             
             if os.path.exists(lookup_file):
+                logger.info(f"   🔀 Attempting merge with lookup file: {os.path.basename(lookup_file)}")
                 lookup_df = pd.read_csv(lookup_file)
                 df['Performance/Event Code'] = df['Performance/Event Code'].astype(str).str.strip()
                 lookup_df['Show Code'] = lookup_df['Show Code'].astype(str).str.strip()
@@ -286,8 +294,15 @@ def process_email_attachment(email_meta):
                     right_on='Show Code',
                     how='left'
                 )
+                
+                # Check how many rows successfully matched the lookup
+                matched_lookup_count = df['Performance Date Time'].notna().sum()
+                logger.info(f"   ✅ Lookup merge complete. {matched_lookup_count}/{len(df)} rows matched.")
+                
+                if matched_lookup_count < len(df):
+                    logger.warning(f"   ⚠️ Some Event Codes did not match the lookup file!")
             else:
-                logger.warning(f"   ⚠️ Lookup file needed but missing: {lookup_file}")
+                logger.warning(f"   ⚠️ Lookup file required but missing: {lookup_file}")
 
         csv_name = std_filename_full.replace(expected_ext, ".csv")
         csv_path = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['processed'], csv_name)
@@ -296,16 +311,31 @@ def process_email_attachment(email_meta):
         archive_path = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['archive'], std_filename_full)
         shutil.move(temp_path, archive_path)
         
-        logger.info(f"✅ Saved CSV: {csv_name}")
-        utils.send_teams_notification(f"✅ **Extraction Success**\n\nRule: {r_name}\nRows: {len(df)}\nFile: {csv_name}", logger)
+        logger.info(f"✅ Final CSV saved successfully: {csv_name}")
         
-        # Save Audit & Return Success
+        # --- RICH TEAMS NOTIFICATION ---
+        # Formatted to visually verify if the parsed values match the report
+        tix = summary_stats.get('total_tickets', 0)
+        gross = summary_stats.get('total_gross', 0.0)
+        
+        success_msg = (
+            f"✅ **Extraction Success**\n\n"
+            f"**Rule:** {r_name}\n"
+            f"**File:** {csv_name}\n\n"
+            f"📊 **Extraction Summary:**\n"
+            f"- **Rows Extracted:** {len(df)}\n"
+            f"- **Total Tickets:** {tix:,}\n"
+            f"- **Total Gross:** ${gross:,.2f}\n"
+            f"- **Lookup Match:** {matched_lookup_count}/{len(df)} rows"
+        )
+        utils.send_teams_notification(success_msg, logger)
+        
         save_processed_id(msg_id, r_name)
         return True, email_meta['received_date'], r_name
 
     except Exception as e:
         logger.error(f"❌ Processing Error: {e}")
-        utils.send_teams_notification(f"❌ Failed: {r_name}\n{e}", logger)
+        utils.send_teams_notification(f"❌ **Extraction Failed**\n\n**Rule:** {r_name}\n**Error:** {e}", logger)
         
         if os.path.exists(temp_path):
             failed_dir = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['failed'])

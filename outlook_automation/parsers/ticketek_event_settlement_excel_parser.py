@@ -132,5 +132,13 @@ def extract_settlement_data(file_path):
             error_msg = f"Data schema mismatch! Expected exact columns: {EXPECTED_SCHEMA}, but got: {actual_schema}"
             logs.append(f"❌ {error_msg}")
             raise ValueError(error_msg)
+        else:
+            logs.append(f"✅ Schema validation passed. Found {len(extracted_events)} event rows.")
 
-    return extracted_events, logs
+    # RETURN SUMMARY STATS FOR OBSERVABILITY
+    summary_stats = {
+        "total_tickets": grand_total_tickets,
+        "total_gross": grand_total_gross
+    }
+
+    return extracted_events, logs, summary_stats

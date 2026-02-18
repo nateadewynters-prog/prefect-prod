@@ -81,9 +81,17 @@ def extract_contractual_report(pdf_path):
                 error_msg = f"Data schema mismatch! Expected exact columns: {EXPECTED_SCHEMA}, but got: {actual_schema}"
                 logs.append(f"❌ {error_msg}")
                 raise ValueError(error_msg)
+            else:
+                logs.append(f"✅ Schema validation passed. Extracted {len(extracted_rows)} production rows.")
 
     except Exception as e:
         logs.append(f"❌ CRITICAL ERROR: {str(e)}")
         raise e
         
-    return extracted_rows, logs
+    # RETURN SUMMARY STATS FOR OBSERVABILITY
+    summary_stats = {
+        "total_tickets": calc_total_sold,
+        "total_gross": calc_total_gross
+    }
+        
+    return extracted_rows, logs, summary_stats
