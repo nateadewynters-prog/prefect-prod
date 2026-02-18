@@ -16,7 +16,8 @@
             "active": true,
             "match_criteria": {
                 "sender_domain": "figures@malvern-theatres.co.uk",
-                "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs"
+                "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs",
+                "attachment_type": ".pdf"
             },
             "metadata": {
                 "show_name": "The Silence of the Lambs",
@@ -36,7 +37,8 @@
             "active": true,
             "match_criteria": {
                 "sender_domain": "info@ticketek.com.sg",
-                "subject_keyword": "Jesus Christ Superstar (Sales Summary)"
+                "subject_keyword": "Jesus Christ Superstar (Sales Summary)",
+                "attachment_type": ".xls"
             },
             "metadata": {
                 "show_name": "Jesus Christ Superstar",
