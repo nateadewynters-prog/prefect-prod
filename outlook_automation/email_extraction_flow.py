@@ -72,7 +72,9 @@ def save_processed_id(msg_id, rule_name):
         f.write(f"{timestamp},{msg_id},{rule_name}\n")
 
 def generate_standard_filename(metadata, received_date_str, extension):
+    # Parse ISO date and force conversion to UTC/GMT
     dt = date_parser.parse(received_date_str).astimezone(timezone.utc)
+    # Subtract 1 day to reflect the actual reporting period (T-1)
     report_date = dt - timedelta(days=1)
     date_formatted = report_date.strftime("%d_%m_%y")
     
@@ -93,10 +95,7 @@ def generate_standard_filename(metadata, received_date_str, extension):
 def fetch_and_route_emails():
     logger = get_run_logger()
     token = get_graph_token()
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'ConsistencyLevel': 'eventual' 
-    }
+    headers = {'Authorization': f'Bearer {token}'}
     
     processed_ids = load_processed_ids()
     candidates = []
@@ -107,28 +106,30 @@ def fetch_and_route_emails():
         if not rule.get('active'): continue
 
         crit = rule['match_criteria']
-        sender = crit['sender_domain']
-        subject_kw = crit['subject_keyword']
+        sender = crit['sender_domain'].lower()
+        subject_kw = crit['subject_keyword'].lower()
         
-        # Pull the backfill_since date (default to 2000-01-01 if missing)
-        backfill_since = rule.get('backfill_since', '2000-01-01')
-        
-        # Construct dynamic KQL search query with predicate pushdown for date
-        search_query = f'from:"{sender}" AND subject:"{subject_kw}" AND received>="{backfill_since}"'
+        # Parse backfill_since to a UTC datetime object for strict Python comparison
+        backfill_str = rule.get('backfill_since', '2000-01-01')
+        backfill_dt = date_parser.parse(backfill_str).replace(tzinfo=timezone.utc)
+
+        # 1. Fuzzy Text Search (Drastically reduces payload to ONLY relevant emails)
+        search_query = f'"{sender} {subject_kw}"'
 
         endpoint = f"https://graph.microsoft.com/v1.0/users/{TARGET_EMAIL_USER}/messages"
         params = {
-            '$search': f'"{search_query}"',
+            '$search': search_query,
             '$select': 'id,subject,from,hasAttachments,receivedDateTime',
-            '$top': 100 
+            '$top': 100
         }
 
         logger.info(f"--- 📡 Searching for Rule: {rule['rule_name']} ---")
-        logger.info(f"   Query: {search_query}")
+        logger.info(f"   Date Boundary: >= {backfill_str}")
         
         page_count = 1
         total_found = 0
         total_skipped = 0
+        total_out_of_bounds = 0
 
         while endpoint:
             try:
@@ -147,12 +148,27 @@ def fetch_and_route_emails():
                 emails = data.get('value', [])
                 
                 if not emails and page_count == 1:
-                    logger.info(f"   🤷‍♂️ No emails found matching criteria since {backfill_since}.")
+                    logger.info(f"   🤷‍♂️ No emails found matching text criteria.")
                     break
 
                 for email in emails:
                     msg_id = email['id']
                     
+                    # 2. Strict Python Validation
+                    actual_subject = (email.get('subject') or "").lower()
+                    actual_sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
+                    
+                    if sender not in actual_sender or subject_kw not in actual_subject:
+                        continue 
+
+                    # 3. Strict Python Date Boundary check
+                    email_date_str = email.get('receivedDateTime')
+                    email_dt = date_parser.parse(email_date_str).astimezone(timezone.utc)
+                    
+                    if email_dt < backfill_dt:
+                        total_out_of_bounds += 1
+                        continue # Skip emails older than the backfill_since date
+                        
                     if msg_id in processed_ids:
                         total_skipped += 1
                         continue
@@ -164,12 +180,12 @@ def fetch_and_route_emails():
                     candidates.append({
                         "id": msg_id,
                         "subject": email.get('subject'),
-                        "received_date": email.get('receivedDateTime'),
+                        "received_date": email_date_str,
                         "rule": rule
                     })
 
                 endpoint = data.get('@odata.nextLink')
-                params = None 
+                params = None # Clear params because nextLink handles them automatically
                 
                 if endpoint:
                     page_count += 1
@@ -177,10 +193,12 @@ def fetch_and_route_emails():
 
             except Exception as e:
                 logger.error(f"   ❌ Graph API Error: {e}")
+                if hasattr(e, 'response') and e.response is not None:
+                    logger.error(f"   API Details: {e.response.text}")
                 break 
 
-        if total_found > 0 or total_skipped > 0:
-            logger.info(f"   🏁 Rule Summary: Queued {total_found} new emails. Skipped {total_skipped} already processed.")
+        if total_found > 0 or total_skipped > 0 or total_out_of_bounds > 0:
+            logger.info(f"   🏁 Rule Summary: Queued {total_found} new. Skipped {total_skipped} processed. Ignored {total_out_of_bounds} older than backfill date.")
 
     return candidates
 
@@ -344,4 +362,4 @@ def email_extraction_flow():
     update_config_state(successful_runs)
 
 if __name__ == "__main__":
-    email_extraction_flow.serve(name="outlook-extraction-service", cron="*/15 * * * *")
+    email_extraction_flow()
