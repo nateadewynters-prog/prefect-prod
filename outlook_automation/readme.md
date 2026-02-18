@@ -107,9 +107,44 @@ The filename date (`15_10_23`) is derived strictly from the **Email Received Tim
 
 ### Lookups
 
-If `needs_lookup: true` is set, the system looks for:
-`data/lookups/{show_id}_event_dates.csv`
-It attempts to join this data with the parsed results before saving.
+If `needs_lookup: true` is set, the system looks for `data/lookups/{show_id}_event_dates.csv`. It attempts to join this data with the parsed results before saving.
+
+---
+
+## 6. Service Configuration (NSSM)
+
+The service is managed via **NSSM** (Non-Sucking Service Manager) and runs in the same virtual environment as Brandwatch.
+
+* **Service Name:** `outlook-extraction-service`
+* **Command:** `C:\Prefect\venv\Scripts\python.exe`
+* **Arguments:** `email_extraction_flow.py`
+* **Directory:** `C:\Prefect\outlook_automation`
+* **Env Vars:** `PREFECT_UI_API_URL=http://10.1.50.126:4200/api`
+
+### PowerShell Installation Script
+
+Run the following in PowerShell as Administrator to install or update the service:
+
+```powershell
+$nssm = "C:\Users\batchuser\nssm-2.24-101-g897c7ad\win64\nssm.exe"
+$serviceName = "outlook-extraction-service"
+
+# 1. Install Service
+& $nssm install $serviceName "C:\Prefect\venv\Scripts\python.exe"
+
+# 2. Set Arguments (Script)
+& $nssm set $serviceName AppParameters "email_extraction_flow.py"
+
+# 3. Set Working Directory (Crucial for relative paths)
+& $nssm set $serviceName AppDirectory "C:\Prefect\outlook_automation"
+
+# 4. Set Environment Variables (Prefect Reporting)
+& $nssm set $serviceName AppEnvironmentExtra "PREFECT_API_URL=[http://10.1.50.126:4200/api](http://10.1.50.126:4200/api)"
+
+# 5. Start Service
+Start-Service $serviceName
+
+```
 
 ```
 
