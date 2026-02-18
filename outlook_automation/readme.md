@@ -70,7 +70,7 @@ The `{RecDate}` in the filename is:
 
 - Derived from the **Email Received Time in GMT**
 - Adjusted to **T-1 (minus 1 day)**
-- Formatted as a 2-digit year: `dd_mm_yy`
+- Formatted as `dd_mm_yy` (2-digit year)
 
 This ensures the filename reflects the **actual sales reporting period**, not the morning it was delivered.
 
@@ -130,12 +130,43 @@ If an email was received on **February 18, 2026 (GMT)**:
 
 ## 5. Technical Details
 
+### Historical Backlogs & Smart Search (Predicate Pushdown)
+
+Instead of fetching the top 50 emails and filtering in Python, the script pushes search logic directly to the Microsoft Graph API using the KQL `$search` parameter:
+
+```
+from:"domain" AND subject:"keyword"
+```
+
+#### Deep Backlogs
+
+- Handles `@odata.nextLink` pagination automatically  
+- Can reliably find a 1-year-old email buried under 10,000+ irrelevant emails  
+
+#### Rate Limits
+
+- Detects HTTP `429 Too Many Requests`
+- Uses the `Retry-After` header
+- Gracefully pauses to avoid Microsoft throttling  
+
+#### Observability
+
+Granular Prefect logs track:
+
+- Page counts  
+- Skipped emails  
+- Matched emails  
+
+This provides full visibility into backlog processing.
+
+---
+
 ### Multiple Attachments Handling
 
-If an email contains multiple attachments, the script:
+If an email contains multiple attachments:
 
-- Scans for the file matching the `attachment_type` defined in the rule  
-- Skips irrelevant files (e.g., logos or signature images)  
+- The script scans for the file matching the rule’s `attachment_type`
+- Skips irrelevant files (e.g., company logos)
 - If the required type is missing:
   - A Teams notification is triggered  
   - The email is skipped  

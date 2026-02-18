@@ -6,11 +6,10 @@ import importlib
 import pandas as pd
 import requests
 import msal
-from datetime import timezone
-from dateutil import parser as date_parser
-from prefect import flow, task, get_run_logger
+import time
 from datetime import timezone, timedelta
 from dateutil import parser as date_parser
+from prefect import flow, task, get_run_logger
 
 # --- Local Imports ---
 import outlook_utils as utils
@@ -63,16 +62,10 @@ def save_processed_id(message_id):
         f.write(f"{message_id}\n")
 
 def generate_standard_filename(metadata, received_date_str, extension):
-    """
-    Format: {show}_{venue}_{showid}_{venueid}_{documentid}_{dd_mm_yy}.{ext}
-    Strictly uses the Email Received Date (GMT) MINUS 1 DAY.
-    """
     # Parse ISO date and force conversion to UTC/GMT
     dt = date_parser.parse(received_date_str).astimezone(timezone.utc)
-    
     # Subtract 1 day to reflect the actual reporting period
     report_date = dt - timedelta(days=1)
-    
     date_formatted = report_date.strftime("%d_%m_%y")
     
     filename = (
@@ -88,53 +81,100 @@ def generate_standard_filename(metadata, received_date_str, extension):
 
 # --- Tasks ---
 
-@task(name="fetch_and_route_emails", retries=2)
+@task(name="fetch_historical_backlog", retries=2)
 def fetch_and_route_emails():
+    """
+    Uses Microsoft Graph $search to perform targeted historical lookups based on JSON config rules,
+    bypassing unrelated emails and safely paging through deep backlogs.
+    """
     logger = get_run_logger()
     token = get_graph_token()
-    headers = {'Authorization': f'Bearer {token}'}
-    
-    endpoint = f"https://graph.microsoft.com/v1.0/users/{TARGET_EMAIL_USER}/messages"
-    params = {
-        '$top': 50,
-        '$select': 'id,subject,from,hasAttachments,receivedDateTime',
-        '$orderby': 'receivedDateTime DESC'
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'ConsistencyLevel': 'eventual' 
     }
-    
-    try:
-        response = requests.get(endpoint, headers=headers, params=params)
-        response.raise_for_status()
-        emails = response.json().get('value', [])
-    except Exception as e:
-        logger.error(f"Graph API Error: {e}")
-        return []
     
     processed_ids = load_processed_ids()
     candidates = []
 
-    logger.info(f"🔎 Scanning {len(emails)} emails against {len(CONFIG['rules'])} active rules.")
+    logger.info(f"🔎 Initiating backlog search across {len(CONFIG['rules'])} active rules.")
 
-    for email in emails:
-        msg_id = email['id']
-        if msg_id in processed_ids or not email.get('hasAttachments'):
-            continue
+    for rule in CONFIG['rules']:
+        if not rule.get('active'): continue
 
-        subject = (email.get('subject') or "").lower()
-        sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
+        crit = rule['match_criteria']
+        sender = crit['sender_domain']
+        subject_kw = crit['subject_keyword']
+        search_query = f'from:"{sender}" AND subject:"{subject_kw}"'
 
-        for rule in CONFIG['rules']:
-            if not rule.get('active'): continue
-            crit = rule['match_criteria']
-            
-            if crit['sender_domain'].lower() in sender and crit['subject_keyword'].lower() in subject:
-                candidates.append({
-                    "id": msg_id,
-                    "subject": email.get('subject'),
-                    "received_date": email.get('receivedDateTime'),
-                    "rule": rule
-                })
-                break
-            
+        endpoint = f"https://graph.microsoft.com/v1.0/users/{TARGET_EMAIL_USER}/messages"
+        params = {
+            '$search': f'"{search_query}"',
+            '$select': 'id,subject,from,hasAttachments,receivedDateTime',
+            '$top': 100 
+        }
+
+        logger.info(f"--- 📡 Searching for Rule: {rule['rule_name']} ---")
+        logger.info(f"   Query: {search_query}")
+        
+        page_count = 1
+        total_found_for_rule = 0
+        total_skipped_for_rule = 0
+
+        while endpoint:
+            try:
+                if page_count > 1:
+                    logger.info(f"   📄 Fetching page {page_count}...")
+                    
+                response = requests.get(endpoint, headers=headers, params=params)
+                
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get('Retry-After', 10))
+                    logger.warning(f"   ⚠️ Rate limited (429)! Sleeping for {retry_after}s.")
+                    time.sleep(retry_after)
+                    continue 
+                
+                response.raise_for_status()
+                data = response.json()
+                emails = data.get('value', [])
+                
+                if not emails and page_count == 1:
+                    logger.info(f"   🤷‍♂️ No emails found matching criteria.")
+                    break
+
+                for email in emails:
+                    msg_id = email['id']
+                    
+                    if msg_id in processed_ids:
+                        total_skipped_for_rule += 1
+                        continue
+                        
+                    if not email.get('hasAttachments'):
+                        continue
+
+                    total_found_for_rule += 1
+                    candidates.append({
+                        "id": msg_id,
+                        "subject": email.get('subject'),
+                        "received_date": email.get('receivedDateTime'),
+                        "rule": rule
+                    })
+
+                endpoint = data.get('@odata.nextLink')
+                params = None 
+                
+                if endpoint:
+                    page_count += 1
+                    time.sleep(0.5) 
+
+            except Exception as e:
+                logger.error(f"   ❌ Graph API Error: {e}")
+                break 
+
+        if total_found_for_rule > 0 or total_skipped_for_rule > 0:
+            logger.info(f"   🏁 Rule Summary: Queued {total_found_for_rule} new emails. Skipped {total_skipped_for_rule} already processed.")
+
+    logger.info(f"✅ Full search complete. Total new emails to process: {len(candidates)}")        
     return candidates
 
 @task(name="process_email_attachment")
@@ -151,7 +191,6 @@ def process_email_attachment(email_meta):
     token = get_graph_token()
     headers = {'Authorization': f'Bearer {token}'}
     
-    # 1. Get Attachments
     att_url = f"https://graph.microsoft.com/v1.0/users/{TARGET_EMAIL_USER}/messages/{msg_id}/attachments"
     resp = requests.get(att_url, headers=headers)
     if resp.status_code != 200: return
@@ -161,7 +200,6 @@ def process_email_attachment(email_meta):
         save_processed_id(msg_id)
         return
 
-    # 2. Validate Attachment Type
     target_att = None
     actual_exts = []
     
@@ -179,7 +217,6 @@ def process_email_attachment(email_meta):
         save_processed_id(msg_id)
         return
 
-    # 3. Rename and Download to Inbox (Temp)
     std_filename_full = generate_standard_filename(meta, email_meta['received_date'], expected_ext)
     inbox_dir = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['inbox'])
     temp_path = os.path.join(inbox_dir, std_filename_full)
@@ -191,7 +228,6 @@ def process_email_attachment(email_meta):
         logger.error(f"❌ Download failed: {e}")
         return
 
-    # 4. Dynamic Parsing
     try:
         parser_module = importlib.import_module(proc_config['parser_module'])
         parser_function = getattr(parser_module, proc_config['parser_function'])
@@ -207,7 +243,6 @@ def process_email_attachment(email_meta):
 
         df = pd.DataFrame(parsed_data)
         
-        # 5. Lookup Enrichment
         if proc_config.get('needs_lookup'):
             lookup_dir = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['lookups'])
             lookup_file = os.path.join(lookup_dir, f"{meta['show_id']}_{meta['venue_id']}_event_dates.csv")
@@ -223,11 +258,9 @@ def process_email_attachment(email_meta):
                     right_on='Show Code',
                     how='left'
                 )
-                logger.info(f"   ✅ Joined successfully with lookup.")
             else:
                 logger.warning(f"   ⚠️ Lookup file needed but missing: {lookup_file}")
 
-        # 6. Save Processed CSV & Archive Raw File
         csv_name = std_filename_full.replace(expected_ext, ".csv")
         csv_path = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['processed'], csv_name)
         df.to_csv(csv_path, index=False)
@@ -242,7 +275,6 @@ def process_email_attachment(email_meta):
         logger.error(f"❌ Processing Error: {e}")
         utils.send_teams_notification(f"❌ Failed: {rule['rule_name']}\n{e}", logger)
         
-        # Cleanup Failed Files
         if os.path.exists(temp_path):
             failed_dir = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['failed'])
             shutil.move(temp_path, os.path.join(failed_dir, std_filename_full))
@@ -256,4 +288,4 @@ def email_extraction_flow():
         process_email_attachment(email)
 
 if __name__ == "__main__":
-    email_extraction_flow.serve(name="outlook-extraction-service", cron="* * * * *")
+    email_extraction_flow.serve(name="outlook-extraction-service", cron="*/15 * * * *")
