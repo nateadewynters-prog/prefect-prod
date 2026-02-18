@@ -1,3 +1,6 @@
+Here is your cleaned, properly structured, and export-ready `readme.md` wrapped in a single Markdown code block:
+
+````markdown
 # 📧 Medallion Email Extraction Automation (Prefect 3.0)
 
 **Host:** `DEW-DBSYNC01`  
@@ -41,9 +44,7 @@ C:\Prefect\outlook_automation\
 
 All logic is controlled by:
 
-```
-config/show_reporting_rules.json
-```
+`config/show_reporting_rules.json`
 
 The engine routes emails based on:
 
@@ -57,15 +58,13 @@ The engine routes emails based on:
 
 Each rule in the JSON config tracks its own progress using:
 
-```
-"backfill_since": "YYYY-MM-DD"
-```
+`"backfill_since": "YYYY-MM-DD"`
 
 When the script runs:
 
-- It queries Microsoft Graph only for emails received **on or after** this date  
-- After successful processing, it automatically updates the JSON file  
-- The `backfill_since` value advances forward  
+- It searches for relevant emails and uses Python to strictly filter for items received **on or after** this date.
+- After successful processing, it automatically updates the JSON file.
+- The `backfill_since` value advances forward.
 
 This:
 
@@ -101,15 +100,11 @@ This ensures filenames reflect the **actual sales reporting period**, not delive
 If email received: **February 18, 2026 (GMT)**  
 Reporting Date (T-1): **February 17, 2026**
 
-Raw Archive:
-```
-Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.xls
-```
+Raw Archive:  
+`Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.xls`
 
-Processed Data:
-```
-Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.csv
-```
+Processed Data:  
+`Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.csv`
 
 ---
 
@@ -160,9 +155,7 @@ While the JSON state file controls how far back to search, `processed_ids.txt` a
 
 It is a CSV-formatted audit log recording:
 
-```
-timestamp, msg_id, rule_name
-```
+`timestamp, msg_id, rule_name`
 
 If a message ID exists in this file:
 
@@ -171,24 +164,21 @@ If a message ID exists in this file:
 
 ---
 
-### Historical Backlogs & Smart Search (Predicate Pushdown)
+### Historical Backlogs & Hybrid Search Strategy
 
-Instead of fetching top N emails and filtering in Python, the script pushes search logic directly to Microsoft Graph using KQL:
+Instead of downloading massive inboxes or fighting Microsoft Graph's `$filter` restrictions, the script uses a **Hybrid Strategy**:
 
-```
-from:"domain" AND subject:"keyword" AND received>="YYYY-MM-DD"
-```
+- **Fuzzy API Search:**  
+  Pushes a targeted text search directly to Graph using the `$search` parameter (e.g., `"domain keyword"`). This instantly bypasses irrelevant emails.
 
-#### Deep Backlogs
+- **Strict Python Date Filter:**  
+  Because Microsoft blocks combining `$search` and `$filter`, the `backfill_since` date boundary is evaluated locally in Python. Older emails are instantly dropped.
 
-- Handles `@odata.nextLink` pagination automatically  
-- Can retrieve emails buried under 10,000+ irrelevant messages  
+- **Deep Backlogs:**  
+  Handles `@odata.nextLink` pagination automatically, allowing retrieval of emails buried under 10,000+ irrelevant messages.
 
-#### Rate Limits
-
-- Detects HTTP `429 Too Many Requests`
-- Uses `Retry-After` header
-- Gracefully pauses to avoid throttling  
+- **Rate Limits:**  
+  Detects HTTP `429 Too Many Requests`, uses the `Retry-After` header, and gracefully pauses to avoid throttling.
 
 ---
 
@@ -199,8 +189,8 @@ If an email contains multiple attachments:
 - Scans for file matching rule’s `attachment_type`
 - Skips irrelevant files (e.g., logos)
 - If required type missing:
-  - Sends Teams notification  
-  - Skips email  
+  - Sends Teams notification
+  - Skips email
 
 ---
 
@@ -214,3 +204,4 @@ If extracted data does not exactly match expected column structure:
 - Prefect task fails  
 - Teams alert is sent  
 - **No corrupted or misaligned data is saved**
+````
