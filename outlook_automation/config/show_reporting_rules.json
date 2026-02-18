@@ -14,6 +14,7 @@
         {
             "rule_name": "MALVERN_SILENCE_OF_THE_LAMBS",
             "active": true,
+            "backfill_since": "2023-01-01",
             "match_criteria": {
                 "sender_domain": "figures@malvern-theatres.co.uk",
                 "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs",
@@ -35,6 +36,7 @@
         {
             "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR",
             "active": true,
+            "backfill_since": "2023-01-01",
             "match_criteria": {
                 "sender_domain": "info@ticketek.com.sg",
                 "subject_keyword": "Jesus Christ Superstar (Sales Summary)",

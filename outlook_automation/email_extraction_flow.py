@@ -7,7 +7,7 @@ import pandas as pd
 import requests
 import msal
 import time
-from datetime import timezone, timedelta
+from datetime import datetime, timezone, timedelta
 from dateutil import parser as date_parser
 from prefect import flow, task, get_run_logger
 
@@ -54,17 +54,25 @@ def get_graph_token():
     raise Exception(f"Failed to acquire Graph Token: {result.get('error_description')}")
 
 def load_processed_ids():
+    """Loads processed IDs, supporting both new CSV audit format and legacy single-ID lines."""
+    processed = set()
     with open(HISTORY_FILE, 'r') as f:
-        return set(line.strip() for line in f)
+        for line in f:
+            parts = line.strip().split(',')
+            if len(parts) >= 2:
+                processed.add(parts[1]) # Index 1 is the msg_id in the new CSV format
+            elif len(parts) == 1 and parts[0]:
+                processed.add(parts[0]) # Legacy fallback
+    return processed
 
-def save_processed_id(message_id):
+def save_processed_id(msg_id, rule_name):
+    """Saves to audit log in CSV format: timestamp,msg_id,rule_name"""
+    timestamp = datetime.now(timezone.utc).isoformat()
     with open(HISTORY_FILE, 'a') as f:
-        f.write(f"{message_id}\n")
+        f.write(f"{timestamp},{msg_id},{rule_name}\n")
 
 def generate_standard_filename(metadata, received_date_str, extension):
-    # Parse ISO date and force conversion to UTC/GMT
     dt = date_parser.parse(received_date_str).astimezone(timezone.utc)
-    # Subtract 1 day to reflect the actual reporting period
     report_date = dt - timedelta(days=1)
     date_formatted = report_date.strftime("%d_%m_%y")
     
@@ -83,10 +91,6 @@ def generate_standard_filename(metadata, received_date_str, extension):
 
 @task(name="fetch_historical_backlog", retries=2)
 def fetch_and_route_emails():
-    """
-    Uses Microsoft Graph $search to perform targeted historical lookups based on JSON config rules,
-    bypassing unrelated emails and safely paging through deep backlogs.
-    """
     logger = get_run_logger()
     token = get_graph_token()
     headers = {
@@ -97,7 +101,7 @@ def fetch_and_route_emails():
     processed_ids = load_processed_ids()
     candidates = []
 
-    logger.info(f"🔎 Initiating backlog search across {len(CONFIG['rules'])} active rules.")
+    logger.info(f"🔎 Initiating search across {len(CONFIG['rules'])} active rules.")
 
     for rule in CONFIG['rules']:
         if not rule.get('active'): continue
@@ -105,7 +109,12 @@ def fetch_and_route_emails():
         crit = rule['match_criteria']
         sender = crit['sender_domain']
         subject_kw = crit['subject_keyword']
-        search_query = f'from:"{sender}" AND subject:"{subject_kw}"'
+        
+        # Pull the backfill_since date (default to 2000-01-01 if missing)
+        backfill_since = rule.get('backfill_since', '2000-01-01')
+        
+        # Construct dynamic KQL search query with predicate pushdown for date
+        search_query = f'from:"{sender}" AND subject:"{subject_kw}" AND received>="{backfill_since}"'
 
         endpoint = f"https://graph.microsoft.com/v1.0/users/{TARGET_EMAIL_USER}/messages"
         params = {
@@ -118,13 +127,12 @@ def fetch_and_route_emails():
         logger.info(f"   Query: {search_query}")
         
         page_count = 1
-        total_found_for_rule = 0
-        total_skipped_for_rule = 0
+        total_found = 0
+        total_skipped = 0
 
         while endpoint:
             try:
-                if page_count > 1:
-                    logger.info(f"   📄 Fetching page {page_count}...")
+                if page_count > 1: logger.info(f"   📄 Fetching page {page_count}...")
                     
                 response = requests.get(endpoint, headers=headers, params=params)
                 
@@ -139,20 +147,20 @@ def fetch_and_route_emails():
                 emails = data.get('value', [])
                 
                 if not emails and page_count == 1:
-                    logger.info(f"   🤷‍♂️ No emails found matching criteria.")
+                    logger.info(f"   🤷‍♂️ No emails found matching criteria since {backfill_since}.")
                     break
 
                 for email in emails:
                     msg_id = email['id']
                     
                     if msg_id in processed_ids:
-                        total_skipped_for_rule += 1
+                        total_skipped += 1
                         continue
                         
                     if not email.get('hasAttachments'):
                         continue
 
-                    total_found_for_rule += 1
+                    total_found += 1
                     candidates.append({
                         "id": msg_id,
                         "subject": email.get('subject'),
@@ -171,34 +179,36 @@ def fetch_and_route_emails():
                 logger.error(f"   ❌ Graph API Error: {e}")
                 break 
 
-        if total_found_for_rule > 0 or total_skipped_for_rule > 0:
-            logger.info(f"   🏁 Rule Summary: Queued {total_found_for_rule} new emails. Skipped {total_skipped_for_rule} already processed.")
+        if total_found > 0 or total_skipped > 0:
+            logger.info(f"   🏁 Rule Summary: Queued {total_found} new emails. Skipped {total_skipped} already processed.")
 
-    logger.info(f"✅ Full search complete. Total new emails to process: {len(candidates)}")        
     return candidates
 
 @task(name="process_email_attachment")
 def process_email_attachment(email_meta):
+    """Returns a tuple: (Success_Boolean, Received_Date_Str, Rule_Name)"""
     logger = get_run_logger()
     msg_id = email_meta['id']
     rule = email_meta['rule']
     meta = rule['metadata']
     proc_config = rule['processing']
+    r_name = rule['rule_name']
     expected_ext = rule['match_criteria'].get('attachment_type', '').lower()
     
-    logger.info(f"🚀 Processing Rule: {rule['rule_name']} | Subject: {email_meta['subject']}")
+    logger.info(f"🚀 Processing Rule: {r_name} | Subject: {email_meta['subject']}")
     
     token = get_graph_token()
     headers = {'Authorization': f'Bearer {token}'}
     
     att_url = f"https://graph.microsoft.com/v1.0/users/{TARGET_EMAIL_USER}/messages/{msg_id}/attachments"
     resp = requests.get(att_url, headers=headers)
-    if resp.status_code != 200: return
+    if resp.status_code != 200: 
+        return False, None, r_name
 
     attachments = resp.json().get('value', [])
     if not attachments:
-        save_processed_id(msg_id)
-        return
+        save_processed_id(msg_id, r_name)
+        return False, None, r_name
 
     target_att = None
     actual_exts = []
@@ -212,10 +222,10 @@ def process_email_attachment(email_meta):
 
     if not target_att:
         error_msg = f"The attachment type expected was {expected_ext}, but received {', '.join(actual_exts)}"
-        logger.warning(f"[{rule['rule_name']}] {error_msg}")
-        utils.send_teams_notification(f"⚠️ **Attachment Mismatch**\nRule: {rule['rule_name']}\n{error_msg}", logger)
-        save_processed_id(msg_id)
-        return
+        logger.warning(f"[{r_name}] {error_msg}")
+        utils.send_teams_notification(f"⚠️ **Attachment Mismatch**\nRule: {r_name}\n{error_msg}", logger)
+        save_processed_id(msg_id, r_name)
+        return False, None, r_name
 
     std_filename_full = generate_standard_filename(meta, email_meta['received_date'], expected_ext)
     inbox_dir = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['inbox'])
@@ -226,7 +236,7 @@ def process_email_attachment(email_meta):
             f.write(base64.b64decode(target_att['contentBytes']))
     except Exception as e:
         logger.error(f"❌ Download failed: {e}")
-        return
+        return False, None, r_name
 
     try:
         parser_module = importlib.import_module(proc_config['parser_module'])
@@ -236,7 +246,7 @@ def process_email_attachment(email_meta):
         
         for line in parse_logs:
             if "CRITICAL" in line or "MISMATCH" in line:
-                logger.warning(f"[{rule['rule_name']}] {line}")
+                logger.warning(f"[{r_name}] {line}")
 
         if not parsed_data:
             raise ValueError("Parser returned 0 rows.")
@@ -269,23 +279,69 @@ def process_email_attachment(email_meta):
         shutil.move(temp_path, archive_path)
         
         logger.info(f"✅ Saved CSV: {csv_name}")
-        utils.send_teams_notification(f"✅ **Extraction Success**\n\nRule: {rule['rule_name']}\nRows: {len(df)}\nFile: {csv_name}", logger)
+        utils.send_teams_notification(f"✅ **Extraction Success**\n\nRule: {r_name}\nRows: {len(df)}\nFile: {csv_name}", logger)
+        
+        # Save Audit & Return Success
+        save_processed_id(msg_id, r_name)
+        return True, email_meta['received_date'], r_name
 
     except Exception as e:
         logger.error(f"❌ Processing Error: {e}")
-        utils.send_teams_notification(f"❌ Failed: {rule['rule_name']}\n{e}", logger)
+        utils.send_teams_notification(f"❌ Failed: {r_name}\n{e}", logger)
         
         if os.path.exists(temp_path):
             failed_dir = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['failed'])
             shutil.move(temp_path, os.path.join(failed_dir, std_filename_full))
+            
+        save_processed_id(msg_id, r_name)
+        return False, None, r_name
 
-    save_processed_id(msg_id)
+@task(name="update_config_state")
+def update_config_state(successful_runs):
+    """Updates the JSON config with the most recent successfully processed date per rule."""
+    if not successful_runs: return
+    logger = get_run_logger()
+    
+    # 1. Find the latest (max) date for each successfully processed rule
+    max_dates = {}
+    for r_name, date_str in successful_runs:
+        dt = date_parser.parse(date_str).astimezone(timezone.utc)
+        if r_name not in max_dates or dt > max_dates[r_name]:
+            max_dates[r_name] = dt
+            
+    # 2. Open, update, and save the JSON config file
+    with open(CONFIG_PATH, 'r') as f:
+        current_config = json.load(f)
+        
+    updated = False
+    for rule in current_config['rules']:
+        r_name = rule['rule_name']
+        if r_name in max_dates:
+            # Format to YYYY-MM-DD
+            new_date_str = max_dates[r_name].strftime('%Y-%m-%d')
+            current_date_str = rule.get('backfill_since', '1900-01-01')
+            
+            if new_date_str > current_date_str:
+                rule['backfill_since'] = new_date_str
+                updated = True
+                logger.info(f"🔄 Advanced '{r_name}' backfill date to {new_date_str}")
+                
+    if updated:
+        with open(CONFIG_PATH, 'w') as f:
+            json.dump(current_config, f, indent=4)
+        logger.info("💾 Saved updated state to show_reporting_rules.json")
 
 @flow(name="Email Extraction Flow", log_prints=True)
 def email_extraction_flow():
     candidates = fetch_and_route_emails()
+    successful_runs = []
+    
     for email in candidates:
-        process_email_attachment(email)
+        success, rec_date, r_name = process_email_attachment(email)
+        if success:
+            successful_runs.append((r_name, rec_date))
+            
+    update_config_state(successful_runs)
 
 if __name__ == "__main__":
     email_extraction_flow.serve(name="outlook-extraction-service", cron="*/15 * * * *")

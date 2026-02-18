@@ -26,7 +26,7 @@ C:\Prefect\outlook_automation\
 │   ├── archive\                  # Renamed Raw Files (PDF/XLS)
 │   ├── failed\                   # Error files
 │   ├── lookups\                  # Enrichment data ({ShowID}_{VenueID}_event_dates.csv)
-│   └── processed_ids.txt         # History log
+│   └── processed_ids.txt         # Audit log CSV (timestamp, msg_id, rule_name)
 ├── parsers\                      # 🧠 LOGIC
 │   ├── __init__.py
 │   ├── ticketek_event_settlement_excel_parser.py        
@@ -49,7 +49,29 @@ The engine routes emails based on:
 
 - Sender Domain  
 - Subject Keyword  
-- Explicit Attachment Type (ignoring signature images)
+- Explicit Attachment Type  
+
+---
+
+### Stateful Backfilling & Progress Tracking
+
+Each rule in the JSON config tracks its own progress using:
+
+```
+"backfill_since": "YYYY-MM-DD"
+```
+
+When the script runs:
+
+- It queries Microsoft Graph only for emails received **on or after** this date  
+- After successful processing, it automatically updates the JSON file  
+- The `backfill_since` value advances forward  
+
+This:
+
+- Eliminates redundant API calls  
+- Enables seamless historical backfills  
+- Allows years of history to be reprocessed by simply adjusting the date  
 
 ---
 
@@ -66,29 +88,28 @@ The engine routes emails based on:
 
 Files are renamed before processing to ensure consistency.
 
-The `{RecDate}` in the filename is:
+The `{RecDate}`:
 
-- Derived from the **Email Received Time in GMT**
+- Derived from **Email Received Time (GMT)**
 - Adjusted to **T-1 (minus 1 day)**
-- Formatted as `dd_mm_yy` (2-digit year)
+- Formatted as `dd_mm_yy`
 
-This ensures the filename reflects the **actual sales reporting period**, not the morning it was delivered.
+This ensures filenames reflect the **actual sales reporting period**, not delivery time.
 
 #### Example
 
-If an email was received on **February 18, 2026 (GMT)**:
+If email received: **February 18, 2026 (GMT)**  
+Reporting Date (T-1): **February 17, 2026**
 
-- Reporting Date (T-1): **February 17, 2026**
+Raw Archive:
+```
+Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.xls
+```
 
-- Raw Archive:
-  ```
-  Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.xls
-  ```
-
-- Processed Data:
-  ```
-  Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.csv
-  ```
+Processed Data:
+```
+Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.csv
+```
 
 ---
 
@@ -96,7 +117,9 @@ If an email was received on **February 18, 2026 (GMT)**:
 
 1. Navigate to `config/show_reporting_rules.json`
 2. Add a new block to the `rules` array
-3. Ensure you declare the specific `attachment_type`
+3. Declare:
+   - `attachment_type`
+   - `backfill_since` starting date
 
 ### Example Configuration
 
@@ -104,6 +127,7 @@ If an email was received on **February 18, 2026 (GMT)**:
 {
     "rule_name": "NEW_SHOW_RULE",
     "active": true,
+    "backfill_since": "2023-01-01",
     "match_criteria": {
         "sender_domain": "new-venue.com",
         "subject_keyword": "Settlement",
@@ -130,34 +154,41 @@ If an email was received on **February 18, 2026 (GMT)**:
 
 ## 5. Technical Details
 
-### Historical Backlogs & Smart Search (Predicate Pushdown)
+### Audit Logging (`processed_ids.txt`)
 
-Instead of fetching the top 50 emails and filtering in Python, the script pushes search logic directly to the Microsoft Graph API using the KQL `$search` parameter:
+While the JSON state file controls how far back to search, `processed_ids.txt` acts as the **final deduplication fail-safe**.
+
+It is a CSV-formatted audit log recording:
 
 ```
-from:"domain" AND subject:"keyword"
+timestamp, msg_id, rule_name
+```
+
+If a message ID exists in this file:
+
+- It is permanently skipped  
+- Duplicate extraction is prevented  
+
+---
+
+### Historical Backlogs & Smart Search (Predicate Pushdown)
+
+Instead of fetching top N emails and filtering in Python, the script pushes search logic directly to Microsoft Graph using KQL:
+
+```
+from:"domain" AND subject:"keyword" AND received>="YYYY-MM-DD"
 ```
 
 #### Deep Backlogs
 
 - Handles `@odata.nextLink` pagination automatically  
-- Can reliably find a 1-year-old email buried under 10,000+ irrelevant emails  
+- Can retrieve emails buried under 10,000+ irrelevant messages  
 
 #### Rate Limits
 
 - Detects HTTP `429 Too Many Requests`
-- Uses the `Retry-After` header
-- Gracefully pauses to avoid Microsoft throttling  
-
-#### Observability
-
-Granular Prefect logs track:
-
-- Page counts  
-- Skipped emails  
-- Matched emails  
-
-This provides full visibility into backlog processing.
+- Uses `Retry-After` header
+- Gracefully pauses to avoid throttling  
 
 ---
 
@@ -165,50 +196,21 @@ This provides full visibility into backlog processing.
 
 If an email contains multiple attachments:
 
-- The script scans for the file matching the rule’s `attachment_type`
-- Skips irrelevant files (e.g., company logos)
-- If the required type is missing:
-  - A Teams notification is triggered  
-  - The email is skipped  
+- Scans for file matching rule’s `attachment_type`
+- Skips irrelevant files (e.g., logos)
+- If required type missing:
+  - Sends Teams notification  
+  - Skips email  
 
 ---
 
 ### Strict Schema Validation (Data Contracts)
 
-To protect downstream systems, parser functions enforce **strict schema validation**.
+To protect downstream systems, parsers enforce strict schema validation.
 
-If extracted data does not exactly match the expected column structure:
+If extracted data does not exactly match expected column structure:
 
-- The script immediately errors  
-- The Prefect task fails  
-- A Teams alert is sent  
+- Script errors immediately  
+- Prefect task fails  
+- Teams alert is sent  
 - **No corrupted or misaligned data is saved**
-
----
-
-### Lookups
-
-If `"needs_lookup": true` is set:
-
-The system searches for:
-
-```
-data/lookups/{show_id}_{venue_id}_event_dates.csv
-```
-
-It joins this enrichment data with parsed results before saving.
-
----
-
-## 6. Service Configuration (NSSM)
-
-The service is managed via **NSSM (Non-Sucking Service Manager)**.
-
-- **Service Name:** `outlook-extraction-service`
-- **Command:** `C:\Prefect\venv\Scripts\python.exe`
-- **Arguments:** `email_extraction_flow.py`
-- **Directory:** `C:\Prefect\outlook_automation`
-- **Environment Variable:**
-  ```
-  PREFECT_UI_API_URL=http://10.1.50.126:4200/api
-  ```
