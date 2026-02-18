@@ -9,6 +9,8 @@ import msal
 from datetime import timezone
 from dateutil import parser as date_parser
 from prefect import flow, task, get_run_logger
+from datetime import timezone, timedelta
+from dateutil import parser as date_parser
 
 # --- Local Imports ---
 import outlook_utils as utils
@@ -63,11 +65,15 @@ def save_processed_id(message_id):
 def generate_standard_filename(metadata, received_date_str, extension):
     """
     Format: {show}_{venue}_{showid}_{venueid}_{documentid}_{dd_mm_yy}.{ext}
-    Strictly uses the Email Received Date converted to GMT.
+    Strictly uses the Email Received Date (GMT) MINUS 1 DAY.
     """
     # Parse ISO date and force conversion to UTC/GMT
     dt = date_parser.parse(received_date_str).astimezone(timezone.utc)
-    date_formatted = dt.strftime("%d_%m_%y")
+    
+    # Subtract 1 day to reflect the actual reporting period
+    report_date = dt - timedelta(days=1)
+    
+    date_formatted = report_date.strftime("%d_%m_%y")
     
     filename = (
         f"{metadata['show_name']}_"

@@ -53,12 +53,15 @@ All logic is controlled by `config/show_reporting_rules.json`.
 
 <br>**Subj:** "Sales Summary" | `ticketek_event...excel_parser.py` | `{Show}_{Venue}_{ShowID}_{VenueID}_{DocID}_{RecDate}.csv` |
 
-### Example Filename Output
+### Strict File Naming & Date Handling
 
-If an email was received on **October 15, 2023**:
+Files are renamed *before* processing to ensure consistency. 
+The `{RecDate}` in the filename is strictly derived from the **Email Received Time** in **GMT timezone, minus 1 day** (T-1). This ensures the file reflects the actual sales reporting period rather than the morning it was delivered. The date is formatted as a 2-digit year (`dd_mm_yy`). 
 
-* **Raw Archive:** `Jesus Christ Superstar_Ticketek SG_287_220_17_15_10_23.xls`
-* **Processed Data:** `Jesus Christ Superstar_Ticketek SG_287_220_17_15_10_23.csv`
+* **Example:** If an email was received on **February 18, 2026** (GMT):
+* **Reporting Date (T-1):** February 17, 2026
+* **Raw Archive:** `Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.xls`
+* **Processed Data:** `Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.csv`
 
 ---
 

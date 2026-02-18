@@ -5,6 +5,8 @@ import gc
 import pdfplumber
 import xlrd
 from parsers import pdf_contractual, xls_settlement
+from datetime import timezone, timedelta
+from dateutil import parser as date_parser
 
 # --- CONFIGURATION ---
 # We use a hardcoded path to ensure we don't accidentally fill up the wrong drive.
