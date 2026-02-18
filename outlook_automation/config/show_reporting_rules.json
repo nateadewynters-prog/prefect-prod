@@ -23,13 +23,13 @@
                 "show_name": "The Silence of the Lambs",
                 "venue_name": "Malvern Theatres",
                 "show_id": "285",
-                "venue_id": "UNKNOWN",
+                "venue_id": "174",
                 "document_id": "17"
             },
             "processing": {
                 "parser_module": "parsers.malvern_theatre_contractual_report_pdf_parser",
                 "parser_function": "extract_contractual_report",
-                "needs_lookup": true
+                "needs_lookup": false
             }
         },
         {

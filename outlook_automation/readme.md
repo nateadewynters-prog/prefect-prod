@@ -1,8 +1,8 @@
 # 📧 Medallion Email Extraction Automation (Prefect 3.0)
 
-**Host:** `DEW-DBSYNC01`
-**Status:** 🟢 Active (Polling every 60s)
-**Architecture:** JSON-Driven Medallion Pattern
+**Host:** `DEW-DBSYNC01`  
+**Status:** 🟢 Active (Polling every 15m)  
+**Architecture:** JSON-Driven Medallion Pattern  
 
 ---
 
@@ -29,46 +29,76 @@ C:\Prefect\outlook_automation\
 │   └── processed_ids.txt         # History log
 ├── parsers\                      # 🧠 LOGIC
 │   ├── __init__.py
-│   ├── ticketek_event_settlement_excel_parser.py        # Was sistic_agency_parser
-│   └── malvern_theatre_contractual_report_pdf_parser.py # Was malvern_theatre_parser
-├── outlook_utils.py              # Shared Utils
+│   ├── ticketek_event_settlement_excel_parser.py        
+│   └── malvern_theatre_contractual_report_pdf_parser.py 
+├── outlook_utils.py              # Shared Utils (Teams Webhooks)
 └── email_extraction_flow.py      # Main Orchestrator
-
 ```
 
 ---
 
 ## 3. Configuration & Routing
 
-All logic is controlled by `config/show_reporting_rules.json`.
+All logic is controlled by:
+
+```
+config/show_reporting_rules.json
+```
+
+The engine routes emails based on:
+
+- Sender Domain  
+- Subject Keyword  
+- Explicit Attachment Type (ignoring signature images)
+
+---
 
 ### Current Rules
 
 | Rule Name | Trigger | Target Parser | Output Filename Format |
-| --- | --- | --- | --- |
-| **MALVERN** | **From:** `malvern-theatres.co.uk`<br>
+|------------|----------|--------------|-------------------------|
+| MALVERN | From: malvern-theatres.co.uk<br>Subj: "Figures"<br>Type: .pdf | malvern_theatre...pdf_parser.py | `{Show}_{Venue}_{ShowID}_{VenueID}_{DocID}_{RecDate}.csv` |
+| TICKETEK | From: ticketek.com.sg<br>Subj: "Sales Summary"<br>Type: .xls | ticketek_event...excel_parser.py | `{Show}_{Venue}_{ShowID}_{VenueID}_{DocID}_{RecDate}.csv` |
 
-<br>**Subj:** "Figures" | `malvern_theatre...pdf_parser.py` | `{Show}_{Venue}_{ShowID}_{VenueID}_{DocID}_{RecDate}.csv` |
-| **TICKETEK** | **From:** `ticketek.com.sg`<br>
-
-<br>**Subj:** "Sales Summary" | `ticketek_event...excel_parser.py` | `{Show}_{Venue}_{ShowID}_{VenueID}_{DocID}_{RecDate}.csv` |
+---
 
 ### Strict File Naming & Date Handling
 
-Files are renamed *before* processing to ensure consistency. 
-The `{RecDate}` in the filename is strictly derived from the **Email Received Time** in **GMT timezone, minus 1 day** (T-1). This ensures the file reflects the actual sales reporting period rather than the morning it was delivered. The date is formatted as a 2-digit year (`dd_mm_yy`). 
+Files are renamed before processing to ensure consistency.
 
-* **Example:** If an email was received on **February 18, 2026** (GMT):
-* **Reporting Date (T-1):** February 17, 2026
-* **Raw Archive:** `Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.xls`
-* **Processed Data:** `Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.csv`
+The `{RecDate}` in the filename is:
+
+- Derived from the **Email Received Time in GMT**
+- Adjusted to **T-1 (minus 1 day)**
+- Formatted as a 2-digit year: `dd_mm_yy`
+
+This ensures the filename reflects the **actual sales reporting period**, not the morning it was delivered.
+
+#### Example
+
+If an email was received on **February 18, 2026 (GMT)**:
+
+- Reporting Date (T-1): **February 17, 2026**
+
+- Raw Archive:
+  ```
+  Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.xls
+  ```
+
+- Processed Data:
+  ```
+  Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.csv
+  ```
 
 ---
 
 ## 4. How to Add a New Show
 
-1. Navigate to `config/show_reporting_rules.json`.
-2. Add a new block to the `rules` array:
+1. Navigate to `config/show_reporting_rules.json`
+2. Add a new block to the `rules` array
+3. Ensure you declare the specific `attachment_type`
+
+### Example Configuration
 
 ```json
 {
@@ -76,7 +106,8 @@ The `{RecDate}` in the filename is strictly derived from the **Email Received Ti
     "active": true,
     "match_criteria": {
         "sender_domain": "new-venue.com",
-        "subject_keyword": "Settlement"
+        "subject_keyword": "Settlement",
+        "attachment_type": ".xlsx"
     },
     "metadata": {
         "show_name": "New Musical",
@@ -91,64 +122,62 @@ The `{RecDate}` in the filename is strictly derived from the **Email Received Ti
         "needs_lookup": true
     }
 }
-
 ```
 
-3. Restart the service.
+4. Restart the service.
 
 ---
 
 ## 5. Technical Details
 
-### Dynamic Parser Loading
+### Multiple Attachments Handling
 
-The orchestrator uses Python's `importlib` to load the parser specified in the JSON string `parser_module`. This means you can swap parsers without restarting the flow if the code is updated.
+If an email contains multiple attachments, the script:
 
-### Date Handling
+- Scans for the file matching the `attachment_type` defined in the rule  
+- Skips irrelevant files (e.g., logos or signature images)  
+- If the required type is missing:
+  - A Teams notification is triggered  
+  - The email is skipped  
 
-The filename date (`15_10_23`) is derived strictly from the **Email Received Time** (via Graph API `receivedDateTime`), ensuring that re-running the script on an old email yields the exact same filename.
+---
+
+### Strict Schema Validation (Data Contracts)
+
+To protect downstream systems, parser functions enforce **strict schema validation**.
+
+If extracted data does not exactly match the expected column structure:
+
+- The script immediately errors  
+- The Prefect task fails  
+- A Teams alert is sent  
+- **No corrupted or misaligned data is saved**
+
+---
 
 ### Lookups
 
-If `needs_lookup: true` is set, the system looks for `data/lookups/{show_id}_event_dates.csv`. It attempts to join this data with the parsed results before saving.
+If `"needs_lookup": true` is set:
+
+The system searches for:
+
+```
+data/lookups/{show_id}_{venue_id}_event_dates.csv
+```
+
+It joins this enrichment data with parsed results before saving.
 
 ---
 
 ## 6. Service Configuration (NSSM)
 
-The service is managed via **NSSM** (Non-Sucking Service Manager) and runs in the same virtual environment as Brandwatch.
+The service is managed via **NSSM (Non-Sucking Service Manager)**.
 
-* **Service Name:** `outlook-extraction-service`
-* **Command:** `C:\Prefect\venv\Scripts\python.exe`
-* **Arguments:** `email_extraction_flow.py`
-* **Directory:** `C:\Prefect\outlook_automation`
-* **Env Vars:** `PREFECT_UI_API_URL=http://10.1.50.126:4200/api`
-
-### PowerShell Installation Script
-
-Run the following in PowerShell as Administrator to install or update the service:
-
-```powershell
-$nssm = "C:\Users\batchuser\nssm-2.24-101-g897c7ad\win64\nssm.exe"
-$serviceName = "outlook-extraction-service"
-
-# 1. Install Service
-& $nssm install $serviceName "C:\Prefect\venv\Scripts\python.exe"
-
-# 2. Set Arguments (Script)
-& $nssm set $serviceName AppParameters "email_extraction_flow.py"
-
-# 3. Set Working Directory (Crucial for relative paths)
-& $nssm set $serviceName AppDirectory "C:\Prefect\outlook_automation"
-
-# 4. Set Environment Variables (Prefect Reporting)
-& $nssm set $serviceName AppEnvironmentExtra "PREFECT_API_URL=[http://10.1.50.126:4200/api](http://10.1.50.126:4200/api)"
-
-# 5. Start Service
-Start-Service $serviceName
-
-```
-
-```
-
-```
+- **Service Name:** `outlook-extraction-service`
+- **Command:** `C:\Prefect\venv\Scripts\python.exe`
+- **Arguments:** `email_extraction_flow.py`
+- **Directory:** `C:\Prefect\outlook_automation`
+- **Environment Variable:**
+  ```
+  PREFECT_UI_API_URL=http://10.1.50.126:4200/api
+  ```
