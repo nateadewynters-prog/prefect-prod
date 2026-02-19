@@ -54,6 +54,9 @@ def extract_settlement_data(file_path):
     grand_total_tickets = 0
     grand_total_gross = 0.0
     
+    footer_span_tickets = None
+    footer_span_gross = None
+    
     logger.info("--- 🕵️ Starting Grid Scan ---")
 
     for i, row in enumerate(grid_data):
@@ -126,6 +129,12 @@ def extract_settlement_data(file_path):
                 inside_event_block = False
                 current_event_code = None
 
+        # 4. Global Verification (The Footer)
+        if first_cell == "Event Span Total":
+            logger.info("--- 🔍 Global Verification (Footer) ---")
+            footer_span_tickets = clean_int(row[total_col_index]) if len(row) > total_col_index else 0
+            footer_span_gross = clean_currency(row[total_col_index+1]) if len(row) > total_col_index+1 else 0.0
+
     # --- STRICT SCHEMA VALIDATION ---
     if extracted_events:
         actual_schema = set(extracted_events[0].keys())
@@ -136,13 +145,36 @@ def extract_settlement_data(file_path):
         else:
             logger.info(f"✅ Schema validation passed. Found {len(extracted_events)} event rows.")
 
+    # --- DYNAMIC VALIDATION RESULT ---
+    metrics = {
+        "Extracted Tickets": grand_total_tickets,
+        "Extracted Gross": f"${grand_total_gross:,.2f}"
+    }
+
+    if footer_span_tickets is not None and footer_span_gross is not None:
+        metrics["Reported Tickets"] = footer_span_tickets
+        metrics["Reported Gross"] = f"${footer_span_gross:,.2f}"
+        
+        tickets_match = (grand_total_tickets == footer_span_tickets)
+        gross_matches = (abs(grand_total_gross - footer_span_gross) < 1.0)
+        
+        if tickets_match and gross_matches:
+            status = "PASSED"
+            message = "✅ Calculated totals successfully match the 'Event Span Total' footer."
+            logger.info(message)
+        else:
+            status = "FAILED"
+            message = f"Mismatch! Calculated (Tickets: {grand_total_tickets}, Gross: ${grand_total_gross:,.2f}) vs Reported (Tickets: {footer_span_tickets}, Gross: ${footer_span_gross:,.2f})"
+            logger.error(f"❌ {message}")
+    else:
+        status = "UNVALIDATED"
+        message = "⚠️ No 'Event Span Total' footer found in Excel, manual review required."
+        logger.warning(message)
+
     validation_result = ValidationResult(
-        status="PASSED",
-        message="✅ Matched stated totals successfully.",
-        metrics={
-            "Extracted Tickets": grand_total_tickets,
-            "Extracted Gross": f"${grand_total_gross:,.2f}"
-        }
+        status=status,
+        message=message,
+        metrics=metrics
     )
 
     return extracted_events, validation_result

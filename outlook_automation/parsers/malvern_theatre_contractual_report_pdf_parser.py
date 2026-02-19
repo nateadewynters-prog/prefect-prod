@@ -32,6 +32,9 @@ def extract_contractual_report(pdf_path):
     
     calc_total_sold = 0
     calc_total_gross = 0.0
+    report_total_sold = 0
+    report_total_gross = 0.0
+    verification_found = False
 
     row_pattern = re.compile(
         r"^\s*(?P<day>\w+)\s+"                 
@@ -46,6 +49,16 @@ def extract_contractual_report(pdf_path):
         r"(?P<gross>[\d\.,]+)"                 
     )
 
+    summary_pattern = re.compile(
+        r"^\s*\d+\s+Performances\s+"
+        r"(?P<cap>[\d,]+)\s+"
+        r"(?P<sold>[\d,]+)\s+"
+        r"(?P<rsrv>[\d,]+)\s+"
+        r"(?P<rem>[\d,]+)\s+"
+        r"(?P<rsrv_val>[£\d\.,]+)\s+"
+        r"(?P<gross>[£\d\.,]+)"
+    )
+
     try:
         with pdfplumber.open(pdf_path) as pdf:
             for i, page in enumerate(pdf.pages):
@@ -53,6 +66,7 @@ def extract_contractual_report(pdf_path):
                 if not text: continue
                 
                 for line in text.split('\n'):
+                    # 1. Check Data Row
                     match = row_pattern.search(line)
                     if match:
                         d = match.groupdict()
@@ -74,6 +88,16 @@ def extract_contractual_report(pdf_path):
                             "Reserved Value": parse_currency(d['rsrv_val']),
                             "Total Gross": gross
                         })
+                        continue
+                    
+                    # 2. Check Summary Line
+                    match_sum = summary_pattern.search(line)
+                    if match_sum:
+                        logger.info(f"🏁 Found 'Summary Totals' line on Page {i+1}.")
+                        s = match_sum.groupdict()
+                        report_total_sold = parse_int(s['sold'])
+                        report_total_gross = parse_currency(s['gross'])
+                        verification_found = True
 
         # --- STRICT SCHEMA VALIDATION ---
         if extracted_rows:
@@ -89,13 +113,36 @@ def extract_contractual_report(pdf_path):
         logger.error(f"❌ CRITICAL ERROR: {str(e)}")
         raise e
         
+    # --- DYNAMIC VALIDATION RESULT ---
+    metrics = {
+        "Calculated Tickets": calc_total_sold,
+        "Calculated Gross": f"£{calc_total_gross:,.2f}"
+    }
+
+    if verification_found:
+        metrics["Reported Tickets"] = report_total_sold
+        metrics["Reported Gross"] = f"£{report_total_gross:,.2f}"
+
+        tickets_match = (calc_total_sold == report_total_sold)
+        gross_matches = (abs(calc_total_gross - report_total_gross) < 1.0)
+
+        if tickets_match and gross_matches:
+            status = "PASSED"
+            message = "Calculated totals successfully match the report summary."
+            logger.info(f"✅ {message}")
+        else:
+            status = "FAILED"
+            message = f"Mismatch! Calculated (Tickets: {calc_total_sold}, Gross: £{calc_total_gross:,.2f}) vs Reported (Tickets: {report_total_sold}, Gross: £{report_total_gross:,.2f})"
+            logger.error(f"❌ {message}")
+    else:
+        status = "UNVALIDATED"
+        message = "No stated totals found in PDF, manual review required."
+        logger.warning(f"⚠️ {message}")
+
     validation_result = ValidationResult(
-        status="UNVALIDATED",
-        message="No stated totals found in PDF, manual review required.",
-        metrics={
-            "Calculated Tickets": calc_total_sold,
-            "Calculated Gross": f"£{calc_total_gross:,.2f}"
-        }
+        status=status,
+        message=message,
+        metrics=metrics
     )
         
     return extracted_rows, validation_result
