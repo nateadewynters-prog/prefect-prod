@@ -1,7 +1,8 @@
 import pdfplumber
 import re
 import os
-from prefect import task
+from prefect import task, get_run_logger
+from shared_libs.utils import ValidationResult
 
 def parse_currency(value_str):
     if not value_str: return 0.0
@@ -22,12 +23,12 @@ def parse_int(value_str):
 # Strict Data Contract
 EXPECTED_SCHEMA = {"Day", "Date", "Time", "Production", "Total Capacity", "Sold", "Reserved", "Remaining", "Reserved Value", "Total Gross"}
 
-@task(name="Parse Malvern Contractual PDF", log_prints=True)
+@task(name="Parse Malvern Contractual PDF")
 def extract_contractual_report(pdf_path):
-    logs = []
+    logger = get_run_logger()
     extracted_rows = []
     
-    logs.append(f"📂 Opening PDF file: {os.path.basename(pdf_path)}")
+    logger.info(f"📂 Opening PDF file: {os.path.basename(pdf_path)}")
     
     calc_total_sold = 0
     calc_total_gross = 0.0
@@ -79,19 +80,22 @@ def extract_contractual_report(pdf_path):
             actual_schema = set(extracted_rows[0].keys())
             if actual_schema != EXPECTED_SCHEMA:
                 error_msg = f"Data schema mismatch! Expected exact columns: {EXPECTED_SCHEMA}, but got: {actual_schema}"
-                logs.append(f"❌ {error_msg}")
+                logger.error(f"❌ {error_msg}")
                 raise ValueError(error_msg)
             else:
-                logs.append(f"✅ Schema validation passed. Extracted {len(extracted_rows)} production rows.")
+                logger.info(f"✅ Schema validation passed. Extracted {len(extracted_rows)} production rows.")
 
     except Exception as e:
-        logs.append(f"❌ CRITICAL ERROR: {str(e)}")
+        logger.error(f"❌ CRITICAL ERROR: {str(e)}")
         raise e
         
-    # RETURN SUMMARY STATS FOR OBSERVABILITY
-    summary_stats = {
-        "total_tickets": calc_total_sold,
-        "total_gross": calc_total_gross
-    }
+    validation_result = ValidationResult(
+        status="UNVALIDATED",
+        message="No stated totals found in PDF, manual review required.",
+        metrics={
+            "Calculated Tickets": calc_total_sold,
+            "Calculated Gross": f"£{calc_total_gross:,.2f}"
+        }
+    )
         
-    return extracted_rows, logs, summary_stats
+    return extracted_rows, validation_result

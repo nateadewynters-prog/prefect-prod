@@ -4,11 +4,20 @@ import requests as r
 from dotenv import load_dotenv
 from pathlib import Path
 from prefect.runtime import flow_run
+from dataclasses import dataclass
+from typing import Dict, Any
 
 # --- Core Configuration ---
 # Resolves to C:\Prefect\.env regardless of which script calls it
 ENV_PATH = Path("C:/Prefect/.env")
 BASE_URL = "https://api.falcon.io"
+
+@dataclass
+class ValidationResult:
+    """Standardized Data Contract for parser validation returns."""
+    status: str  # Strictly "PASSED", "FAILED", or "UNVALIDATED"
+    message: str
+    metrics: Dict[str, Any]
 
 def setup_environment():
     """Loads the centralized .env file from the Prefect root."""

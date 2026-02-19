@@ -2,7 +2,7 @@
 
 **Host:** `DEW-DBSYNC01` (Internal IP: `10.1.50.126`)  
 **OS:** Windows Server 10.0.14393  
-**Python Version:** 3.13.5 (`C:\Program Files\Python313`)  
+**Python Version:** `3.13.5` (`C:\Program Files\Python313`)  
 **Service Manager:** NSSM (`C:\Users\batchuser\nssm-2.24-101-g897c7ad\win64\nssm.exe`)  
 **Virtual Environment:** `C:\Prefect\venv`  
 
@@ -10,23 +10,31 @@
 
 ## 1. System Architecture
 
-This server hosts multiple automated data pipelines orchestrated by Prefect 3.0.
+This server hosts multiple automated data pipelines orchestrated by **Prefect 3.0**.
 
 To maintain **DRY principles**, all projects share:
 
 - A centralized configuration file (`.env`)
 - A unified Python utility library (`shared_lib`)
+- A standardized `ValidationResult` Data Contract for ETL observability
+
+This ensures:
+
+- No duplicated credential logic  
+- Centralized alerting  
+- Consistent database connectivity  
+- Unified validation and monitoring patterns  
 
 ---
 
-### Directory Tree
+## Directory Tree
 
 ```text
 C:\Prefect\
 ├── README.md                     <-- Master System Documentation (This File)
 ├── .env                          <-- Centralized Secrets & API Keys
 ├── shared_lib\                   <-- Unified Python Utilities
-│   └── utils.py                  # Handles SQL, .env loading, and Teams Webhooks
+│   └── utils.py                  # Handles SQL, .env loading, Teams Webhooks, and Data Contracts
 ├── brandwatch\                   
 │   ├── README.md                 <-- Brandwatch Project Documentation
 │   ├── brandwatch_channel_sync.py
@@ -68,15 +76,17 @@ utils.setup_environment()
 This guarantees:
 
 - Centralized credential management  
-- Secure configuration  
+- Secure configuration loading  
 - No duplicated `.env` logic  
-- Simplified maintenance  
+- Simplified long-term maintenance  
 
 ---
 
 ## 3. Windows Services (NSSM)
 
 All flows run continuously or on defined schedules using **Windows Services managed by NSSM**.
+
+---
 
 ### ⚠️ Important PowerShell Note
 
@@ -90,17 +100,19 @@ All NSSM commands must reference the exact executable path:
 
 ### Active Services
 
-| Service Name | Directory | Target Script | Schedule |
-|--------------|-----------|--------------|----------|
-| prefect-server | `C:\Prefect\` | `prefect server start` | Continuous (Port 4200) |
-| brandwatch-channel-service | `...\brandwatch` | `brandwatch_channel_sync.py` | Daily @ 07:00 AM |
-| brandwatch-content-service | `...\brandwatch` | `brandwatch_content_sync.py` | Daily @ 08:00 AM |
-| brandwatch-comments-service | `...\brandwatch` | `brandwatch_comments_sync.py` | Daily @ 09:30 AM |
-| outlook-automation-service | `...\outlook_automation` | `email_extraction_flow.py` | Continuous (15m Polling) |
+| Service Name                   | Directory                  | Target Script / Command             | Schedule                    |
+|--------------------------------|----------------------------|------------------------------------|-----------------------------|
+| `prefect-server`              | `C:\Prefect\`              | `prefect server start`             | Continuous (Port 4200)      |
+| `brandwatch-channel-service`  | `...\brandwatch`           | `brandwatch_channel_sync.py`       | Daily @ 07:00 AM            |
+| `brandwatch-content-service`  | `...\brandwatch`           | `brandwatch_content_sync.py`       | Daily @ 08:00 AM            |
+| `brandwatch-comments-service` | `...\brandwatch`           | `brandwatch_comments_sync.py`      | Daily @ 09:30 AM            |
+| `outlook-automation-service`  | `...\outlook_automation`   | `email_extraction_flow.py`         | Continuous (15m Polling)    |
 
 ---
 
 ## 4. Global Administration & Troubleshooting
+
+---
 
 ### Restarting Services
 
@@ -110,7 +122,7 @@ If you update:
 - The `.env` file  
 - Any `.json` configuration  
 
-You **must restart** the respective service so changes load into memory.
+You must restart the respective service so changes load into memory.
 
 ```powershell
 # Restart a specific service
@@ -154,7 +166,7 @@ C:\Users\batchuser\PortableGit\bin\git.exe
 
 ---
 
-#### Standard Workflow
+### Standard Workflow
 
 Open PowerShell in:
 
@@ -176,7 +188,7 @@ Commit:
 
 ---
 
-#### Git Lock Errors
+### Git Lock Errors
 
 If Git fails with:
 
@@ -202,7 +214,7 @@ del .git\index.lock
 ## 5. Project-Specific Documentation
 
 For detailed business logic, API routing, database schema, or project-specific troubleshooting, refer to:
-W
+
 📊 **Brandwatch Sync**  
 ```
 C:\Prefect\brandwatch\README.md
@@ -215,13 +227,16 @@ C:\Prefect\outlook_automation\README.md
 
 ---
 
-## 🧩 System Summary
+## 🧭 Operational Principles
 
-This orchestration server provides:
+This server is designed around:
 
-- Centralized credential management  
-- Unified shared utilities  
-- Prefect 3.0 orchestration  
-- Windows-native service automation  
-- Secure API integrations  
-- Continuous monitoring & observability  
+- Centralized configuration
+- Service-based orchestration
+- Strict idempotency
+- Secure credential handling
+- Modular architecture
+- Observable ETL patterns
+- Clear separation of business logic by domain
+
+All automation pipelines deployed on `DEW-DBSYNC01` must adhere to this standard.

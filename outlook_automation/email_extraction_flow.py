@@ -12,6 +12,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from dateutil import parser as date_parser
 from prefect import flow, task, get_run_logger
+from prefect.artifacts import create_markdown_artifact
 
 # Add C:\Prefect to path
 sys.path.append(str(Path(__file__).parents[1]))
@@ -47,7 +48,6 @@ if not os.path.exists(HISTORY_FILE):
     with open(HISTORY_FILE, 'w') as f: pass
 
 # --- Helper Functions ---
-
 def get_graph_token():
     authority_url = f"https://login.microsoftonline.com/{TENANT_ID}"
     app = msal.ConfidentialClientApplication(
@@ -95,7 +95,6 @@ def generate_standard_filename(metadata, received_date_str, extension):
     return filename.replace(" ", "_").replace("/", "-")
 
 # --- Tasks ---
-
 @task(name="fetch_historical_backlog", retries=2)
 def fetch_and_route_emails():
     logger = get_run_logger()
@@ -267,18 +266,30 @@ def process_email_attachment(email_meta):
         parser_module = importlib.import_module(proc_config['parser_module'])
         parser_function = getattr(parser_module, proc_config['parser_function'])
         
-        # UNPACKING 3 VARIABLES NOW (Data, Logs, Summary Metrics)
-        parsed_data, parse_logs, summary_stats = parser_function(temp_path)
-        
-        # Echo Parser Logs to Prefect
-        for line in parse_logs:
-            if "CRITICAL" in line or "MISMATCH" in line or "❌" in line:
-                logger.warning(f"   [{r_name} Parser] {line}")
-            else:
-                logger.info(f"   [{r_name} Parser] {line}")
+        # UNPACKING NEW DATA CONTRACT
+        parsed_data, validation_result = parser_function(temp_path)
 
         if not parsed_data:
             raise ValueError("Parser completed but returned 0 rows.")
+
+        # Hard Fail evaluation
+        if validation_result.status == "FAILED":
+            raise ValueError(f"Data Validation Failed: {validation_result.message}")
+
+        # Prefect Artifact Generation
+        md_table = (
+            f"## Validation Result: {validation_result.status}\n\n"
+            f"**Message:** {validation_result.message}\n\n"
+            f"| Metric | Value |\n|---|---|\n"
+        )
+        for key, val in validation_result.metrics.items():
+            md_table += f"| {key} | {val} |\n"
+            
+        create_markdown_artifact(
+            key=f"val-{msg_id.lower()[:20]}", 
+            markdown=md_table, 
+            description=f"Validation details for {r_name}"
+        )
 
         df = pd.DataFrame(parsed_data)
         matched_lookup_count = "N/A"
@@ -300,7 +311,6 @@ def process_email_attachment(email_meta):
                     how='left'
                 )
                 
-                # Check how many rows successfully matched the lookup
                 matched_lookup_count = df['Performance Date Time'].notna().sum()
                 logger.info(f"   ✅ Lookup merge complete. {matched_lookup_count}/{len(df)} rows matched.")
                 
@@ -318,23 +328,25 @@ def process_email_attachment(email_meta):
         
         logger.info(f"✅ Final CSV saved successfully: {csv_name}")
         
-        # --- RICH TEAMS NOTIFICATION ---
-        # Formatted to visually verify if the parsed values match the report
-        tix = summary_stats.get('total_tickets', 0)
-        gross = summary_stats.get('total_gross', 0.0)
-        
-        success_msg = (
-            f"✅ **Extraction Success**\n\n"
-            f"**Rule:** {r_name}\n"
-            f"**File:** {csv_name}\n\n"
-            f"📊 **Extraction Summary:**\n"
-            f"- **Rows Extracted:** {len(df)}\n"
-            f"- **Total Tickets:** {tix:,}\n"
-            f"- **Total Gross:** ${gross:,.2f}\n"
-            f"- **Lookup Match:** {matched_lookup_count}/{len(df)} rows"
-        )
-        utils.send_teams_notification(success_msg, logger)
-        
+        # --- TEAMS NOTIFICATION LOGIC ---
+        if validation_result.status == "UNVALIDATED":
+            warning_msg = (
+                f"⚠️ **Manual Review Required**\n\n"
+                f"**Rule:** {r_name}\n"
+                f"**File:** {csv_name}\n\n"
+                f"**Message:** {validation_result.message}\n\n"
+                f"📊 **Extraction Summary:**\n"
+                f"- **Rows Extracted:** {len(df)}\n"
+            )
+            for k, v in validation_result.metrics.items():
+                warning_msg += f"- **{k}:** {v}\n"
+            warning_msg += f"- **Lookup Match:** {matched_lookup_count}/{len(df)} rows"
+            
+            utils.send_teams_notification(warning_msg, logger)
+        else:
+            # Silent Pass
+            logger.info(f"✅ Teams Alert Bypassed: Validation PASSED natively.")
+
         save_processed_id(msg_id, r_name)
         return True, email_meta['received_date'], r_name
 
@@ -370,7 +382,6 @@ def update_config_state(successful_runs):
     for rule in current_config['rules']:
         r_name = rule['rule_name']
         if r_name in max_dates:
-            # Format to YYYY-MM-DD
             new_date_str = max_dates[r_name].strftime('%Y-%m-%d')
             current_date_str = rule.get('backfill_since', '1900-01-01')
             

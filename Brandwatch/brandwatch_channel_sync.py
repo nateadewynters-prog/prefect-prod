@@ -7,12 +7,14 @@ import pyodbc
 from time import sleep
 from datetime import datetime, timedelta, date
 from prefect import flow, task, get_run_logger
+from prefect.artifacts import create_markdown_artifact
 
 # 1. Best Practice: Add the parent directory to sys.path to find shared_lib
 sys.path.append(str(Path(__file__).parents[1]))
 
 # 2. Updated Import
 import shared_libs.utils as utils
+from shared_libs.utils import ValidationResult
 
 # --- Configuration ---
 utils.setup_environment()
@@ -128,19 +130,23 @@ def fetch_brandwatch_data():
 @task(name="push_to_sql")
 def push_to_sql(file_path):
     logger = get_run_logger()
-    if not os.path.exists(file_path): return 0
+    if not os.path.exists(file_path): 
+        return 0, ValidationResult("FAILED", "CSV File missing.", {})
 
     try:
         df = pd.read_csv(file_path)
-        if df.empty: return 0
-    except Exception: return 0
+        if df.empty: 
+            return 0, ValidationResult("FAILED", "CSV File is empty.", {})
+    except Exception as e: 
+        return 0, ValidationResult("FAILED", f"Error reading CSV: {e}", {})
 
     # Sanitize Columns
     df.columns = [c.replace(' ', '_').replace('(', '').replace(')', '') for c in df.columns]
     
     # Prepare data for insertion
     data_to_insert = [tuple(x if pd.notnull(x) else None for x in r) for r in df.values]
-    if not data_to_insert: return 0
+    if not data_to_insert: 
+        return 0, ValidationResult("FAILED", "No valid data to insert.", {})
 
     # IDEMPOTENCY FIX: Extract the date to ensure we can clear old data
     target_date = df['date'].iloc[0]
@@ -154,44 +160,57 @@ def push_to_sql(file_path):
             cursor = conn.cursor()
             
             # --- START TRANSACTION ---
-            
-            # 1. Delete existing records for this specific date (Idempotency)
-            # This ensures that if we retry, we don't duplicate rows.
             logger.info(f"🧹 Clearing existing data for {target_date}...")
             cursor.execute("DELETE FROM bwChannel WHERE date = ?", target_date)
             
-            # 2. Insert new records
             placeholders = ', '.join(['?'] * len(df.columns))
             sql = f"INSERT INTO bwChannel ({', '.join(df.columns)}) VALUES ({placeholders})"
             cursor.executemany(sql, data_to_insert)
             
-            # 3. Commit Transaction (Atomic: Both Delete and Insert succeed, or neither do)
             conn.commit()
-            
             rows_inserted = len(data_to_insert)
             logger.info(f"✅ SQL Import Successful: {rows_inserted} rows inserted for {target_date}.")
-            break
+            
+            val_result = ValidationResult(
+                status="PASSED",
+                message="✅ Channel metrics successfully updated.",
+                metrics={"Target Date": target_date, "Rows Inserted": rows_inserted}
+            )
+            return rows_inserted, val_result
             
         except pyodbc.Error as e:
             logger.warning(f"SQL Insert failed (Attempt {attempt+1}): {e}")
-            if conn:
-                conn.rollback() # Rollback logic if something goes wrong mid-transaction
+            if conn: conn.rollback()
             if attempt < 4: sleep(5 * (2 ** attempt))
-            else: raise
+            else: 
+                return 0, ValidationResult("FAILED", f"SQL Error: {str(e)}", {})
         finally:
             if conn: conn.close()
                 
-    return rows_inserted
+    return 0, ValidationResult("FAILED", "Exhausted retries.", {})
 
 @flow(name="Brandwatch Channel Sync", log_prints=True)
 def brandwatch_sync_flow():
     logger = get_run_logger()
     try:
         csv_path = fetch_brandwatch_data()
-        total_rows = push_to_sql(csv_path)
-        utils.send_teams_notification(
-            f"✅ **Brandwatch Channel Sync Successful**\n\n**Date:** {date.today()}\n**Rows:** {total_rows}", logger
-        )
+        total_rows, val_result = push_to_sql(csv_path)
+        
+        # Hard Fail Check
+        if val_result.status == "FAILED":
+            raise ValueError(f"Data Validation Failed: {val_result.message}")
+
+        # Artifact Generation
+        md_table = f"## Validation Result: {val_result.status}\n\n**Message:** {val_result.message}\n\n| Metric | Value |\n|---|---|\n"
+        for key, val in val_result.metrics.items(): md_table += f"| {key} | {val} |\n"
+        create_markdown_artifact(key="brandwatch-channel-val", markdown=md_table, description="Channel Sync Validation")
+
+        # Alert Logic
+        if val_result.status == "UNVALIDATED":
+            utils.send_teams_notification(f"⚠️ **Brandwatch Channel: Manual Review**\n\n{val_result.message}", logger)
+        else:
+            logger.info("✅ Teams Alert Bypassed: Validation PASSED natively.")
+
     except Exception as e:
         utils.send_teams_notification(f"❌ **Brandwatch Channel Sync Failed**\n\n**Error:** {str(e)}", logger)
         raise e

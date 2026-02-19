@@ -14,16 +14,14 @@ This project extracts social media performance data from the **Brandwatch (Falco
 
 It consists of **three distinct ETL pipelines**, orchestrated via Prefect:
 
-- Channel-Level Metrics
-- Post-Level Metrics & Daily Delta Calculations
-- Comments / Replies / DMs Export
+- Channel-Level Metrics  
+- Post-Level Metrics & Daily Delta Calculations  
+- Comments / Replies / DMs Export  
 
 All scripts share centralized credentials and utilities from:
 
-```
-C:\Prefect\.env
-C:\Prefect\shared_lib\utils.py
-```
+- `C:\Prefect\.env`  
+- `C:\Prefect\shared_lib\utils.py`  
 
 ---
 
@@ -37,15 +35,6 @@ C:\Prefect\brandwatch\
 └── brandwatch_comments_sync.py   # Asynchronously exports comment/reply data
 ```
 
-### 🔗 External Dependencies
-
-```
-C:\Prefect\.env                  # Contains BRANDWATCH_API_KEY and SQL Credentials
-C:\Prefect\shared_lib\utils.py   # Unified DB connections and Teams Webhooks
-```
-
-> The scripts dynamically import the shared utility library by appending the parent directory `C:\Prefect` to the Python system path at runtime.
-
 ---
 
 ## 3. Pipeline Logic
@@ -58,18 +47,12 @@ C:\Prefect\shared_lib\utils.py   # Unified DB connections and Teams Webhooks
 
 **Logic:**
 
-- Fetches **T-2 (two days ago)** data to account for API lag.
-- Pulls high-level page/channel metrics.
-- Writes results into `bwChannel`.
+- Fetches **T-2 (two days ago)** data to account for API lag  
+- Pulls high-level page/channel metrics  
+- Writes results into `bwChannel`  
 
-**Idempotency Strategy:**
-
-Before inserting new rows:
-
-- Deletes existing records in `bwChannel`
-- For the specific target date only
-
-This ensures retries never create duplicates.
+**Idempotency Strategy:**  
+Before inserting new rows, it deletes existing records in `bwChannel` for the specific target date only.
 
 ---
 
@@ -79,74 +62,59 @@ This ensures retries never create duplicates.
 
 **Logic:**
 
-- Fetches post-level metrics in **3 historical batches**
-- Covers the last **90 days**
-- Writes to:
-  - `bwContent`
-  - `bwContent_Reporting`
+- Fetches post-level metrics in **3 historical batches** covering the last 90 days  
+- Writes to `bwContent` and `bwContent_Reporting`  
 
 ---
 
 #### 🔥 Key Engineering Features
 
-##### 1️⃣ In-Memory Delta Calculation
+---
 
-Replaces the legacy SQL Stored Procedure.
+**1️⃣ In-Memory Delta Calculation**
 
-Daily metrics such as:
-
-- `daily_likes`
-- `daily_views`
-- `daily_comments`
-- `daily_shares`
-
-Are calculated in **Pandas memory** by comparing snapshot-to-snapshot values before pushing into `bwContent_Reporting`.
+Replaces the legacy SQL Stored Procedure.  
+Daily metrics are calculated in Pandas memory by comparing snapshot-to-snapshot values before pushing into `bwContent_Reporting`.
 
 ---
 
-##### 2️⃣ Chunked SQL History Fetch
+**2️⃣ Chunked SQL History Fetch**
 
-Problem:
-- SQL `IN (...)` clauses exceeding ~100k characters
-- pyodbc silently failing
-- Returning 0 historical rows
+To prevent `pyodbc` silently failing on massive `IN (...)` clauses:
 
-Solution:
-- Break unique `content_id`s into batches of **500**
-- Fetch in chunks
-- Reassemble using:
-
-```python
-pd.concat()
-```
-
-If post volume increases significantly, reduce chunk size.
+- Unique `content_ids` are broken into batches of 500  
+- Fetched in chunks  
+- Reassembled using `pd.concat()`  
 
 ---
 
-##### 3️⃣ Timezone Cleaning
+**3️⃣ Timezone Cleaning**
 
-Ensures SQL-safe ingestion:
+Forces UTC parsing and removes timezone awareness to prevent datetime subtraction errors:
 
 ```python
 df['date'] = pd.to_datetime(df['date'], utc=True, errors='coerce').dt.tz_localize(None)
 ```
 
-This:
+---
 
-- Forces UTC parsing
-- Removes timezone awareness
-- Prevents datetime subtraction errors
+**4️⃣ Rate Limit Protection**
+
+Between 30-day API batches, enforces a **3-minute cooldown** to prevent Brandwatch throttling.
 
 ---
 
-##### 4️⃣ Rate Limit Protection
+**5️⃣ Data Contract Validation**
 
-Between 30-day API batches:
+Implements the `ValidationResult` dataclass to assess data loads.
 
-- Enforces a **3-minute cooldown**
-- Prevents Brandwatch throttling
-- Protects long-running historical syncs
+If an API payload returns **0 rows during delta calculation**, the system:
+
+- Flags the run as `UNVALIDATED`  
+- Triggers a manual review alert to Teams  
+- Publishes results to the Prefect UI via Markdown Artifacts  
+
+This prevents silent data corruption.
 
 ---
 
@@ -156,46 +124,27 @@ Between 30-day API batches:
 
 **Logic:**
 
-- Initiates asynchronous export job
-- Extracts:
-  - Comments
-  - Replies
-  - Direct Messages
-- Pulls T-2 data
+- Initiates asynchronous export job  
+- Extracts Comments, Replies, and Direct Messages for T-2  
 
----
+**Export Polling Strategy:**
 
-#### 🔄 Export Polling Strategy
-
-- Polls the Brandwatch Export API every **10 seconds**
-- Waits until job status = `COMPLETED`
-- Downloads generated CSV
-- Loads into SQL (`bwComment`)
-
----
-
-#### 🛡 Idempotency
-
-Before insert:
-
-- Deletes existing SQL records
-- For the extracted date range only
-
-Ensures safe re-runs.
+- Polls the Brandwatch Export API every 10 seconds  
+- Continues until job status = `COMPLETED`  
 
 ---
 
 ## 4. Verification Checklist
 
+---
+
 ### ✅ Prefect Dashboard
 
-Open:
-
-```
-http://10.1.50.126:4200
-```
-
-Verify all three flows show **Completed** state.
+- Verify all three flows show **Completed** state  
+- Review the **Artifacts tab** for Data Contract Metrics  
+  - `PASSED`
+  - `UNVALIDATED`
+  - `FAILED`
 
 ---
 
@@ -207,37 +156,25 @@ Check:
 C:\BrandwatchOutputs\
 ```
 
-Subdirectories:
-
-- `channel`
-- `content`
-- `comment`
-
-Fresh CSVs should exist with today's timestamp.
+Confirm fresh CSVs are generated.
 
 ---
 
 ### ✅ Teams Notifications
 
-Confirm receipt of:
+Confirm receipt of Adaptive Cards in the MS Teams channel.
 
-```
-✅ Success
-```
-
-Adaptive Card in the MS Teams channel for all three flows.
+- `PASSED` validations are silenced  
+- `UNVALIDATED` (Warnings) and `FAILED` trigger alerts  
 
 ---
 
 ### ✅ Database Validation
 
-Run SQL checks:
-
-- `bwContent_Reporting`  
-  - Confirm `daily_*` columns are populated (not all 0)
+Confirm records exist for yesterday’s reporting date in:
 
 - `bwChannel`  
-  - Confirm records exist for yesterday’s reporting date
+- `bwContent_Reporting`  
 
 ---
 
@@ -245,70 +182,41 @@ Run SQL checks:
 
 ---
 
-### ❌ Issue:  
-`String data, right truncation: length 2038 buffer 510`
+### Issue: `String data, right truncation`
 
-**Cause:**
+**Cause:**  
+`pyodbc` bulk insert buffer too small.
 
-`pyodbc`'s `fast_executemany` attempts to auto-size buffers (~255 chars).  
-Fails when inserting long captions, deep links, or image URLs.
-
-**Fix:**
-
+**Fix:**  
 Disable fast execution on the cursor:
 
 ```python
 cursor.fast_executemany = False
 ```
 
-This is intentionally disabled in the Content pipeline.
-
 ---
 
-### ❌ Issue:  
-`TypeError: Cannot subtract tz-naive and tz-aware datetime-like objects`
+### Issue: `TypeError: Cannot subtract tz-naive and tz-aware datetime-like objects`
 
-**Cause:**
+**Cause:**  
+Mixing timezone-aware and timezone-naive datetimes.
 
-Mixing:
-
-- API-provided UTC timestamps (tz-aware)
-- Locally generated naive datetimes
-
-**Fix:**
-
-Normalize both to timezone-naive:
+**Fix:**  
+Normalize both columns to timezone-naive:
 
 ```python
-df['date'] = pd.to_datetime(df['date'], utc=True, errors='coerce').dt.tz_localize(None)
+dt.tz_localize(None)
 ```
 
 ---
 
-### ❌ Issue:  
-Daily metrics perfectly match lifetime metrics (deltas not calculating)
+### Issue: Daily metrics perfectly match lifetime metrics
 
-**Cause:**
+**Cause:**  
+Historical SQL fetch failed due to oversized `IN (...)` clause.
 
-SQL `IN (...)` clause too large.  
-pyodbc silently drops filter → returns 0 history → script assumes all posts are new.
-
-**Fix:**
-
-Chunk `content_id`s into smaller batches (e.g., 500):
-
-```python
-for chunk in chunks:
-    # fetch history
-```
-
-Rebuild full historical dataframe using:
-
-```python
-pd.concat()
-```
-
-Reduce chunk size further if post volume increases.
+**Fix:**  
+Chunk `content_ids` into smaller batches (e.g., 500).
 
 ---
 
@@ -316,13 +224,11 @@ Reduce chunk size further if post volume increases.
 
 This system is:
 
-- Idempotent
-- Rate-limit aware
-- SQL-safe
-- Timezone-clean
-- Delta-calculating in-memory
-- Centrally credentialed
-- Fully observable via Prefect
-- Production-hardened for high-volume social data ingestion
-
----
+- Idempotent  
+- Rate-limit aware  
+- SQL-safe  
+- Timezone-clean  
+- Delta-calculating in-memory  
+- Centrally credentialed  
+- Fully observable via Prefect Artifacts  
+- Production-hardened for high-volume social data ingestion  

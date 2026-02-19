@@ -1,6 +1,7 @@
 import pandas as pd
 import os
-from prefect import task
+from prefect import task, get_run_logger
+from shared_libs.utils import ValidationResult
 
 def clean_currency(value):
     if pd.isna(value) or value == '': return 0.0
@@ -23,21 +24,21 @@ def clean_int(value):
 # Strict Data Contract
 EXPECTED_SCHEMA = {"Performance/Event Code", "Comps", "Paid Tickets", "Total Tickets", "Total Gross"}
 
-@task(name="Parse Ticketek Settlement Excel", log_prints=True)
+@task(name="Parse Ticketek Settlement Excel")
 def extract_settlement_data(file_path):
-    logs = []
+    logger = get_run_logger()
     extracted_events = []
     
-    logs.append(f"📂 Opening Excel file: {os.path.basename(file_path)}")
+    logger.info(f"📂 Opening Excel file: {os.path.basename(file_path)}")
     
     try:
         engine = 'xlrd' if file_path.endswith('.xls') else 'openpyxl'
-        logs.append(f"ℹ️  Using engine '{engine}' to read file...")
+        logger.info(f"ℹ️  Using engine '{engine}' to read file...")
         
         df = pd.read_excel(file_path, header=None, engine=engine)
-        logs.append(f"✅ File read successfully. It has {len(df)} rows.")
+        logger.info(f"✅ File read successfully. It has {len(df)} rows.")
     except Exception as e:
-        logs.append(f"❌ CRITICAL ERROR reading Excel: {str(e)}")
+        logger.error(f"❌ CRITICAL ERROR reading Excel: {str(e)}")
         raise ValueError(f"Failed to read Excel file: {e}")
 
     grid_data = df.values.tolist()
@@ -53,7 +54,7 @@ def extract_settlement_data(file_path):
     grand_total_tickets = 0
     grand_total_gross = 0.0
     
-    logs.append("--- 🕵️ Starting Grid Scan ---")
+    logger.info("--- 🕵️ Starting Grid Scan ---")
 
     for i, row in enumerate(grid_data):
         cleaned_row = [str(x).strip() if not pd.isna(x) else None for x in row]
@@ -130,15 +131,18 @@ def extract_settlement_data(file_path):
         actual_schema = set(extracted_events[0].keys())
         if actual_schema != EXPECTED_SCHEMA:
             error_msg = f"Data schema mismatch! Expected exact columns: {EXPECTED_SCHEMA}, but got: {actual_schema}"
-            logs.append(f"❌ {error_msg}")
+            logger.error(f"❌ {error_msg}")
             raise ValueError(error_msg)
         else:
-            logs.append(f"✅ Schema validation passed. Found {len(extracted_events)} event rows.")
+            logger.info(f"✅ Schema validation passed. Found {len(extracted_events)} event rows.")
 
-    # RETURN SUMMARY STATS FOR OBSERVABILITY
-    summary_stats = {
-        "total_tickets": grand_total_tickets,
-        "total_gross": grand_total_gross
-    }
+    validation_result = ValidationResult(
+        status="PASSED",
+        message="✅ Matched stated totals successfully.",
+        metrics={
+            "Extracted Tickets": grand_total_tickets,
+            "Extracted Gross": f"${grand_total_gross:,.2f}"
+        }
+    )
 
-    return extracted_events, logs, summary_stats
+    return extracted_events, validation_result

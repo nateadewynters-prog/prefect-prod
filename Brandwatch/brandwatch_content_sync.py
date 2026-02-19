@@ -9,12 +9,14 @@ import numpy as np
 from datetime import datetime, timedelta, date
 from collections import defaultdict
 from prefect import flow, task, get_run_logger
+from prefect.artifacts import create_markdown_artifact
 
 # 1. Best Practice: Add the parent directory to sys.path to find shared_lib
 sys.path.append(str(Path(__file__).parents[1]))
 
 # Import Shared Utils
 import shared_libs.utils as utils
+from shared_libs.utils import ValidationResult
 
 # --- Configuration ---
 utils.setup_environment()
@@ -200,7 +202,6 @@ def push_content_to_sql(file_paths):
     if not dfs: return 0
     combined_df = pd.concat(dfs, ignore_index=True)
     
-    # Cleaning
     if 'date_of_post' in combined_df.columns:
         combined_df['date_of_post'] = pd.to_datetime(combined_df['date_of_post'], errors='coerce')
         combined_df = combined_df.dropna(subset=['date_of_post'])
@@ -209,10 +210,8 @@ def push_content_to_sql(file_paths):
     
     conn = utils.get_db_connection()
     cursor = conn.cursor()
-    # fast_executemany disabled for large text fields
     
     try:
-        # 1. Insert Data
         if 'date_of_upload' in combined_df.columns:
             for u_date in combined_df['date_of_upload'].dropna().unique():
                 cursor.execute("DELETE FROM bwContent WHERE date_of_upload = ?", pd.to_datetime(u_date).strftime('%Y-%m-%d'))
@@ -221,36 +220,6 @@ def push_content_to_sql(file_paths):
         sql = f"INSERT INTO bwContent ({', '.join(combined_df.columns)}) VALUES ({placeholders})"
         cursor.executemany(sql, [tuple(x if pd.notnull(x) else None for x in row) for row in combined_df.values])
         conn.commit()
-        
-        # 2. Log 7-Day History (New Logic)
-        try:
-            logger.info("--- 📊 Verifying Upload History (Last 7 Days) ---")
-            history_sql = """
-                SELECT CAST(date_of_upload AS DATE) as upload_date, COUNT(*) as row_count
-                FROM bwContent
-                WHERE date_of_upload >= DATEADD(day, -7, GETDATE())
-                GROUP BY CAST(date_of_upload AS DATE)
-                ORDER BY upload_date DESC
-            """
-            cursor.execute(history_sql)
-            rows = cursor.fetchall()
-
-            log_msg = "\n" + "-"*35 + "\n"
-            log_msg += f"{'Upload Date':<15} | {'Row Count':<10}\n"
-            log_msg += "-"*35 + "\n"
-            
-            for row in rows:
-                # row[0] is date, row[1] is count
-                date_str = str(row[0])
-                count_str = str(row[1])
-                log_msg += f"{date_str:<15} | {count_str:<10}\n"
-            
-            log_msg += "-"*35
-            logger.info(log_msg)
-            
-        except Exception as history_e:
-            logger.warning(f"⚠️ Data pushed successfully, but failed to fetch history logs: {history_e}")
-
         return len(combined_df)
     finally:
         conn.close()
@@ -259,17 +228,16 @@ def push_content_to_sql(file_paths):
 def calculate_and_push_deltas(file_paths):
     logger = get_run_logger()
     valid_files = [f for f in file_paths if f and os.path.exists(f)]
-    if not valid_files: return 0
+    if not valid_files: 
+        return 0, ValidationResult("FAILED", "No valid files provided for delta calculation.", {})
 
     dfs = [pd.read_csv(f) for f in valid_files]
     current_df = pd.concat(dfs, ignore_index=True)
     current_df.columns = [c.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_') for c in current_df.columns]
     
-    # ID Cleaning & Dedup
     current_df['content_id'] = current_df['content_id'].astype(str).str.strip()
     current_df = current_df.drop_duplicates(subset=['content_id', 'date_of_upload'])
 
-    # Timezone strip
     current_df['date_of_post'] = pd.to_datetime(current_df['date_of_post'], utc=True, errors='coerce').dt.tz_localize(None)
     current_df['date_of_upload'] = pd.to_datetime(current_df['date_of_upload'], utc=True, errors='coerce').dt.tz_localize(None)
     current_df['days_since_post'] = (current_df['date_of_upload'] - current_df['date_of_post']).dt.days
@@ -283,7 +251,6 @@ def calculate_and_push_deltas(file_paths):
         today_str = current_df['date_of_upload'].max().strftime('%Y-%m-%d')
         content_ids = current_df['content_id'].dropna().unique().tolist()
         
-        # Chunked Fetch
         prev_dfs = []
         for i in range(0, len(content_ids), 500):
             chunk = tuple(content_ids[i:i + 500])
@@ -316,7 +283,6 @@ def calculate_and_push_deltas(file_paths):
                 final_df[prev] = pd.to_numeric(final_df.get(prev, 0), errors='coerce').fillna(0)
                 final_df[f"daily_{m}"] = pd.to_numeric(final_df[lt], errors='coerce').fillna(0) - final_df[prev]
 
-        # Cleanup & Push
         final_df = final_df.replace({np.nan: None})
         cursor.execute("DELETE FROM bwContent_Reporting WHERE date_of_upload = ?", today_str)
         
@@ -327,11 +293,16 @@ def calculate_and_push_deltas(file_paths):
         sql = f"INSERT INTO bwContent_Reporting ({', '.join(final_df.columns)}) VALUES ({placeholders})"
         cursor.executemany(sql, [tuple(x if pd.notnull(x) else None for x in row) for row in final_df.values])
         conn.commit()
-        return len(final_df)
+        
+        status = "PASSED" if len(final_df) > 0 else "UNVALIDATED"
+        message = "✅ Deltas updated." if len(final_df) > 0 else "⚠️ No new content rows processed."
+        
+        val_result = ValidationResult(status=status, message=message, metrics={"Rows Processed": len(final_df)})
+        return len(final_df), val_result
 
     except Exception as e:
         logger.error(f"Delta Calculation Failed: {e}")
-        raise
+        return 0, ValidationResult("FAILED", f"Error calculating deltas: {e}", {})
     finally:
         conn.close()
 
@@ -355,11 +326,26 @@ def brandwatch_content_flow():
                 time.sleep(180) 
 
         raw_rows = push_content_to_sql(generated_files)
-        reporting_rows = calculate_and_push_deltas(generated_files) if raw_rows > 0 else 0
+        
+        if raw_rows > 0:
+            reporting_rows, val_result = calculate_and_push_deltas(generated_files)
+            val_result.metrics["Raw Rows"] = raw_rows
+        else:
+            val_result = ValidationResult("UNVALIDATED", "⚠️ 0 raw rows fetched, delta calculation skipped.", {"Raw Rows": 0, "Reporting Rows": 0})
 
-        utils.send_teams_notification(
-            f"✅ **Brandwatch Content Sync Successful**\n\n**Date:** {date.today()}\n**Raw:** {raw_rows}\n**Reporting:** {reporting_rows}", logger
-        )
+        if val_result.status == "FAILED":
+            raise ValueError(f"Data Validation Failed: {val_result.message}")
+
+        # Artifact Generation
+        md_table = f"## Validation Result: {val_result.status}\n\n**Message:** {val_result.message}\n\n| Metric | Value |\n|---|---|\n"
+        for key, val in val_result.metrics.items(): md_table += f"| {key} | {val} |\n"
+        create_markdown_artifact(key="brandwatch-content-val", markdown=md_table, description="Content Sync Validation")
+
+        if val_result.status == "UNVALIDATED":
+            utils.send_teams_notification(f"⚠️ **Brandwatch Content: Manual Review**\n\n{val_result.message}", logger)
+        else:
+            logger.info("✅ Teams Alert Bypassed: Validation PASSED natively.")
+
     except Exception as e:
         utils.send_teams_notification(f"❌ **Brandwatch Content Sync Failed**\n\n**Error:** {str(e)}", logger)
         raise e

@@ -12,11 +12,7 @@
 
 This service automates financial data extraction from emails. It uses a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
 
-The system is **Config-Driven**: Adding a new show or venue does *not* require changing code — only updating:
-
-```
-config/show_reporting_rules.json
-```
+The system is **Config-Driven**: Adding a new show or venue does *not* require changing code — only updating `config/show_reporting_rules.json`.
 
 ---
 
@@ -40,12 +36,15 @@ C:\Prefect\outlook_automation\
 └── email_extraction_flow.py      # Main Orchestrator
 ```
 
+---
+
 ### 🔗 External Dependencies
 
-```
-C:\Prefect\.env                  # Master credentials (Azure Tenant/Client IDs, Webhooks)
-C:\Prefect\shared_lib\utils.py   # Unified environment loading and Teams notification logic
-```
+- `C:\Prefect\.env`  
+  Master credentials (Azure Tenant/Client IDs, Webhooks)
+
+- `C:\Prefect\shared_lib\utils.py`  
+  Unified environment loading, Data Contracts, and Teams notification logic
 
 ---
 
@@ -69,18 +68,18 @@ The engine routes emails based on:
 
 Each rule in the JSON config tracks its own progress using:
 
-```
+```json
 "backfill_since": "YYYY-MM-DD"
 ```
 
 When the script runs:
 
-- It searches for relevant emails
-- Uses Python to strictly filter items received **on or after** this date
-- After successful processing, it automatically updates the JSON file
-- The `backfill_since` value advances forward
+1. It searches for relevant emails  
+2. Uses Python to strictly filter items received on or after this date  
+3. After successful processing, it automatically updates the JSON file  
+4. The `backfill_since` value advances forward  
 
-This:
+This design:
 
 - Eliminates redundant API calls  
 - Enables seamless historical backfills  
@@ -90,43 +89,19 @@ This:
 
 ### Strict File Naming & Date Handling
 
-Files are renamed before processing to ensure consistency.
+Files are renamed **before processing** to ensure consistency.
 
 The `{RecDate}` is:
 
-- Derived from **Email Received Time (GMT)**
-- Adjusted to **T-1 (minus 1 day)**
-- Formatted as `dd_mm_yy`
+- Derived from Email Received Time (GMT)  
+- Adjusted to **T-1** (minus 1 day)  
+- Formatted as `dd_mm_yy`  
 
-This ensures filenames reflect the **actual sales reporting period**, not delivery time.
+This guarantees:
 
----
-
-#### Example
-
-If email received:
-
-```
-February 18, 2026 (GMT)
-```
-
-Reporting Date (T-1):
-
-```
-February 17, 2026
-```
-
-Raw Archive:
-
-```
-Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.xls
-```
-
-Processed Data:
-
-```
-Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.csv
-```
+- Reporting-date accuracy  
+- Timezone consistency  
+- Deterministic downstream file naming  
 
 ---
 
@@ -138,40 +113,10 @@ Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.csv
 config/show_reporting_rules.json
 ```
 
-2. Add a new block to the `rules` array.
-
+2. Add a new block to the `rules` array  
 3. Declare:
    - `attachment_type`
-   - `backfill_since` starting date
-
----
-
-### Example Configuration
-
-```json
-{
-    "rule_name": "NEW_SHOW_RULE",
-    "active": true,
-    "backfill_since": "2023-01-01",
-    "match_criteria": {
-        "sender_domain": "new-venue.com",
-        "subject_keyword": "Settlement",
-        "attachment_type": ".xlsx"
-    },
-    "metadata": {
-        "show_name": "New Musical",
-        "venue_name": "The Globe",
-        "show_id": "999",
-        "venue_id": "VN-GLOBE",
-        "document_id": "17"
-    },
-    "processing": {
-        "parser_module": "parsers.ticketek_event_settlement_excel_parser",
-        "parser_function": "extract_settlement_data",
-        "needs_lookup": true
-    }
-}
-```
+   - `backfill_since` starting date  
 
 4. Restart the service:
 
@@ -179,37 +124,48 @@ config/show_reporting_rules.json
 Restart-Service "outlook-extraction-service"
 ```
 
+No Python code changes are required.
+
 ---
 
 ## 5. Technical Details
 
-### Unified Teams Notifications
+---
 
-Alerts for:
+### Strict Schema Validation & Data Contracts
 
-- Extraction successes  
-- Attachment mismatches  
-- Parser failures  
+To protect downstream systems, parsers enforce strict schema validation via a **Generic Validation Pattern** using the `ValidationResult` dataclass.
 
-Are routed through the standardized:
+Each parser returns two objects:
 
-```
-send_teams_notification()
-```
+1. **Parsed Data**  
+   Structured dictionary (or DataFrame) of extracted rows  
 
-Located in:
+2. **ValidationResult**  
+   A dataclass containing:
 
-```
-C:\Prefect\shared_lib\utils.py
-```
+   - `status` → `PASSED`, `FAILED`, or `UNVALIDATED`  
+   - `message` → Human-readable explanation  
+   - `metrics` → Flexible dictionary of extracted metrics  
+     - Example: `{"Extracted Tickets": 1500}`  
 
-This ensures the payload strictly matches the **Adaptive Card schema** expected by the Power Automate workflow.
+---
+
+### Orchestrator Behavior
+
+| Status        | System Action |
+|--------------|--------------|
+| `FAILED`      | Hard failure. File moved to `failed/`. Red ❌ Teams alert sent. |
+| `UNVALIDATED` | Warning ⚠️ Teams alert. Manual review required. |
+| `PASSED`      | Silently logged to console (prevents alert fatigue). |
+
+All validation results automatically generate a **Prefect Markdown Artifact**, enabling analysts to review extracted metrics directly inside the Prefect UI.
 
 ---
 
 ### Audit Logging (`processed_ids.txt`)
 
-While the JSON state file controls how far back to search, `processed_ids.txt` acts as the **final deduplication fail-safe**.
+While the JSON state file controls historical boundaries, `processed_ids.txt` acts as the **final deduplication fail-safe**.
 
 It is a CSV-formatted audit log recording:
 
@@ -217,44 +173,23 @@ It is a CSV-formatted audit log recording:
 timestamp, msg_id, rule_name
 ```
 
-If a message ID exists in this file:
-
-- It is permanently skipped  
-- Duplicate extraction is prevented  
+If a message ID exists in this file, it is permanently skipped.
 
 ---
 
 ### Hybrid Search Strategy (Microsoft Graph API)
 
-Instead of downloading massive inboxes or fighting Microsoft Graph's `$filter` restrictions, the script uses a **Hybrid Strategy**:
+The script uses a **Hybrid Strategy** to bypass Graph limitations:
 
-**Fuzzy API Search**
-- Pushes a targeted text search directly to Graph using the `$search` parameter  
-- Example: `"domain keyword"`  
-- Instantly bypasses irrelevant emails  
+1. **Fuzzy API Search**  
+   Pushes a targeted text search directly to Graph using `$search`.
 
-**Strict Python Date Filter**
-- Microsoft blocks combining `$search` and `$filter`  
-- The `backfill_since` boundary is evaluated locally in Python  
-- Older emails are instantly dropped  
+2. **Strict Python Date Filter**  
+   Evaluates the `backfill_since` boundary locally in Python.
 
-**Deep Backlogs & Rate Limits**
-- Handles `@odata.nextLink` pagination automatically  
-- Gracefully pauses when hitting `429 Too Many Requests`  
-- Respects the `Retry-After` header  
-
----
-
-### Strict Schema Validation (Data Contracts)
-
-To protect downstream systems, parsers enforce strict schema validation.
-
-If extracted data does **not exactly match** the expected column structure:
-
-- The script errors immediately  
-- The Prefect task fails  
-- A Teams alert is sent  
-- **No corrupted or misaligned data is saved**  
+3. **Deep Backlogs & Rate Limits**  
+   - Handles `@odata.nextLink` pagination automatically  
+   - Gracefully pauses when receiving `429 Too Many Requests`  
 
 ---
 
@@ -266,8 +201,6 @@ This pipeline is:
 - Stateful  
 - Idempotent  
 - Timezone-safe (GMT standardized)  
-- Strictly validated  
-- Fully observable via Prefect  
+- Strictly validated (Data Contracts)  
+- Fully observable via Prefect Artifacts  
 - Centralized for credentials and notifications  
-
-It is production-hardened for long-term automated financial reporting.

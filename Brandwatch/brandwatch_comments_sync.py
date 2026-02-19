@@ -8,12 +8,14 @@ import time
 from io import StringIO
 from datetime import datetime, timedelta, date, timezone
 from prefect import flow, task, get_run_logger
+from prefect.artifacts import create_markdown_artifact
 
 # 1. Best Practice: Add the parent directory to sys.path to find shared_lib
 sys.path.append(str(Path(__file__).parents[1]))
 
 # Import Shared Utils
 import shared_libs.utils as utils
+from shared_libs.utils import ValidationResult
 
 # --- Configuration ---
 utils.setup_environment()
@@ -69,11 +71,13 @@ def fetch_comments_data():
 @task(name="push_comments_to_sql", retries=3, retry_delay_seconds=60)
 def push_comments_to_sql(file_path):
     logger = get_run_logger()
-    if not file_path or not os.path.exists(file_path): return 0
+    if not file_path or not os.path.exists(file_path): 
+        return 0, ValidationResult("FAILED", "Missing export file.", {})
 
     try:
         df = pd.read_csv(file_path)
-        if df.empty: return 0
+        if df.empty: 
+            return 0, ValidationResult("UNVALIDATED", "Export completed but returned 0 rows.", {"Total Rows": 0})
 
         df.columns = [col.replace(' ', '_').replace('(', '').replace(')', '') for col in df.columns]
         df = df.drop(columns=['Author_name', 'Falcon_user_name', 'Author_follower_count', 'Audience_labels'], errors='ignore')
@@ -84,10 +88,11 @@ def push_comments_to_sql(file_path):
 
     except Exception as e:
         logger.error(f"Data preparation failed: {e}")
-        raise
+        return 0, ValidationResult("FAILED", f"Pandas preparation error: {e}", {})
 
     data_to_insert = [tuple(None if pd.isnull(val) else val for val in row) for row in df.values]
-    if not data_to_insert: return 0
+    if not data_to_insert: 
+        return 0, ValidationResult("UNVALIDATED", "Data mapped to 0 valid inserts.", {"Total Rows": 0})
 
     conn = utils.get_db_connection()
     cursor = conn.cursor()
@@ -103,7 +108,13 @@ def push_comments_to_sql(file_path):
         sql = f"INSERT INTO bwComment ({', '.join(df.columns)}) VALUES ({placeholders})"
         cursor.executemany(sql, data_to_insert)
         conn.commit()
-        return len(data_to_insert)
+        
+        val_result = ValidationResult(
+            status="PASSED",
+            message="✅ Comments parsed and inserted correctly.",
+            metrics={"Rows Inserted": len(data_to_insert)}
+        )
+        return len(data_to_insert), val_result
     finally:
         conn.close()
 
@@ -112,10 +123,23 @@ def brandwatch_comments_flow():
     logger = get_run_logger()
     try:
         csv_path = fetch_comments_data()
-        total_rows = push_comments_to_sql(csv_path)
-        utils.send_teams_notification(
-            f"✅ **Brandwatch Comments Sync Successful**\n\n**Date:** {date.today()}\n**Rows:** {total_rows}", logger
-        )
+        total_rows, val_result = push_comments_to_sql(csv_path)
+
+        # Hard Fail Validation Check
+        if val_result.status == "FAILED":
+            raise ValueError(f"Data Validation Failed: {val_result.message}")
+
+        # Artifact Generation
+        md_table = f"## Validation Result: {val_result.status}\n\n**Message:** {val_result.message}\n\n| Metric | Value |\n|---|---|\n"
+        for key, val in val_result.metrics.items(): md_table += f"| {key} | {val} |\n"
+        create_markdown_artifact(key="brandwatch-comments-val", markdown=md_table, description="Comments Sync Validation")
+
+        # Alerting Logic
+        if val_result.status == "UNVALIDATED":
+            utils.send_teams_notification(f"⚠️ **Brandwatch Comments: Manual Review**\n\n{val_result.message}", logger)
+        else:
+            logger.info("✅ Teams Alert Bypassed: Validation PASSED natively.")
+
     except Exception as e:
         utils.send_teams_notification(f"❌ **Brandwatch Comments Sync Failed**\n\n**Error:** {str(e)}", logger)
         raise e
