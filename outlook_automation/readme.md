@@ -1,11 +1,10 @@
-Here is your cleaned, properly structured, and export-ready `readme.md` wrapped in a single Markdown code block:
-
-````markdown
 # 📧 Medallion Email Extraction Automation (Prefect 3.0)
 
 **Host:** `DEW-DBSYNC01`  
 **Status:** 🟢 Active (Polling every 15m)  
 **Architecture:** JSON-Driven Medallion Pattern  
+
+> **System Map Reference:** For global server settings, NSSM service management, and Python environment details, refer to the **Master README** at `C:\Prefect\README.md`.
 
 ---
 
@@ -13,7 +12,11 @@ Here is your cleaned, properly structured, and export-ready `readme.md` wrapped 
 
 This service automates financial data extraction from emails. It uses a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
 
-The system is **Config-Driven**: Adding a new show or venue does *not* require changing code, only updating `config/show_reporting_rules.json`.
+The system is **Config-Driven**: Adding a new show or venue does *not* require changing code — only updating:
+
+```
+config/show_reporting_rules.json
+```
 
 ---
 
@@ -34,8 +37,14 @@ C:\Prefect\outlook_automation\
 │   ├── __init__.py
 │   ├── ticketek_event_settlement_excel_parser.py        
 │   └── malvern_theatre_contractual_report_pdf_parser.py 
-├── outlook_utils.py              # Shared Utils (Teams Webhooks)
 └── email_extraction_flow.py      # Main Orchestrator
+```
+
+### 🔗 External Dependencies
+
+```
+C:\Prefect\.env                  # Master credentials (Azure Tenant/Client IDs, Webhooks)
+C:\Prefect\shared_lib\utils.py   # Unified environment loading and Teams notification logic
 ```
 
 ---
@@ -44,7 +53,9 @@ C:\Prefect\outlook_automation\
 
 All logic is controlled by:
 
-`config/show_reporting_rules.json`
+```
+config/show_reporting_rules.json
+```
 
 The engine routes emails based on:
 
@@ -58,13 +69,16 @@ The engine routes emails based on:
 
 Each rule in the JSON config tracks its own progress using:
 
-`"backfill_since": "YYYY-MM-DD"`
+```
+"backfill_since": "YYYY-MM-DD"
+```
 
 When the script runs:
 
-- It searches for relevant emails and uses Python to strictly filter for items received **on or after** this date.
-- After successful processing, it automatically updates the JSON file.
-- The `backfill_since` value advances forward.
+- It searches for relevant emails
+- Uses Python to strictly filter items received **on or after** this date
+- After successful processing, it automatically updates the JSON file
+- The `backfill_since` value advances forward
 
 This:
 
@@ -74,20 +88,11 @@ This:
 
 ---
 
-### Current Rules
-
-| Rule Name | Trigger | Target Parser | Output Filename Format |
-|------------|----------|--------------|-------------------------|
-| MALVERN | From: malvern-theatres.co.uk<br>Subj: "Figures"<br>Type: .pdf | malvern_theatre...pdf_parser.py | `{Show}_{Venue}_{ShowID}_{VenueID}_{DocID}_{RecDate}.csv` |
-| TICKETEK | From: ticketek.com.sg<br>Subj: "Sales Summary"<br>Type: .xls | ticketek_event...excel_parser.py | `{Show}_{Venue}_{ShowID}_{VenueID}_{DocID}_{RecDate}.csv` |
-
----
-
 ### Strict File Naming & Date Handling
 
 Files are renamed before processing to ensure consistency.
 
-The `{RecDate}`:
+The `{RecDate}` is:
 
 - Derived from **Email Received Time (GMT)**
 - Adjusted to **T-1 (minus 1 day)**
@@ -95,26 +100,51 @@ The `{RecDate}`:
 
 This ensures filenames reflect the **actual sales reporting period**, not delivery time.
 
+---
+
 #### Example
 
-If email received: **February 18, 2026 (GMT)**  
-Reporting Date (T-1): **February 17, 2026**
+If email received:
 
-Raw Archive:  
-`Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.xls`
+```
+February 18, 2026 (GMT)
+```
 
-Processed Data:  
-`Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.csv`
+Reporting Date (T-1):
+
+```
+February 17, 2026
+```
+
+Raw Archive:
+
+```
+Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.xls
+```
+
+Processed Data:
+
+```
+Jesus_Christ_Superstar_Ticketek_SG_287_220_17_17_02_26.csv
+```
 
 ---
 
 ## 4. How to Add a New Show
 
-1. Navigate to `config/show_reporting_rules.json`
-2. Add a new block to the `rules` array
+1. Navigate to:
+
+```
+config/show_reporting_rules.json
+```
+
+2. Add a new block to the `rules` array.
+
 3. Declare:
    - `attachment_type`
    - `backfill_since` starting date
+
+---
 
 ### Example Configuration
 
@@ -143,11 +173,39 @@ Processed Data:
 }
 ```
 
-4. Restart the service.
+4. Restart the service:
+
+```powershell
+Restart-Service "outlook-extraction-service"
+```
 
 ---
 
 ## 5. Technical Details
+
+### Unified Teams Notifications
+
+Alerts for:
+
+- Extraction successes  
+- Attachment mismatches  
+- Parser failures  
+
+Are routed through the standardized:
+
+```
+send_teams_notification()
+```
+
+Located in:
+
+```
+C:\Prefect\shared_lib\utils.py
+```
+
+This ensures the payload strictly matches the **Adaptive Card schema** expected by the Power Automate workflow.
+
+---
 
 ### Audit Logging (`processed_ids.txt`)
 
@@ -155,7 +213,9 @@ While the JSON state file controls how far back to search, `processed_ids.txt` a
 
 It is a CSV-formatted audit log recording:
 
-`timestamp, msg_id, rule_name`
+```
+timestamp, msg_id, rule_name
+```
 
 If a message ID exists in this file:
 
@@ -164,33 +224,24 @@ If a message ID exists in this file:
 
 ---
 
-### Historical Backlogs & Hybrid Search Strategy
+### Hybrid Search Strategy (Microsoft Graph API)
 
 Instead of downloading massive inboxes or fighting Microsoft Graph's `$filter` restrictions, the script uses a **Hybrid Strategy**:
 
-- **Fuzzy API Search:**  
-  Pushes a targeted text search directly to Graph using the `$search` parameter (e.g., `"domain keyword"`). This instantly bypasses irrelevant emails.
+**Fuzzy API Search**
+- Pushes a targeted text search directly to Graph using the `$search` parameter  
+- Example: `"domain keyword"`  
+- Instantly bypasses irrelevant emails  
 
-- **Strict Python Date Filter:**  
-  Because Microsoft blocks combining `$search` and `$filter`, the `backfill_since` date boundary is evaluated locally in Python. Older emails are instantly dropped.
+**Strict Python Date Filter**
+- Microsoft blocks combining `$search` and `$filter`  
+- The `backfill_since` boundary is evaluated locally in Python  
+- Older emails are instantly dropped  
 
-- **Deep Backlogs:**  
-  Handles `@odata.nextLink` pagination automatically, allowing retrieval of emails buried under 10,000+ irrelevant messages.
-
-- **Rate Limits:**  
-  Detects HTTP `429 Too Many Requests`, uses the `Retry-After` header, and gracefully pauses to avoid throttling.
-
----
-
-### Multiple Attachments Handling
-
-If an email contains multiple attachments:
-
-- Scans for file matching rule’s `attachment_type`
-- Skips irrelevant files (e.g., logos)
-- If required type missing:
-  - Sends Teams notification
-  - Skips email
+**Deep Backlogs & Rate Limits**
+- Handles `@odata.nextLink` pagination automatically  
+- Gracefully pauses when hitting `429 Too Many Requests`  
+- Respects the `Retry-After` header  
 
 ---
 
@@ -198,10 +249,25 @@ If an email contains multiple attachments:
 
 To protect downstream systems, parsers enforce strict schema validation.
 
-If extracted data does not exactly match expected column structure:
+If extracted data does **not exactly match** the expected column structure:
 
-- Script errors immediately  
-- Prefect task fails  
-- Teams alert is sent  
-- **No corrupted or misaligned data is saved**
-````
+- The script errors immediately  
+- The Prefect task fails  
+- A Teams alert is sent  
+- **No corrupted or misaligned data is saved**  
+
+---
+
+## ✅ Architectural Guarantees
+
+This pipeline is:
+
+- Config-driven  
+- Stateful  
+- Idempotent  
+- Timezone-safe (GMT standardized)  
+- Strictly validated  
+- Fully observable via Prefect  
+- Centralized for credentials and notifications  
+
+It is production-hardened for long-term automated financial reporting.
