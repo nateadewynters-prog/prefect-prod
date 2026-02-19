@@ -1,4 +1,6 @@
+import sys
 import os
+from pathlib import Path
 import requests as r
 import pandas as pd
 import pyodbc
@@ -6,15 +8,18 @@ from time import sleep
 from datetime import datetime, timedelta, date
 from prefect import flow, task, get_run_logger
 
-# Import Shared Utils
-import brandwatch_utils as utils
+# 1. Best Practice: Add the parent directory to sys.path to find shared_lib
+sys.path.append(str(Path(__file__).parents[1]))
+
+# 2. Updated Import
+import shared_libs.utils as utils
 
 # --- Configuration ---
 utils.setup_environment()
-API_KEY = '1SfCwWj7AAlGBPSgQFDC5Bf9PBLz6wsn' 
+API_KEY = os.getenv('BRANDWATCH_API_KEY')
 OUTPUT_DIR = r'C:\BrandwatchOutputs\channel'
 
-@task(name="fetch_brandwatch_data", retries=3, retry_delay_seconds=300)
+@task(name="fetch_brandwatch_data")
 def fetch_brandwatch_data():
     logger = get_run_logger()
     target_date = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')

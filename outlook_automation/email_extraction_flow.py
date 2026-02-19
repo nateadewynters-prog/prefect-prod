@@ -1,3 +1,5 @@
+import sys
+from pathlib import Path
 import os
 import json
 import shutil
@@ -11,8 +13,11 @@ from datetime import datetime, timezone, timedelta
 from dateutil import parser as date_parser
 from prefect import flow, task, get_run_logger
 
+# Add C:\Prefect to path
+sys.path.append(str(Path(__file__).parents[1]))
+
 # --- Local Imports ---
-import outlook_utils as utils
+import shared_libs.utils as utils
 
 # --- Configuration Load ---
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -30,7 +35,7 @@ utils.setup_environment()
 TENANT_ID = os.getenv("AZURE_TENANT_ID")
 CLIENT_ID = os.getenv("AZURE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
-TARGET_EMAIL_USER = os.getenv("TARGET_EMAIL_USER")
+TARGET_EMAIL_USER = os.getenv("FIGURES_INBOX_ADDRESS")
 
 # --- Directory Setup ---
 for key, relative_path in GLOBAL['data_dirs'].items():

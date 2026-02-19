@@ -1,4 +1,6 @@
+import sys
 import os
+from pathlib import Path
 import requests as r
 import pandas as pd
 import pyodbc
@@ -7,12 +9,15 @@ from io import StringIO
 from datetime import datetime, timedelta, date, timezone
 from prefect import flow, task, get_run_logger
 
+# 1. Best Practice: Add the parent directory to sys.path to find shared_lib
+sys.path.append(str(Path(__file__).parents[1]))
+
 # Import Shared Utils
-import brandwatch_utils as utils
+import shared_libs.utils as utils
 
 # --- Configuration ---
 utils.setup_environment()
-API_KEY = 'MSgkkt0njOWJf1qD8tUYzeCAmnySSQeG'
+API_KEY = os.getenv('BRANDWATCH_API_KEY')
 OUTPUT_DIR = r'C:\BrandwatchOutputs\comment'
 
 @task(name="fetch_comments_data", retries=3, retry_delay_seconds=60)
