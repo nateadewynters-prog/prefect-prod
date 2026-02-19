@@ -61,7 +61,7 @@ def fetch_comments_data():
             time.sleep(10)
     raise TimeoutError("Export polling timed out.")
 
-@task(name="push_comments_to_sql")
+@task(name="push_comments_to_sql", retries=3, retry_delay_seconds=60)
 def push_comments_to_sql(file_path):
     logger = get_run_logger()
     if not file_path or not os.path.exists(file_path): return 0
