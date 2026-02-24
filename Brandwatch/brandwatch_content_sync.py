@@ -58,7 +58,6 @@ async def fetch_posts_async(client, channel_map, target_date, semaphore, logger)
             if not str(post.get("facebook", {}) or post.get("instagram", {}) or post.get("tiktok", {})).startswith("{'dark': True"):
                 all_posts.append(post)
                 
-        logger.info(f"[{target_date.date()}] Fetched {len(all_posts)} valid posts.")
         return all_posts
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 429:
@@ -120,10 +119,8 @@ async def poll_insight_data(client, req_id, semaphore, logger):
 
 async def process_day_async(client, target_date, channel_map, semaphore, logger):
     """Fetches posts and their insights for a single day concurrently."""
-    logger.info(f"[{target_date.date()}] Starting data collection...")
     posts = await fetch_posts_async(client, channel_map, target_date, semaphore, logger)
     if not posts:
-        logger.info(f"[{target_date.date()}] No posts found. Skipping insights.")
         return [], []
 
     channel_to_content = defaultdict(list)
@@ -161,12 +158,10 @@ async def process_day_async(client, target_date, channel_map, semaphore, logger)
             })
 
     # Submit and Poll Insights
-    logger.info(f"[{target_date.date()}] Submitting {len(payloads)} insight reports...")
     submit_tasks = [request_insight_id(client, p, semaphore, logger) for p in payloads]
     req_ids = await asyncio.gather(*submit_tasks)
     valid_req_ids = [rid for rid in req_ids if rid]
     
-    logger.info(f"[{target_date.date()}] Polling {len(valid_req_ids)} insight reports...")
     poll_tasks = [poll_insight_data(client, rid, semaphore, logger) for rid in valid_req_ids]
     raw_insights = await asyncio.gather(*poll_tasks)
 
@@ -178,7 +173,6 @@ async def process_day_async(client, target_date, channel_map, semaphore, logger)
             for item in items:
                 all_results.append({'contentId': item['contentId'], 'metric': metric, 'value': item['value']})
                 
-    logger.info(f"[{target_date.date()}] Completed! Extracted {len(all_results)} insight data points.")
     return posts, all_results
 
 
@@ -228,7 +222,8 @@ async def process_content_batch(batch_num, start_date, end_date, channel_map):
         logger.warning(f"No posts found for Batch {batch_num}.")
         return None
 
-    logger.info("Compiling and vectorizing dataframes...")
+    logger.info(f"Fetched {len(all_posts)} posts and {len(all_results)} insight metrics. Compiling dataframes...")
+    
     # Vectorized DataFrame Assembly
     df_posts = pd.DataFrame([{
         "date_of_post": p.get("date", ""),
@@ -243,7 +238,6 @@ async def process_content_batch(batch_num, start_date, end_date, channel_map):
     } for p in all_posts])
 
     if all_results:
-        logger.info("Pivoting insight metrics...")
         # Pivot insights and merge
         df_insights = pd.DataFrame(all_results)
         df_insights = df_insights.pivot(index='contentId', columns='metric', values='value').reset_index()
@@ -254,7 +248,6 @@ async def process_content_batch(batch_num, start_date, end_date, channel_map):
         if 'user_profile_clicks_lifetime' in df_insights.columns:
             df_insights = df_insights.rename(columns={'user_profile_clicks_lifetime': 'profile_clicks_lifetime'})
         
-        logger.info("Merging posts and insights...")
         # Merge posts and metrics on content ID
         df_final = pd.merge(df_posts, df_insights, left_on='content_id', right_on='contentId', how='left').drop(columns=['contentId'])
     else:
@@ -291,7 +284,6 @@ def push_content_to_sql(file_paths):
 
     if not dfs: return 0
     combined_df = pd.concat(dfs, ignore_index=True)
-    logger.info(f"Combined DataFrame built. Total rows to process: {len(combined_df)}")
     
     if 'date_of_post' in combined_df.columns:
         combined_df['date_of_post'] = pd.to_datetime(combined_df['date_of_post'], errors='coerce')
@@ -404,7 +396,8 @@ def calculate_and_push_deltas(file_paths):
         status = "PASSED" if len(final_df) > 0 else "UNVALIDATED"
         message = "✅ Deltas updated." if len(final_df) > 0 else "⚠️ No new content rows processed."
         
-        val_result = ValidationResult(status=status, message=message, metrics={"Rows Processed": len(final_df)})
+        # Updated Artifact Key to reflect database table name
+        val_result = ValidationResult(status=status, message=message, metrics={"bwContent_Reporting Rows": len(final_df)})
         return len(final_df), val_result
 
     except Exception as e:
@@ -438,9 +431,10 @@ async def brandwatch_content_flow():
         
         if raw_rows > 0:
             reporting_rows, val_result = calculate_and_push_deltas(generated_files)
-            val_result.metrics["Raw Rows"] = raw_rows
+            # Updated Artifact Key to reflect database table name
+            val_result.metrics["bwContent Rows"] = raw_rows
         else:
-            val_result = ValidationResult("UNVALIDATED", "⚠️ 0 raw rows fetched, delta calculation skipped.", {"Raw Rows": 0, "Reporting Rows": 0})
+            val_result = ValidationResult("UNVALIDATED", "⚠️ 0 raw rows fetched, delta calculation skipped.", {"bwContent Rows": 0, "bwContent_Reporting Rows": 0})
 
         if val_result.status == "FAILED":
             raise ValueError(f"Data Validation Failed: {val_result.message}")
