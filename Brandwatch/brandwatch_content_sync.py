@@ -28,66 +28,86 @@ STATUSES = "published"
 CONCURRENCY_LIMIT = 5 
 
 # --- Async HTTP Helpers ---
-async def fetch_posts_async(client, channel_map, target_date, semaphore, logger):
+async def fetch_posts_async(client, channel_map, target_date, semaphore, logger, max_retries=5):
     since = target_date.strftime('%Y-%m-%dT00:00:00.00Z')
     until = target_date.strftime('%Y-%m-%dT23:59:59.00Z')
     url = f"{utils.BASE_URL}/publish/items"
-    params = {"statuses": STATUSES, "since": since, "until": until, "limit": 100}
     
-    all_posts = []
-    try:
-        async with semaphore:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            
-        raw_posts = data.get('items', [])
-        next_page = data.get('paging', {}).get('nextPage')
+    retries = 0
+    while retries < max_retries:
+        # Reset params and list inside the loop so retries start fresh
+        params = {"statuses": STATUSES, "since": since, "until": until, "limit": 100}
+        all_posts = []
         
-        while next_page:
-            params["page"] = next_page
-            async with semaphore:
-                resp = await client.get(url, params=params)
-                resp.raise_for_status()
-                new_items = resp.json().get('items', [])
-                raw_posts.extend(new_items)
-                next_page = resp.json().get('paging', {}).get('nextPage')
-                
-        for post in raw_posts:
-            # Replicating original dark post filter logic
-            if not str(post.get("facebook", {}) or post.get("instagram", {}) or post.get("tiktok", {})).startswith("{'dark': True"):
-                all_posts.append(post)
-                
-        return all_posts
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 429:
-            retry_after = int(e.response.headers.get("Retry-After", 5))
-            logger.warning(f"[{target_date.date()}] Rate limited on posts. Sleeping {retry_after}s.")
-            await asyncio.sleep(retry_after)
-            return await fetch_posts_async(client, channel_map, target_date, semaphore, logger)
-        logger.error(f"[{target_date.date()}] Error fetching posts: {e}")
-        return []
-    except Exception as e:
-        logger.error(f"[{target_date.date()}] Connection error fetching posts: {e}")
-        return []
-
-async def request_insight_id(client, payload, semaphore, logger):
-    req_url = f"{utils.BASE_URL}/measure/v2/insights/content"
-    async with semaphore:
         try:
-            response = await client.post(req_url, json=payload)
-            response.raise_for_status()
-            return response.json().get('insightsRequestId')
+            async with semaphore:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                
+            raw_posts = data.get('items', [])
+            next_page = data.get('paging', {}).get('nextPage')
+            
+            while next_page:
+                params["page"] = next_page
+                async with semaphore:
+                    resp = await client.get(url, params=params)
+                    resp.raise_for_status()
+                    new_items = resp.json().get('items', [])
+                    raw_posts.extend(new_items)
+                    next_page = resp.json().get('paging', {}).get('nextPage')
+                    
+            for post in raw_posts:
+                # Replicating original dark post filter logic
+                if not str(post.get("facebook", {}) or post.get("instagram", {}) or post.get("tiktok", {})).startswith("{'dark': True"):
+                    all_posts.append(post)
+                    
+            return all_posts
+            
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
                 retry_after = int(e.response.headers.get("Retry-After", 5))
-                logger.warning(f"Rate limited on report submit. Sleeping {retry_after}s.")
+                logger.warning(f"[{target_date.date()}] Rate limited on posts. Sleeping {retry_after}s (Attempt {retries + 1}/{max_retries}).")
                 await asyncio.sleep(retry_after)
+                retries += 1
+                continue # Loops back up to try again without recursion
+            logger.error(f"[{target_date.date()}] Error fetching posts: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"[{target_date.date()}] Connection error fetching posts: {e}")
+            return []
+            
+    logger.error(f"[{target_date.date()}] Max retries ({max_retries}) exceeded for fetching posts.")
+    return []
+
+async def request_insight_id(client, payload, semaphore, logger, max_retries=5):
+    req_url = f"{utils.BASE_URL}/measure/v2/insights/content"
+    
+    retries = 0
+    while retries < max_retries:
+        try:
+            # We grab the semaphore inside the loop so we don't hog the concurrency slot while sleeping
+            async with semaphore:
+                response = await client.post(req_url, json=payload)
+                response.raise_for_status()
+                return response.json().get('insightsRequestId')
+                
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                retry_after = int(e.response.headers.get("Retry-After", 5))
+                logger.warning(f"Rate limited on report submit. Sleeping {retry_after}s (Attempt {retries + 1}/{max_retries}).")
+                await asyncio.sleep(retry_after)
+                retries += 1
+                continue
             else:
                 logger.error(f"HTTP error on insight submit: {e}")
+                return None
         except Exception as e:
             logger.error(f"Error requesting insight ID: {e}")
-        return None
+            return None
+            
+    logger.error(f"Max retries ({max_retries}) exceeded for requesting insight ID.")
+    return None
 
 async def poll_insight_data(client, req_id, semaphore, logger):
     poll_url = f"{utils.BASE_URL}/measure/v2/insights/{req_id}"
