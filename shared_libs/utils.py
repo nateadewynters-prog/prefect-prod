@@ -9,7 +9,7 @@ from typing import Dict, Any
 
 # --- Core Configuration ---
 # Resolves to C:\Prefect\.env regardless of which script calls it
-ENV_PATH = Path("C:/Prefect/.env")
+ENV_PATH = Path("/opt/prefect/prod/.env")
 BASE_URL = "https://api.falcon.io"
 
 @dataclass
@@ -37,7 +37,7 @@ def get_db_connection():
         raise ValueError("Missing SQL environment variables in centralized .env")
 
     conn_str = (
-        f'DRIVER={{ODBC Driver 17 for SQL Server}};'
+        f'DRIVER={{ODBC Driver 18 for SQL Server}};'
         f'SERVER={server};DATABASE={database};'
         f'UID={username};PWD={password};LoginTimeout=30'
     )
