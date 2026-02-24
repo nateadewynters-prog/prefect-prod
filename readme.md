@@ -1,10 +1,10 @@
 # 🏛️ Central Orchestration Server (Prefect 3.0)
 
-**Host:** `DEW-DBSYNC01` (Internal IP: `10.1.50.126`)  
-**OS:** Windows Server 10.0.14393  
-**Python Version:** `3.13.5` (`C:\Program Files\Python313`)  
-**Service Manager:** NSSM (`C:\Users\batchuser\nssm-2.24-101-g897c7ad\win64\nssm.exe`)  
-**Virtual Environment:** `C:\Prefect\venv`  
+**Host:** `dew-insights01`  
+**OS:** Linux/Ubuntu  
+**Python Version:** `3.13.5` (`/usr/bin/python3`)  
+**Service Manager:** systemd (`/etc/systemd/system/`)  
+**Virtual Environment:** `/opt/prefect/prod/venv`  
 
 ---
 
@@ -15,7 +15,7 @@ This server hosts multiple automated data pipelines orchestrated by **Prefect 3.
 To maintain **DRY principles**, all projects share:
 
 - A centralized configuration file (`.env`)
-- A unified Python utility library (`shared_lib`)
+- A unified Python utility library (`shared_libs`)
 - A standardized `ValidationResult` Data Contract for ETL observability
 
 This ensures:
@@ -30,21 +30,22 @@ This ensures:
 ## Directory Tree
 
 ```text
-C:\Prefect\
-├── README.md                     <-- Master System Documentation (This File)
+/opt/prefect/prod/code/
+├── readme.md                     <-- Master System Documentation (This File)
+├── requirements.txt              <-- Python Dependencies
 ├── .env                          <-- Centralized Secrets & API Keys
-├── shared_lib\                   <-- Unified Python Utilities
+├── shared_libs/                  <-- Unified Python Utilities
 │   └── utils.py                  # Handles SQL, .env loading, Teams Webhooks, and Data Contracts
-├── brandwatch\                   
-│   ├── README.md                 <-- Brandwatch Project Documentation
+├── brandwatch/                   
+│   ├── readme.md                 <-- Brandwatch Project Documentation
 │   ├── brandwatch_channel_sync.py
 │   ├── brandwatch_comments_sync.py
 │   └── brandwatch_content_sync.py
-└── outlook_automation\           
-    ├── README.md                 <-- Email Extraction Project Documentation
+└── outlook_automation/           
+    ├── readme.md                 <-- Email Extraction Project Documentation
     ├── email_extraction_flow.py
-    ├── config\                   # JSON routing rules
-    └── parsers\                  # PDF/Excel extraction logic
+    ├── config/                   # JSON routing rules
+    └── parsers/                  # PDF/Excel extraction logic
 ```
 
 ---
@@ -54,7 +55,7 @@ C:\Prefect\
 All environment variables, database credentials, and API keys are stored in:
 
 ```
-C:\Prefect\.env
+/opt/prefect/prod/.env
 ```
 
 ⚠️ **Never hardcode credentials inside scripts.**
@@ -65,10 +66,10 @@ All scripts must load configuration via the shared utility:
 import sys
 from pathlib import Path
 
-# Add C:\Prefect to Python path
+# Add /opt/prefect/prod/code to Python path
 sys.path.append(str(Path(__file__).parents[1]))
 
-import shared_lib.utils as utils
+import shared_libs.utils as utils
 
 utils.setup_environment()
 ```
@@ -82,18 +83,18 @@ This guarantees:
 
 ---
 
-## 3. Windows Services (NSSM)
+## 3. Linux Services (systemd)
 
-All flows run continuously or on defined schedules using **Windows Services managed by NSSM**.
+All flows run continuously or on defined schedules using **systemd services**.
 
 ---
 
-### ⚠️ Important PowerShell Note
+### ⚠️ Important Bash Note
 
-All NSSM commands must reference the exact executable path:
+All systemd units must reference the exact python executable path within the virtual environment:
 
-```powershell
-& "C:\Users\batchuser\nssm-2.24-101-g897c7ad\win64\nssm.exe" <command>
+```bash
+/opt/prefect/prod/venv/bin/python <script_path>
 ```
 
 ---
@@ -102,11 +103,11 @@ All NSSM commands must reference the exact executable path:
 
 | Service Name                   | Directory                  | Target Script / Command             | Schedule                    |
 |--------------------------------|----------------------------|------------------------------------|-----------------------------|
-| `prefect-server`              | `C:\Prefect\`              | `prefect server start`             | Continuous (Port 4200)      |
-| `brandwatch-channel-service`  | `...\brandwatch`           | `brandwatch_channel_sync.py`       | Daily @ 07:00 AM            |
-| `brandwatch-content-service`  | `...\brandwatch`           | `brandwatch_content_sync.py`       | Daily @ 08:00 AM            |
-| `brandwatch-comments-service` | `...\brandwatch`           | `brandwatch_comments_sync.py`      | Daily @ 09:30 AM            |
-| `outlook-automation-service`  | `...\outlook_automation`   | `email_extraction_flow.py`         | Continuous (15m Polling)    |
+| `prefect-server`              | `/opt/prefect/prod/code/`  | `prefect server start`             | Continuous (Port 4200)      |
+| `brandwatch-channel`          | `.../brandwatch`           | `brandwatch_channel_sync.py`       | Daily @ 07:00 AM            |
+| `brandwatch-content`          | `.../brandwatch`           | `brandwatch_content_sync.py`       | Daily @ 08:00 AM            |
+| `brandwatch-comments`         | `.../brandwatch`           | `brandwatch_comments_sync.py`      | Daily @ 09:30 AM            |
+| `outlook-automation`          | `.../outlook_automation`   | `email_extraction_flow.py`         | Continuous (15m Polling)    |
 
 ---
 
@@ -124,12 +125,12 @@ If you update:
 
 You must restart the respective service so changes load into memory.
 
-```powershell
+```bash
 # Restart a specific service
-Restart-Service -Name "outlook-automation-service"
+sudo systemctl restart outlook-automation
 
 # Restart all Brandwatch services
-Restart-Service -Name "brandwatch-*-service"
+sudo systemctl restart brandwatch-*
 ```
 
 ---
@@ -139,51 +140,47 @@ Restart-Service -Name "brandwatch-*-service"
 Prefect UI:
 
 ```
-http://10.1.50.126:4200
+http://dew-insights01:4200
 ```
 
 If inaccessible from another machine, verify firewall rule:
 
-```powershell
-New-NetFirewallRule -DisplayName "Allow Prefect UI" `
-    -Direction Inbound `
-    -LocalPort 4200 `
-    -Protocol TCP `
-    -Action Allow
+```bash
+sudo ufw allow 4200/tcp
 ```
 
 ---
 
-### Version Control (Portable Git)
+### Version Control (Git)
 
-Repository is managed using **Portable Git**.
+Repository is managed using standard **Git**.
 
 **Executable:**
 
 ```
-C:\Users\batchuser\PortableGit\bin\git.exe
+/usr/bin/git
 ```
 
 ---
 
 ### Standard Workflow
 
-Open PowerShell in:
+Open Terminal in:
 
 ```
-C:\Prefect
+/opt/prefect/prod/code
 ```
 
 Stage changes:
 
-```powershell
-& "C:\Users\batchuser\PortableGit\bin\git.exe" add .
+```bash
+git add .
 ```
 
 Commit:
 
-```powershell
-& "C:\Users\batchuser\PortableGit\bin\git.exe" commit -m "Update message"
+```bash
+git commit -m "Update message"
 ```
 
 ---
@@ -196,18 +193,18 @@ If Git fails with:
 fatal: unable to write new index file
 ```
 
-This typically means a background service locked the file.
+This typically means a background process locked the file.
 
 **Resolution Steps:**
 
 1. Stop Prefect services  
 2. Delete lock file:
 
-```powershell
-del .git\index.lock
+```bash
+rm .git/index.lock
 ```
 
-3. Re-run Git command as Administrator  
+3. Re-run Git command (use sudo if permissions issue)
 
 ---
 
@@ -217,12 +214,12 @@ For detailed business logic, API routing, database schema, or project-specific t
 
 📊 **Brandwatch Sync**  
 ```
-C:\Prefect\brandwatch\README.md
+/opt/prefect/prod/code/brandwatch/readme.md
 ```
 
 📧 **Outlook Extraction**  
 ```
-C:\Prefect\outlook_automation\README.md
+/opt/prefect/prod/code/outlook_automation/readme.md
 ```
 
 ---
@@ -239,4 +236,4 @@ This server is designed around:
 - Observable ETL patterns
 - Clear separation of business logic by domain
 
-All automation pipelines deployed on `DEW-DBSYNC01` must adhere to this standard.
+All automation pipelines deployed on `dew-insights01` must adhere to this standard.

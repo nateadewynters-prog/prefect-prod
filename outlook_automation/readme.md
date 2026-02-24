@@ -1,10 +1,10 @@
 # 📧 Medallion Email Extraction Automation (Prefect 3.0)
 
-**Host:** `DEW-DBSYNC01`  
+**Host:** `dew-insights01`  
 **Status:** 🟢 Active (Polling every 15m)  
 **Architecture:** JSON-Driven Medallion Pattern  
 
-> **System Map Reference:** For global server settings, NSSM service management, and Python environment details, refer to the **Master README** at `C:\Prefect\README.md`.
+> **System Map Reference:** For global server settings, systemd service management, and Python environment details, refer to the **Master README** at `/opt/prefect/prod/code/readme.md`.
 
 ---
 
@@ -19,17 +19,17 @@ The system is **Config-Driven**: Adding a new show or venue does *not* require c
 ## 2. Directory Structure
 
 ```text
-C:\Prefect\outlook_automation\
-├── config\                       # ⚙️ BRAIN
+/opt/prefect/prod/code/outlook_automation/
+├── config/                       # ⚙️ BRAIN
 │   └── show_reporting_rules.json # Defines routing & naming rules
-├── data\                         # 💾 STORAGE
-│   ├── inbox\                    # Temp landing zone
-│   ├── processed\                # Final Output CSVs
-│   ├── archive\                  # Renamed Raw Files (PDF/XLS)
-│   ├── failed\                   # Error files
-│   ├── lookups\                  # Enrichment data ({ShowID}_{VenueID}_event_dates.csv)
+├── data/                         # 💾 STORAGE
+│   ├── inbox/                    # Temp landing zone
+│   ├── processed/                # Final Output CSVs
+│   ├── archive/                  # Renamed Raw Files (PDF/XLS)
+│   ├── failed/                   # Error files
+│   ├── lookups/                  # Enrichment data ({ShowID}_{VenueID}_event_dates.csv)
 │   └── processed_ids.txt         # Audit log CSV (timestamp, msg_id, rule_name)
-├── parsers\                      # 🧠 LOGIC
+├── parsers/                      # 🧠 LOGIC
 │   ├── __init__.py
 │   ├── ticketek_event_settlement_excel_parser.py        
 │   └── malvern_theatre_contractual_report_pdf_parser.py 
@@ -40,10 +40,10 @@ C:\Prefect\outlook_automation\
 
 ### 🔗 External Dependencies
 
-- `C:\Prefect\.env`  
+- `/opt/prefect/prod/.env`  
   Master credentials (Azure Tenant/Client IDs, Webhooks)
 
-- `C:\Prefect\shared_lib\utils.py`  
+- `/opt/prefect/prod/code/shared_libs/utils.py`  
   Unified environment loading, Data Contracts, and Teams notification logic
 
 ---
@@ -120,8 +120,8 @@ config/show_reporting_rules.json
 
 4. Restart the service:
 
-```powershell
-Restart-Service "outlook-extraction-service"
+```bash
+sudo systemctl restart outlook-automation
 ```
 
 No Python code changes are required.

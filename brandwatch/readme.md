@@ -1,10 +1,10 @@
 # 📊 Brandwatch API Sync (Prefect 3.0)
 
-**Host:** `DEW-DBSYNC01`  
-**Outputs:** `C:\BrandwatchOutputs\`  
+**Host:** `dew-insights01`  
+**Outputs:** `/opt/data/brandwatch_outputs/`  
 **Database:** `DEW-DBSYNC01` → `OrganicSocial`  
 
-> **System Map Reference:** For global server settings, NSSM service management, Git workflows, and Python environment details, refer to the **Master README** at `C:\Prefect\README.md`.
+> **System Map Reference:** For global server settings, systemd service management, Git workflows, and Python environment details, refer to the **Master README** at `/opt/prefect/prod/code/readme.md`.
 
 ---
 
@@ -20,16 +20,16 @@ It consists of **three distinct ETL pipelines**, orchestrated via Prefect:
 
 All scripts share centralized credentials and utilities from:
 
-- `C:\Prefect\.env`  
-- `C:\Prefect\shared_lib\utils.py`  
+- `/opt/prefect/prod/.env`  
+- `/opt/prefect/prod/code/shared_libs/utils.py`  
 
 ---
 
 ## 2. Directory Structure & Dependencies
 
 ```text
-C:\Prefect\brandwatch\
-├── README.md                     <-- Project Documentation (This File)
+/opt/prefect/prod/code/brandwatch/
+├── readme.md                     <-- Project Documentation (This File)
 ├── brandwatch_channel_sync.py    # Fetches high-level page/channel metrics
 ├── brandwatch_content_sync.py    # Fetches post-level metrics & calculates daily deltas
 └── brandwatch_comments_sync.py   # Asynchronously exports comment/reply data
@@ -136,7 +136,7 @@ This prevents silent data corruption.
 Check:
 
 ```
-C:\BrandwatchOutputs\
+/opt/data/brandwatch_outputs/
 ```
 
 Confirm fresh CSVs are generated.
@@ -181,6 +181,15 @@ dt.tz_localize(None)
 
 - **Cause:** Historical SQL fetch failed due to oversized `IN (...)` clause.
 - **Fix:** Chunk content_ids into smaller batches (e.g., 500).
+
+**Issue:** SQL Connection Failures on Linux
+
+- **Cause:** Missing or incorrect ODBC driver.
+- **Fix:** Ensure `ODBC Driver 18 for SQL Server` is installed and referenced in connection strings.
+
+```python
+DRIVER={ODBC Driver 18 for SQL Server}
+```
 
 ---
 
