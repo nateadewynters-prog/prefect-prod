@@ -20,7 +20,7 @@ from shared_libs.utils import ValidationResult
 # --- Configuration ---
 utils.setup_environment()
 API_KEY = os.getenv('BRANDWATCH_API_KEY')
-OUTPUT_DIR = r'C:\BrandwatchOutputs\comment'
+OUTPUT_DIR = '/opt/data/brandwatch_outputs/comment'
 
 @task(name="fetch_comments_data", retries=3, retry_delay_seconds=60)
 def fetch_comments_data():

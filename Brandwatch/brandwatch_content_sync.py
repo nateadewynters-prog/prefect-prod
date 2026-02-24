@@ -21,7 +21,7 @@ from shared_libs.utils import ValidationResult
 # --- Configuration ---
 utils.setup_environment()
 API_KEY = os.getenv('BRANDWATCH_API_KEY')
-OUTPUT_DIR = r'C:\BrandwatchOutputs\content'
+OUTPUT_DIR = '/opt/data/brandwatch_outputs/content'
 STATUSES = "published"
 
 # Safely caps simultaneous HTTP requests to prevent instant 429s. Adjust as needed.

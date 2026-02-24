@@ -19,7 +19,7 @@ from shared_libs.utils import ValidationResult
 # --- Configuration ---
 utils.setup_environment()
 API_KEY = os.getenv('BRANDWATCH_API_KEY')
-OUTPUT_DIR = r'C:\BrandwatchOutputs\channel'
+OUTPUT_DIR = '/opt/data/brandwatch_outputs/channel'
 
 @task(name="fetch_brandwatch_data")
 def fetch_brandwatch_data():
@@ -40,12 +40,12 @@ def fetch_brandwatch_data():
         raise 
 
     # Export Channel List (Optional utility output)
-    os.makedirs(r'C:\BrandwatchOutputs\channellist', exist_ok=True)
+    os.makedirs('/opt/data/brandwatch_outputs/channellist', exist_ok=True)
     pd.DataFrame([{
         'channelId': ch['uuid'],
         'channel_name': ch['name'],
         'network': ch['network']
-    } for ch in channels]).to_csv(r'C:\BrandwatchOutputs\channellist\channels_list.csv', index=False)
+    } for ch in channels]).to_csv('/opt/data/brandwatch_outputs/channellist/channels_list.csv', index=False)
 
     # --- Part 2: Fetch Metrics ---
     metrics = [
