@@ -14,7 +14,7 @@
         {
             "rule_name": "MALVERN_SILENCE_OF_THE_LAMBS",
             "active": true,
-            "backfill_since": "2026-02-24",
+            "backfill_since": "2026-02-25",
             "match_criteria": {
                 "sender_domain": "figures@malvern-theatres.co.uk",
                 "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs",

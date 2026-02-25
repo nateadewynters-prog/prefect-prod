@@ -1,0 +1,14 @@
+FROM python:3.13.5-slim
+
+WORKDIR /opt/prefect/prod/code
+
+# Copy requirements and install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy only the necessary code blocks
+COPY shared_libs/ ./shared_libs/
+COPY outlook_automation/ ./outlook_automation/
+
+# Command to run your flow
+CMD ["python", "outlook_automation/email_extraction_flow.py"]

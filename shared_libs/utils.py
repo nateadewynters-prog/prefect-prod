@@ -1,5 +1,4 @@
 import os
-import pyodbc
 import requests as r
 from dotenv import load_dotenv
 from pathlib import Path
@@ -28,6 +27,7 @@ def setup_environment():
 
 def get_db_connection():
     """Returns an active pyodbc connection using centralized env vars."""
+    import pyodbc
     server = os.getenv('SQL_SERVER')
     database = os.getenv('SQL_ORGANICSOCIAL_DATABASE')
     username = os.getenv('SQL_USERNAME')

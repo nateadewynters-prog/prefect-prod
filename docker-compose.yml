@@ -1,0 +1,55 @@
+services:
+  # --- 1. THE ORCHESTRATION BRAIN ---
+  prefect-server:
+    image: prefecthq/prefect:3-python3.13
+    container_name: prefect-server
+    restart: unless-stopped
+    ports:
+      - "4200:4200"
+    environment:
+      # These ensure your laptop browser talks to the correct server IP
+      - PREFECT_API_URL=http://10.1.50.127:4200/api
+      - PREFECT_UI_API_URL=http://10.1.50.127:4200/api
+    volumes:
+      - /opt/prefect/prod/prefect_db_data:/root/.prefect
+    command: prefect server start --host 0.0.0.0
+
+  # --- 2. OUTLOOK WORKER ---
+  outlook-automation:
+    build:
+      context: .
+      dockerfile: outlook_automation/Dockerfile.outlook
+    container_name: prefect-outlook-automation
+    restart: unless-stopped
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+    volumes:
+      - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
+      - ./outlook_automation/config:/opt/prefect/prod/code/outlook_automation/config
+      - ./outlook_automation/data:/opt/prefect/prod/code/outlook_automation/data
+    depends_on:
+      - prefect-server
+    # Basic command to start the polling script
+    command: python outlook_automation/email_extraction_flow.py
+
+  # --- 3. BRANDWATCH WORKHORSE ---
+  brandwatch-sync:
+    build:
+      context: .
+      dockerfile: brandwatch/Dockerfile.brandwatch
+    container_name: prefect-brandwatch-sync
+    restart: unless-stopped
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+    volumes:
+      - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
+      - /opt/data/brandwatch_outputs:/opt/data/brandwatch_outputs
+    depends_on:
+      - prefect-server
+    # THE BASIC WAY: This starts all 3 scripts in one container.
+    # Each script will register its own deployment in your dashboard.
+    command: >
+      sh -c "python brandwatch/brandwatch_channel_sync.py &
+             python brandwatch/brandwatch_content_sync.py &
+             python brandwatch/brandwatch_comments_sync.py &
+             wait"
