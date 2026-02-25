@@ -18,10 +18,13 @@ It consists of **three distinct ETL pipelines**, orchestrated via Prefect:
 - Post-Level Metrics & Daily Delta Calculations  
 - Comments / Replies / DMs Export  
 
-All scripts share centralized credentials and utilities from:
+All scripts share centralized credentials from:
 
-- `/opt/prefect/prod/.env`  
-- `/opt/prefect/prod/code/shared_libs/utils.py`  
+- `/opt/prefect/prod/.env` (Volume Mounted)
+
+And utilize their isolated, localized utility:
+
+- `./utils.py`  
 
 ---
 
@@ -30,6 +33,9 @@ All scripts share centralized credentials and utilities from:
 ```text
 /opt/prefect/prod/code/brandwatch/
 ├── readme.md                     <-- Project Documentation (This File)
+├── Dockerfile.brandwatch         <-- Isolated Build Context
+├── requirements.txt              <-- Local Python Dependencies
+├── utils.py                      <-- Localized Utilities
 ├── brandwatch_channel_sync.py    # Fetches high-level page/channel metrics
 ├── brandwatch_content_sync.py    # Fetches post-level metrics & calculates daily deltas
 └── brandwatch_comments_sync.py   # Asynchronously exports comment/reply data

@@ -15,10 +15,9 @@ from prefect import flow, task, get_run_logger
 from prefect.artifacts import create_markdown_artifact
 
 # Add C:\Prefect to path
-sys.path.append(str(Path(__file__).parents[1]))
 
 # --- Local Imports ---
-import shared_libs.utils as utils
+import utils
 
 # --- Configuration Load ---
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))

@@ -12,18 +12,18 @@
 
 This server hosts multiple automated data pipelines orchestrated by **Prefect 3.0**.
 
-To maintain **DRY principles**, all projects share:
+To ensure **independent microservice isolation** and avoid tight coupling, each project maintains its own isolated context:
 
-- A centralized configuration file (`.env`)
-- A unified Python utility library (`shared_libs`)
-- A standardized `ValidationResult` Data Contract for ETL observability
+- They share a centralized configuration file (`.env`) via volume mounts.
+- Python utilities (`utils.py`) and dependencies (`requirements.txt`) are localized directly inside each specific project directory, entirely replacing the legacy `shared_libs` directory.
+- A standardized `ValidationResult` Data Contract for ETL observability is maintained within each domain's localized `utils.py`.
 
-This ensures:
+This architectural pattern prioritizes decoupled microservices over strict DRY principles, ensuring:
 
-- No duplicated credential logic  
-- Centralized alerting  
-- Consistent database connectivity  
-- Unified validation and monitoring patterns  
+- True service isolation  
+- Independent dependency management per domain  
+- Self-contained Docker build contexts  
+- Localized utility evolution without cross-domain regressions  
 
 ---
 
@@ -32,17 +32,21 @@ This ensures:
 ```text
 /opt/prefect/prod/code/
 ├── readme.md                     <-- Master System Documentation (This File)
-├── requirements.txt              <-- Python Dependencies
+├── docker-compose.yml            <-- Orchestration configuration
 ├── .env                          <-- Centralized Secrets & API Keys
-├── shared_libs/                  <-- Unified Python Utilities
-│   └── utils.py                  # Handles SQL, .env loading, Teams Webhooks, and Data Contracts
 ├── brandwatch/                   
 │   ├── readme.md                 <-- Brandwatch Project Documentation
+│   ├── Dockerfile.brandwatch     <-- Isolated Build Context
+│   ├── requirements.txt          <-- Local Python Dependencies
+│   ├── utils.py                  # Handles SQL, .env loading, Teams Webhooks, and Data Contracts
 │   ├── brandwatch_channel_sync.py
 │   ├── brandwatch_comments_sync.py
 │   └── brandwatch_content_sync.py
 └── outlook_automation/           
     ├── readme.md                 <-- Email Extraction Project Documentation
+    ├── Dockerfile.outlook        <-- Isolated Build Context
+    ├── requirements.txt          <-- Local Python Dependencies
+    ├── utils.py                  # Handles SQL, .env loading, Teams Webhooks, and Data Contracts
     ├── email_extraction_flow.py
     ├── config/                   # JSON routing rules
     └── parsers/                  # PDF/Excel extraction logic
@@ -60,16 +64,10 @@ All environment variables, database credentials, and API keys are stored in:
 
 ⚠️ **Never hardcode credentials inside scripts.**
 
-All scripts must load configuration via the shared utility:
+All scripts must load configuration via their localized utility:
 
 ```python
-import sys
-from pathlib import Path
-
-# Add /opt/prefect/prod/code to Python path
-sys.path.append(str(Path(__file__).parents[1]))
-
-import shared_libs.utils as utils
+import utils
 
 utils.setup_environment()
 ```
@@ -78,7 +76,7 @@ This guarantees:
 
 - Centralized credential management  
 - Secure configuration loading  
-- No duplicated `.env` logic  
+- True microservice independence without fragile `sys.path.append` logic  
 - Simplified long-term maintenance  
 
 ---
@@ -228,12 +226,12 @@ For detailed business logic, API routing, database schema, or project-specific t
 
 This server is designed around:
 
-- Centralized configuration
+- **Independent microservice isolation (prioritized over DRY principles)**
+- Centralized configuration via `.env` volume mounts
 - Service-based orchestration
 - Strict idempotency
 - Secure credential handling
-- Modular architecture
 - Observable ETL patterns
-- Clear separation of business logic by domain
+- Clear separation of business logic and dependencies by domain
 
 All automation pipelines deployed on `dew-insights01` must adhere to this standard.

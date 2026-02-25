@@ -10,13 +10,12 @@ RUN apt-get update && apt-get install -y unixodbc-dev curl gnupg2 \
     && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
+# Copy local requirements and install
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy only the necessary code blocks
-COPY shared_libs/ ./shared_libs/
-COPY brandwatch/ ./brandwatch/
+# Copy the context files INTO the specific brandwatch subfolder
+COPY . ./brandwatch/
 
-# Start the Prefect worker
+# Start the Prefect worker (or your scripts if you aren't using workers yet)
 CMD ["prefect", "worker", "start", "--pool", "brandwatch-pool"]

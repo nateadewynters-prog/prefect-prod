@@ -11,12 +11,10 @@ from collections import defaultdict
 from prefect import flow, task, get_run_logger
 from prefect.artifacts import create_markdown_artifact
 
-# 1. Best Practice: Add the parent directory to sys.path to find shared_lib
-sys.path.append(str(Path(__file__).parents[1]))
 
 # Import Shared Utils
-import shared_libs.utils as utils
-from shared_libs.utils import ValidationResult
+import utils
+from utils import ValidationResult
 
 # --- Configuration ---
 utils.setup_environment()

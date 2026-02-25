@@ -38,13 +38,16 @@ The system is **Config-Driven**: Adding a new show or venue does *not* require c
 
 ---
 
-### 🔗 External Dependencies
+### 🔗 Dependencies
 
-- `/opt/prefect/prod/.env`  
+- **/opt/prefect/prod/.env** (Volume Mounted)  
   Master credentials (Azure Tenant/Client IDs, Webhooks)
 
-- `/opt/prefect/prod/code/shared_libs/utils.py`  
-  Unified environment loading, Data Contracts, and Teams notification logic
+- **./utils.py** (Localized)  
+  Environment loading, Data Contracts, and Teams notification logic
+
+- **./requirements.txt** (Localized)  
+  Specific Python dependencies for the Outlook automation service
 
 ---
 
