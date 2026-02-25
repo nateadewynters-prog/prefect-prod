@@ -408,4 +408,9 @@ def email_extraction_flow():
     update_config_state(successful_runs)
 
 if __name__ == "__main__":
-    email_extraction_flow()
+    email_extraction_flow.serve(
+        name="email-extraction-automated",
+        cron="*/15 * * * *",  # Polling every 15m as per README
+        tags=["medallion-raw", "production"],
+        description="Automated extraction of email attachments to CSVs."
+    )
