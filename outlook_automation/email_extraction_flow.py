@@ -14,8 +14,6 @@ from dateutil import parser as date_parser
 from prefect import flow, task, get_run_logger
 from prefect.artifacts import create_markdown_artifact
 
-# Add C:\Prefect to path
-
 # --- Local Imports ---
 import utils
 
