@@ -25,7 +25,7 @@
                 "venue_name": "Malvern Theatres",
                 "show_id": "285",
                 "venue_id": "174",
-                "document_id": "17"
+                "document_id": "503"
             },
             "processing": {
                 "parser_module": "parsers.malvern_theatre_contractual_report_pdf_parser",
@@ -36,7 +36,7 @@
         {
             "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR",
             "active": true,
-            "backfill_since": "2026-02-24",
+            "backfill_since": "2026-02-25",
             "match_criteria": {
                 "sender_domain": "info@ticketek.com.sg",
                 "subject_keyword": "Jesus Christ Superstar (Sales Summary)",
@@ -47,7 +47,7 @@
                 "venue_name": "Manila",
                 "show_id": "287",
                 "venue_id": "220",
-                "document_id": "17"
+                "document_id": "504"
             },
             "processing": {
                 "parser_module": "parsers.ticketek_event_settlement_excel_parser",
