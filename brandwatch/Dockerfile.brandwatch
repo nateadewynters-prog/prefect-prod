@@ -17,5 +17,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the context files INTO the specific brandwatch subfolder
 COPY . ./brandwatch/
 
-# Start the Prefect worker (or your scripts if you aren't using workers yet)
+# Start the Prefect worker
 CMD ["prefect", "worker", "start", "--pool", "brandwatch-pool"]
