@@ -1,9 +1,8 @@
 import pdfplumber
 import re
 import os
-import utils
 from prefect import task, get_run_logger
-from utils import ValidationResult
+from outlook_automation.utils import ValidationResult
 
 def parse_currency(value_str):
     if not value_str: return 0.0
