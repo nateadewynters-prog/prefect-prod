@@ -81,7 +81,7 @@ def generate_standard_filename(metadata, received_date_str, extension):
     dt = date_parser.parse(received_date_str).astimezone(timezone.utc)
     # Subtract 1 day to reflect the actual reporting period (T-1)
     report_date = dt - timedelta(days=1)
-    date_formatted = report_date.strftime("%d_%m_%y")
+    date_formatted = report_date.strftime("%d_%m_%Y")
     
     filename = (
         f"{metadata['show_name']}_"
