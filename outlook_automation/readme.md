@@ -4,15 +4,15 @@
 **Status:** 🟢 Active (Polling every 15m)  
 **Architecture:** JSON-Driven Medallion Pattern  
 
-> **System Map Reference:** For global server settings, systemd service management, and Python environment details, refer to the **Master README** at `/opt/prefect/prod/code/readme.md`.
+> **System Map Reference:** For global server settings, Docker Compose service management, and Python environment details, refer to the **Master README** at `/opt/prefect/prod/code/readme.md`.
 
 ---
 
 ## 1. Project Overview
 
-This service automates financial data extraction from emails. It uses a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
+This service automates financial data extraction from emails using the Microsoft Graph API. It uses a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
 
-The system is **Config-Driven**: Adding a new show or venue does *not* require changing code — only updating `config/show_reporting_rules.json`.
+The system is **Config-Driven**: Adding a new show or venue does *not* require changing code — only updating `config/show_reporting_rules.json`. It runs as a module via the command: `python -m outlook_automation.email_extraction_flow`.
 
 ---
 
@@ -65,6 +65,9 @@ The engine routes emails based on:
 - Subject Keyword  
 - Explicit Attachment Type  
 
+### The `fetch_and_route_emails` Task
+This primary Prefect task performs a hybrid search strategy to locate emails matching active rules in the configuration. It uses a fuzzy Graph API search (`$search`) combined with strict local Python date filtering to securely boundary messages. Valid emails are queued up for attachment processing.
+
 ---
 
 ### Stateful Backfilling & Progress Tracking
@@ -77,10 +80,10 @@ Each rule in the JSON config tracks its own progress using:
 
 When the script runs:
 
-1. It searches for relevant emails  
-2. Uses Python to strictly filter items received on or after this date  
-3. After successful processing, it automatically updates the JSON file  
-4. The `backfill_since` value advances forward  
+1. It searches for relevant emails via `fetch_and_route_emails`.
+2. Uses Python to strictly filter items received on or after this date.
+3. After successful processing, it automatically updates the JSON file.
+4. The `backfill_since` value advances forward.
 
 This design:
 
@@ -90,44 +93,14 @@ This design:
 
 ---
 
-### Strict File Naming & Date Handling
+## 4. Data Flow Pathing
 
-Files are renamed **before processing** to ensure consistency.
+The application enforces a Medallion-style data movement structure:
 
-The `{RecDate}` is:
-
-- Derived from Email Received Time (GMT)  
-- Adjusted to **T-1** (minus 1 day)  
-- Formatted as `dd_mm_yy`  
-
-This guarantees:
-
-- Reporting-date accuracy  
-- Timezone consistency  
-- Deterministic downstream file naming  
-
----
-
-## 4. How to Add a New Show
-
-1. Navigate to:
-
-```
-config/show_reporting_rules.json
-```
-
-2. Add a new block to the `rules` array  
-3. Declare:
-   - `attachment_type`
-   - `backfill_since` starting date  
-
-4. Restart the service:
-
-```bash
-sudo systemctl restart outlook-automation
-```
-
-No Python code changes are required.
+1. **Inbox:** Target attachments are extracted and temporarily stored in `data/inbox/`.
+2. **Processing:** The corresponding parser dynamically unpacks the file.
+3. **Processed/Archive:** Successfully generated CSVs are stored in `data/processed/`, and the original files are moved to `data/archive/`.
+4. **Failed:** If a file fails parsing or validation, the raw file is moved to `data/failed/` for review.
 
 ---
 
@@ -135,9 +108,22 @@ No Python code changes are required.
 
 ---
 
+### Dynamic Parser Loading
+
+The pipeline resolves parser code references declared in `config/show_reporting_rules.json` at runtime using Python's `importlib`.
+
+```python
+parser_module = importlib.import_module(proc_config['parser_module'])
+parser_function = getattr(parser_module, proc_config['parser_function'])
+```
+
+This prevents the orchestrator (`email_extraction_flow.py`) from becoming bloated with hardcoded import statements for every specific venue or event template.
+
+---
+
 ### Strict Schema Validation & Data Contracts
 
-To protect downstream systems, parsers enforce strict schema validation via a **Generic Validation Pattern** using the `ValidationResult` dataclass.
+To protect downstream systems, parsers enforce strict schema validation via a **Generic Validation Pattern** using the `ValidationResult` dataclass (defined in `utils.py`).
 
 Each parser returns two objects:
 
@@ -150,11 +136,13 @@ Each parser returns two objects:
    - `status` → `PASSED`, `FAILED`, or `UNVALIDATED`  
    - `message` → Human-readable explanation  
    - `metrics` → Flexible dictionary of extracted metrics  
-     - Example: `{"Extracted Tickets": 1500}`  
+     - Example: `{"Calculated Tickets": 1500}`  
 
 ---
 
-### Orchestrator Behavior
+### Orchestrator Behavior & Teams Integration
+
+The system natively integrates with Microsoft Teams via an Adaptive Card Webhook defined in `utils.py`.
 
 | Status        | System Action |
 |--------------|--------------|
@@ -177,22 +165,6 @@ timestamp, msg_id, rule_name
 ```
 
 If a message ID exists in this file, it is permanently skipped.
-
----
-
-### Hybrid Search Strategy (Microsoft Graph API)
-
-The script uses a **Hybrid Strategy** to bypass Graph limitations:
-
-1. **Fuzzy API Search**  
-   Pushes a targeted text search directly to Graph using `$search`.
-
-2. **Strict Python Date Filter**  
-   Evaluates the `backfill_since` boundary locally in Python.
-
-3. **Deep Backlogs & Rate Limits**  
-   - Handles `@odata.nextLink` pagination automatically  
-   - Gracefully pauses when receiving `429 Too Many Requests`  
 
 ---
 

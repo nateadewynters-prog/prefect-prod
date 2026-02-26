@@ -4,7 +4,7 @@
 **Outputs:** `/opt/data/brandwatch_outputs/`  
 **Database:** `DEW-DBSYNC01` → `OrganicSocial`  
 
-> **System Map Reference:** For global server settings, systemd service management, Git workflows, and Python environment details, refer to the **Master README** at `/opt/prefect/prod/code/readme.md`.
+> **System Map Reference:** For global server settings, Docker Compose service management, Git workflows, and Python environment details, refer to the **Master README** at `/opt/prefect/prod/code/readme.md`.
 
 ---
 
@@ -47,7 +47,7 @@ And utilize their isolated, localized utility:
 
 ### A. Channel Sync (brandwatch_channel_sync.py)
 
-**Schedule:** Daily @ 07:00 AM
+**Schedule:** Configured via Orchestrator
 
 **Logic:**
 
@@ -59,7 +59,7 @@ And utilize their isolated, localized utility:
 
 ### B. Content Sync (brandwatch_content_sync.py)
 
-**Schedule:** Daily @ 08:00 AM
+**Schedule:** Configured via Orchestrator
 
 **Logic:**
 
@@ -74,7 +74,7 @@ Eliminates sequential blocking network calls. The script uses an `httpx.AsyncCli
 
 #### 2️⃣ Dynamic Rate Limit Protection
 
-Replaces legacy hardcoded sleep timers (the old 3-minute cooldowns). The script uses an `asyncio.Semaphore` to safely cap simultaneous connections and dynamically catches HTTP 429 Too Many Requests errors, pausing execution precisely based on the API's native `Retry-After` header.
+Replaces legacy hardcoded sleep timers. The script uses an `asyncio.Semaphore` to safely cap simultaneous connections and dynamically catches HTTP 429 Too Many Requests errors, pausing execution precisely based on the API's native `Retry-After` header.
 
 #### 3️⃣ Vectorized Data Assembly & Delta Calculation
 
@@ -113,7 +113,7 @@ This prevents silent data corruption.
 
 ### C. Comments Sync (brandwatch_comments_sync.py)
 
-**Schedule:** Daily @ 09:30 AM
+**Schedule:** Configured via Orchestrator
 
 **Logic:**
 
@@ -149,7 +149,7 @@ Confirm fresh CSVs are generated.
 
 ### ✅ Teams Notifications
 
-Confirm receipt of Adaptive Cards in the MS Teams channel.
+Confirm receipt of Adaptive Cards in the MS Teams channel via the integration in `utils.py`.
 
 - `PASSED` validations are silenced
 - `UNVALIDATED` (Warnings) and `FAILED` trigger alerts

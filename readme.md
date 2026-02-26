@@ -3,7 +3,7 @@
 **Host:** `dew-insights01`  
 **OS:** Linux/Ubuntu  
 **Python Version:** `3.13.5` (`/usr/bin/python3`)  
-**Service Manager:** systemd (`/etc/systemd/system/`)  
+**Service Manager:** Docker Compose  
 **Virtual Environment:** `/opt/prefect/prod/venv`  
 
 ---
@@ -17,6 +17,7 @@ To ensure **independent microservice isolation** and avoid tight coupling, each 
 - They share a centralized configuration file (`.env`) via volume mounts.
 - Python utilities (`utils.py`) and dependencies (`requirements.txt`) are localized directly inside each specific project directory, entirely replacing the legacy `shared_libs` directory.
 - A standardized `ValidationResult` Data Contract for ETL observability is maintained within each domain's localized `utils.py`.
+- **Orchestration of the Brandwatch and Outlook services is managed via `docker-compose.yml`**.
 
 This architectural pattern prioritizes decoupled microservices over strict DRY principles, ensuring:
 
@@ -81,31 +82,17 @@ This guarantees:
 
 ---
 
-## 3. Linux Services (systemd)
+## 3. Docker Compose Orchestration
 
-All flows run continuously or on defined schedules using **systemd services**.
-
----
-
-### ⚠️ Important Bash Note
-
-All systemd units must reference the exact python executable path within the virtual environment:
-
-```bash
-/opt/prefect/prod/venv/bin/python <script_path>
-```
-
----
+All flows run continuously or on defined schedules using **Docker Compose**. The central `docker-compose.yml` file defines the `prefect-server`, `outlook-automation`, and `brandwatch-sync` services.
 
 ### Active Services
 
-| Service Name                   | Directory                  | Target Script / Command             | Schedule                    |
-|--------------------------------|----------------------------|------------------------------------|-----------------------------|
-| `prefect-server`              | `/opt/prefect/prod/code/`  | `prefect server start`             | Continuous (Port 4200)      |
-| `brandwatch-channel`          | `.../brandwatch`           | `brandwatch_channel_sync.py`       | Daily @ 07:00 AM            |
-| `brandwatch-content`          | `.../brandwatch`           | `brandwatch_content_sync.py`       | Daily @ 08:00 AM            |
-| `brandwatch-comments`         | `.../brandwatch`           | `brandwatch_comments_sync.py`      | Daily @ 09:30 AM            |
-| `outlook-automation`          | `.../outlook_automation`   | `email_extraction_flow.py`         | Continuous (15m Polling)    |
+| Service Name                   | Directory                  | Target Script / Command             |
+|--------------------------------|----------------------------|------------------------------------|
+| `prefect-server`              | `/opt/prefect/prod/code/`  | `prefect server start`             |
+| `brandwatch-sync`             | `.../brandwatch`           | `sh -c "python brandwatch/... & wait"` |
+| `outlook-automation`          | `.../outlook_automation`   | `python -m outlook_automation.email_extraction_flow` |
 
 ---
 
@@ -120,15 +107,16 @@ If you update:
 - Any `.py` script  
 - The `.env` file  
 - Any `.json` configuration  
+- The `docker-compose.yml` file
 
-You must restart the respective service so changes load into memory.
+You must rebuild and restart the respective service so changes load into memory.
 
 ```bash
 # Restart a specific service
-sudo systemctl restart outlook-automation
+docker-compose up -d --build outlook-automation
 
-# Restart all Brandwatch services
-sudo systemctl restart brandwatch-*
+# Restart all services
+docker-compose up -d --build
 ```
 
 ---
@@ -195,7 +183,7 @@ This typically means a background process locked the file.
 
 **Resolution Steps:**
 
-1. Stop Prefect services  
+1. Stop running containers
 2. Delete lock file:
 
 ```bash
@@ -220,6 +208,11 @@ For detailed business logic, API routing, database schema, or project-specific t
 /opt/prefect/prod/code/outlook_automation/readme.md
 ```
 
+🧠 **Parsers**  
+```
+/opt/prefect/prod/code/outlook_automation/parsers/readme.md
+```
+
 ---
 
 ## 🧭 Operational Principles
@@ -228,7 +221,7 @@ This server is designed around:
 
 - **Independent microservice isolation (prioritized over DRY principles)**
 - Centralized configuration via `.env` volume mounts
-- Service-based orchestration
+- Docker Compose service-based orchestration
 - Strict idempotency
 - Secure credential handling
 - Observable ETL patterns

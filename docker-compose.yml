@@ -26,11 +26,11 @@ services:
       - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
       # 2. Volumes mapped to your original paths!
       - ./outlook_automation/config:/opt/prefect/prod/code/outlook_automation/config
-      - ./outlook_automation/data:/opt/prefect/prod/code/outlook_automation/data
+      - /opt/data/outlook_automation/data:/opt/prefect/prod/code/outlook_automation/data
     depends_on:
       - prefect-server
     # 3. Command uses your original path!
-    command: python outlook_automation/email_extraction_flow.py
+    command: python -m outlook_automation.email_extraction_flow
 
   # --- 3. BRANDWATCH WORKHORSE ---
   brandwatch-sync:

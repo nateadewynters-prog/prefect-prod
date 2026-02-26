@@ -1,6 +1,5 @@
 import pandas as pd
 import os
-import utils
 from prefect import task, get_run_logger
 from outlook_automation.utils import ValidationResult
 

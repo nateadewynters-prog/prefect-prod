@@ -15,7 +15,7 @@ from prefect import flow, task, get_run_logger
 from prefect.artifacts import create_markdown_artifact
 
 # --- Local Imports ---
-import utils
+from outlook_automation import utils
 
 # --- Configuration Load ---
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
