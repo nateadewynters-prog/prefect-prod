@@ -298,9 +298,12 @@ def process_email_attachment(email_meta):
             if os.path.exists(lookup_file):
                 logger.info(f"   🔀 Attempting merge with lookup file: {os.path.basename(lookup_file)}")
                 lookup_df = pd.read_csv(lookup_file)
+                
+                # Ensure clean strings for joining
                 df['Performance/Event Code'] = df['Performance/Event Code'].astype(str).str.strip()
                 lookup_df['Show Code'] = lookup_df['Show Code'].astype(str).str.strip()
                 
+                # Perform the Left Join
                 df = df.merge(
                     lookup_df[['Show Code', 'Performance Date Time']],
                     left_on='Performance/Event Code',
@@ -308,13 +311,28 @@ def process_email_attachment(email_meta):
                     how='left'
                 )
                 
-                matched_lookup_count = df['Performance Date Time'].notna().sum()
-                logger.info(f"   ✅ Lookup merge complete. {matched_lookup_count}/{len(df)} rows matched.")
+                # --- NEW HARD FAILURE LOGIC ---
+                # Check for any rows that didn't find a match in the lookup
+                unmatched_rows = df[df['Performance Date Time'].isna()]
                 
-                if matched_lookup_count < len(df):
-                    logger.warning(f"   ⚠️ Some Event Codes did not match the lookup file!")
+                if not unmatched_rows.empty:
+                    # Extract the specific codes that are missing
+                    missing_codes = unmatched_rows['Performance/Event Code'].unique().tolist()
+                    
+                    error_msg = (
+                        f"Lookup Merge Failed! Missing mapping for {len(missing_codes)} code(s): {missing_codes}. "
+                        f"Please add them to {os.path.basename(lookup_file)}."
+                    )
+                    logger.error(f"   ❌ {error_msg}")
+                    raise ValueError(error_msg) # This triggers the exception block and Teams alert
+                    
+                logger.info(f"   ✅ Lookup merge complete. 100% of rows successfully mapped.")
+                
             else:
-                logger.warning(f"   ⚠️ Lookup file required but missing: {lookup_file}")
+                # Fail if the required file doesn't exist at all
+                error_msg = f"Lookup file required but missing: {lookup_file}"
+                logger.error(f"   ❌ {error_msg}")
+                raise ValueError(error_msg)
 
         csv_name = std_filename_full.replace(expected_ext, ".csv")
         csv_path = os.path.join(GLOBAL['base_dir'], GLOBAL['data_dirs']['processed'], csv_name)
