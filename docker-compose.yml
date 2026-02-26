@@ -12,6 +12,12 @@ services:
     volumes:
       - /opt/prefect/prod/prefect_db_data:/root/.prefect
     command: prefect server start --host 0.0.0.0
+    # Added Log Rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # --- 2. OUTLOOK WORKER ---
   outlook-automation:
@@ -31,6 +37,12 @@ services:
       - prefect-server
     # 3. Command uses your original path!
     command: python -m outlook_automation.email_extraction_flow
+    # Added Log Rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # --- 3. BRANDWATCH WORKHORSE ---
   brandwatch-sync:
@@ -52,3 +64,9 @@ services:
              python brandwatch/brandwatch_content_sync.py &
              python brandwatch/brandwatch_comments_sync.py &
              wait"
+    # Added Log Rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
