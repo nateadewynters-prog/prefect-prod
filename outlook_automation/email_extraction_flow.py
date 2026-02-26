@@ -81,15 +81,15 @@ def generate_standard_filename(metadata, received_date_str, extension):
     date_formatted = report_date.strftime("%d_%m_%Y")
     
     filename = (
-        f"{metadata['show_name']}_"
-        f"{metadata['venue_name']}_"
+        f"{metadata['show_name']}."
+        f"{metadata['venue_name']}."
         f"{metadata['show_id']}_"
         f"{metadata['venue_id']}_"
         f"{metadata['document_id']}_"
         f"{date_formatted}"
         f"{extension}"
     )
-    return filename.replace(" ", "_").replace("/", "-")
+    return filename.replace(" ", "-").replace("/", "-")
 
 # --- Tasks ---
 @task(name="fetch_historical_backlog", retries=2)
