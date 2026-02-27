@@ -28,15 +28,15 @@ services:
     restart: unless-stopped
     environment:
       - PREFECT_API_URL=http://prefect-server:4200/api
+      - PYTHONPATH=/opt/prefect/prod/code/outlook_automation/src
     volumes:
       - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
-      # 2. Volumes mapped to your original paths!
-      - ./outlook_automation/config:/opt/prefect/prod/code/outlook_automation/config
+      - ./outlook_automation/src/outlook_app/config:/opt/prefect/prod/code/outlook_automation/src/outlook_app/config
       - /opt/data/outlook_automation/data:/opt/prefect/prod/code/outlook_automation/data
     depends_on:
       - prefect-server
     # 3. Command uses your original path!
-    command: python -m outlook_automation.email_extraction_flow
+    command: python -m outlook_app.flows.email_extraction_flow
     # Added Log Rotation
     logging:
       driver: "json-file"
