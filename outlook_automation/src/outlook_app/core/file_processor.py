@@ -65,8 +65,9 @@ class ProcessingEngine:
             lookup_df['Show Code'] = lookup_df['Show Code'].astype(str).str.strip()
             
             df = df.merge(lookup_df[['Show Code', 'Performance Date Time']], left_on='Performance/Event Code', right_on='Show Code', how='left')
-            if not df[df['Performance Date Time'].isna()].empty:
-                raise ValueError("Lookup Merge Failed: Unmapped codes found.")
+            unmapped = df[df['Performance Date Time'].isna()]['Performance/Event Code'].unique()
+            if len(unmapped) > 0:
+                raise ValueError(f"Lookup Merge Failed: Unmapped codes found {{{', '.join(map(str, unmapped[:5]))}}}")
 
         # Save outputs
         filename = os.path.basename(temp_path)
