@@ -1,34 +1,50 @@
-# --- Python Basics ---
+# ==========================================
+# 🐍 Python Cache & Bytecode
+# ==========================================
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
+*.py[cod]
+*$py.class
+*.so
+
+# ==========================================
+# 🧪 Testing & Coverage
+# ==========================================
 .pytest_cache/
+.coverage
+htmlcov/
+.tox/
 
-# --- Environment Variables (Crucial for Security) ---
-# Prevents uploading your Azure Client Secrets
+# ==========================================
+# 📂 Local Data & State (CRITICAL)
+# ==========================================
+# We never commit raw PDFs, Excel files, or CSVs to Git.
+data/inbox/*
+data/processed/*
+data/archive/*
+data/failed/*
+data/lookups/*
+data/processed_ids.txt
+
+# Keep the directory structure intact in Git, but ignore the contents
+!data/inbox/.gitkeep
+!data/processed/.gitkeep
+!data/archive/.gitkeep
+!data/failed/.gitkeep
+!data/lookups/.gitkeep
+
+# ==========================================
+# 🔐 Secrets & Environments
+# ==========================================
 .env
-.env.local
+.env.*
+venv/
+env/
+.venv/
 
-# --- Project Data Directories ---
-# You likely do not want to commit the actual email attachments or processed CSVs
-# Assuming your config points to a 'data' folder:
-data/
-# Or specifically:
-data/inbox/
-data/processed/
-data/archive/
-data/failed/
-
-# Note: You might WANT to keep the 'data/lookups/' folder in git if those 
-# event date files are static reference data. If they change daily, ignore them too.
-# data/lookups/
-
-# --- Runtime History ---
-# Ignore the file that tracks which emails have been processed
-processed_ids.txt
-history.txt
-history.json
+# ==========================================
+# 💻 OS & IDE Files
+# ==========================================
+.DS_Store
+.vscode/
+.idea/
+*.swp

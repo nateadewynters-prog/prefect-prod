@@ -1,49 +1,8 @@
 import os
 import requests as r
-from dotenv import load_dotenv
-from pathlib import Path
 from prefect.runtime import flow_run
-from dataclasses import dataclass
-from typing import Dict, Any
 
-# --- Core Configuration ---
-# Resolves to C:\Prefect\.env regardless of which script calls it
-ENV_PATH = Path("/opt/prefect/prod/.env")
-BASE_URL = "https://api.falcon.io"
-
-@dataclass
-class ValidationResult:
-    """Standardized Data Contract for parser validation returns."""
-    status: str  # Strictly "PASSED", "FAILED", or "UNVALIDATED"
-    message: str
-    metrics: Dict[str, Any]
-
-def setup_environment():
-    """Loads the centralized .env file from the Prefect root."""
-    if ENV_PATH.exists():
-        load_dotenv(ENV_PATH)
-    else:
-        print(f"⚠️ Warning: .env not found at {ENV_PATH}")
-
-def get_db_connection():
-    """Returns an active pyodbc connection using centralized env vars."""
-    import pyodbc
-    server = os.getenv('SQL_SERVER')
-    database = os.getenv('SQL_ORGANICSOCIAL_DATABASE')
-    username = os.getenv('SQL_USERNAME')
-    password = os.getenv('SQL_PASSWORD')
-    
-    if not all([server, database, username, password]):
-        raise ValueError("Missing SQL environment variables in centralized .env")
-
-    conn_str = (
-        f'DRIVER={{ODBC Driver 18 for SQL Server}};'
-        f'SERVER={server};DATABASE={database};'
-        f'UID={username};PWD={password};LoginTimeout=30'
-    )
-    return pyodbc.connect(conn_str)
-
-def send_teams_notification(message, logger=None):
+def send_teams_notification(message: str, logger=None):
     """
     Standardized Adaptive Card notification for Power Automate.
     Matches the schema required by the Medallion Email Extraction workflow.
@@ -62,7 +21,7 @@ def send_teams_notification(message, logger=None):
     except Exception:
         run_link = ui_url
 
-    # Adaptive Card Payload (Strict Schema for triggerBody() parsing)
+    # Adaptive Card Payload
     payload = {
         "type": "message",
         "attachments": [

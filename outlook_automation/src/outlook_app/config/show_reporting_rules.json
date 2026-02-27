@@ -14,7 +14,7 @@
         {
             "rule_name": "MALVERN_SILENCE_OF_THE_LAMBS",
             "active": true,
-            "backfill_since": "2026-02-26",
+            "backfill_since": "2026-02-27",
             "match_criteria": {
                 "sender_domain": "figures@malvern-theatres.co.uk",
                 "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs",
@@ -28,7 +28,7 @@
                 "document_id": "503"
             },
             "processing": {
-                "parser_module": "outlook_automation.parsers.malvern_theatre_contractual_report_pdf_parser",
+                "parser_module": "outlook_app.parsers.malvern_theatre_contractual_report_pdf_parser",
                 "parser_function": "extract_contractual_report",
                 "needs_lookup": false
             }
@@ -36,7 +36,7 @@
         {
             "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR",
             "active": true,
-            "backfill_since": "2026-02-25",
+            "backfill_since": "2026-02-23",
             "match_criteria": {
                 "sender_domain": "info@ticketek.com.sg",
                 "subject_keyword": "Jesus Christ Superstar (Sales Summary)",
@@ -50,7 +50,7 @@
                 "document_id": "504"
             },
             "processing": {
-                "parser_module": "outlook_automation.parsers.ticketek_event_settlement_excel_parser",
+                "parser_module": "outlook_app.parsers.ticketek_event_settlement_excel_parser",
                 "parser_function": "extract_settlement_data",
                 "needs_lookup": true
             }
