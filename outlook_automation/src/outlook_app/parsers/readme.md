@@ -9,29 +9,17 @@
 
 ## 1. Overview
 
-This directory contains the highly specialized extraction modules used by the Medallion Email Extraction pipeline. Instead of relying on rigid hardcoded structures, the `email_extraction_flow.py` orchestrator dynamically invokes these scripts using Python's `importlib` based on rules defined in the `show_reporting_rules.json` configuration file.
-
-Each parser serves a singular purpose: accurately unpacking data from complex, unstructured files provided by external vendors.
+This directory contains specialized extraction modules used by the Medallion Email Extraction pipeline. The orchestrator dynamically invokes these scripts using Python's `importlib` based on rules defined in the `show_reporting_rules.json` configuration file.
 
 ---
 
 ## 2. Extraction Modalities
 
-Our parsers primarily handle two types of attachments:
-
 ### A. PDF Extraction (`pdfplumber`)
-Used for unpacking human-readable contractual reports and summaries.
-- Leverages the robust `pdfplumber` library to perform spatial mapping and regex-based row matching.
-- Extracts tabular data that lacks traditional delimiters.
-- Evaluates built-in summary blocks to verify calculations (e.g. comparing the sum of extracted rows against the stated total gross).
-- Example: `malvern_theatre_contractual_report_pdf_parser.py`.
+Used for unpacking human-readable contractual reports. It leverages spatial mapping and regex-based row matching to extract tabular data from unstructured PDFs.
 
 ### B. Excel Extraction (`pandas` grid-scan)
-Used for vendor settlement grids which do not follow standard DataFrame geometries.
-- Utilizes `pandas` to open unstructured XLS/XLSX workbooks.
-- Employs grid-scanning algorithms to identify header coordinates and data blocks.
-- Accounts for variable empty columns, unexpected spacing, and merged cells inherent to human-edited sheets.
-- Example: `ticketek_event_settlement_excel_parser.py`.
+Used for vendor settlement grids. It employs grid-scanning algorithms to identify header coordinates and data blocks, accounting for variable spacing and merged cells.
 
 ---
 
@@ -43,24 +31,37 @@ Every parser in this directory **MUST** return a specific tuple to the orchestra
 return extracted_rows, validation_result
 ```
 
-`extracted_rows`: A List of Dictionaries or a Pandas DataFrame representing the cleaned data.
-`validation_result`: A `ValidationResult` object (from `utils.py`) enforcing the strict observability contract.
+- `extracted_rows`: A List of Dictionaries or a Pandas DataFrame representing the cleaned data.
+- `validation_result`: A `ValidationResult` object enforcing the strict observability contract.
+
+### Import Path
+The validation contract must be imported as:
+```python
+from outlook_app.core.models import ValidationResult
+```
 
 ### Contract Status Levels
-
-When developing or modifying a parser, you must assign an explicit validation state:
-
-- `PASSED`: Internal sums perfectly match the report's stated summary totals. (Proceeds silently).
-- `FAILED`: Hard schema mismatch or unrecoverable error during extraction. (Halts processing, moves file to `failed/`, triggers Teams ❌).
-- `UNVALIDATED`: Extraction completed, but the parser could not locate a summary total to verify against, or specific constraints were breached. (Creates output but triggers Teams ⚠️ warning for manual review).
+- `PASSED`: Internal sums match report totals.
+- `FAILED`: Hard schema mismatch or unrecoverable error (triggers Red ❌ Teams alert).
+- `UNVALIDATED`: Extraction completed but couldn't be verified (triggers Warning ⚠️ Teams alert).
 
 ---
 
 ## 4. Development Standards
 
-When contributing new parsers:
+1. **Isolation:** Keep parser logic entirely self-contained.
+2. **Schema Enforcement:** Use an `EXPECTED_SCHEMA` to violently reject format changes.
+3. **Resiliency:** Wrap extraction logic in strict `try/except` blocks to accurately propagate `FAILED` statuses.
 
-1. **Isolation:** Keep parser logic entirely self-contained. Do not rely on external API calls within the parser.
-2. **Schema Enforcement:** Use an `EXPECTED_SCHEMA` set at the top of the file to violently reject format changes by the vendor.
-3. **Currency / Int Parsing:** Implement specialized helper functions (e.g. `parse_currency`) to handle anomalies like `£`, `,`, and trailing spaces before inserting values into the final dictionary.
-4. **Resiliency:** Wrap primary extraction logic in strict `try/except` blocks, ensuring that `ValidationResult(status="FAILED")` is accurately propagated up.
+---
+
+## 5. Cheat Sheet: Adding a New Vendor Parser
+
+Follow these steps to integrate a new vendor into the automation pipeline:
+
+* **Step 1:** Create `new_vendor_parser.py` inside `src/outlook_app/parsers/`. Wrap the main function in a Prefect `@task` and ensure it returns a tuple: `(extracted_rows, ValidationResult)`.
+* **Step 2:** Open `src/outlook_app/config/show_reporting_rules.json`.
+* **Step 3:** Add a new JSON object to the `"rules"` array. 
+* **Step 4:** Define the `"match_criteria"` (sender domain, subject keyword, extension).
+* **Step 5:** Define the Medallion `"metadata"` (show_id, venue_id, etc.).
+* **Step 6:** Set the `"processing"` block. Point `"parser_module"` to `"outlook_app.parsers.new_vendor_parser"` and set `"parser_function"` to the exact name of your Python function.

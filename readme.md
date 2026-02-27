@@ -15,8 +15,9 @@ This server hosts multiple automated data pipelines orchestrated by **Prefect 3.
 To ensure **independent microservice isolation** and avoid tight coupling, each project maintains its own isolated context:
 
 - They share a centralized configuration file (`.env`) via volume mounts.
-- Python utilities (`utils.py`) and dependencies (`requirements.txt`) are localized directly inside each specific project directory, entirely replacing the legacy `shared_libs` directory.
-- A standardized `ValidationResult` Data Contract for ETL observability is maintained within each domain's localized `utils.py`.
+- Infrastructure (Docker, requirements) is separated from application code.
+- Utility functions are strictly modularized (e.g., inside `src/outlook_app/utils/` and `src/outlook_app/core/`) rather than existing in a monolithic `utils.py`.
+- A standardized `ValidationResult` Data Contract for ETL observability is maintained within the domain's core models.
 - **Orchestration of the Brandwatch and Outlook services is managed via `docker-compose.yml`**.
 
 This architectural pattern prioritizes decoupled microservices over strict DRY principles, ensuring:
@@ -39,7 +40,7 @@ This architectural pattern prioritizes decoupled microservices over strict DRY p
 │   ├── readme.md                 <-- Brandwatch Project Documentation
 │   ├── Dockerfile.brandwatch     <-- Isolated Build Context
 │   ├── requirements.txt          <-- Local Python Dependencies
-│   ├── utils.py                  # Handles SQL, .env loading, Teams Webhooks, and Data Contracts
+│   ├── utils.py                  # Localized utilities
 │   ├── brandwatch_channel_sync.py
 │   ├── brandwatch_comments_sync.py
 │   └── brandwatch_content_sync.py
@@ -47,10 +48,16 @@ This architectural pattern prioritizes decoupled microservices over strict DRY p
     ├── readme.md                 <-- Email Extraction Project Documentation
     ├── Dockerfile.outlook        <-- Isolated Build Context
     ├── requirements.txt          <-- Local Python Dependencies
-    ├── utils.py                  # Handles SQL, .env loading, Teams Webhooks, and Data Contracts
-    ├── email_extraction_flow.py
-    ├── config/                   # JSON routing rules
-    └── parsers/                  # PDF/Excel extraction logic
+    ├── data/                     # Stateful Medallion data (inbox, processed, etc.)
+    ├── src/                      # 🛠️ Application Source
+    │   └── outlook_app/
+    │       ├── clients/          # API Clients (Graph API, etc.)
+    │       ├── config/           # JSON routing rules
+    │       ├── core/             # Business logic & File processing
+    │       ├── flows/            # Prefect Orchestration Flows
+    │       ├── parsers/          # Vendor-specific PDF/Excel parsers
+    │       └── utils/            # Shared internal utilities (DB, Notifications)
+    └── tests/                    # Isolated test suite
 ```
 
 ---
@@ -65,20 +72,7 @@ All environment variables, database credentials, and API keys are stored in:
 
 ⚠️ **Never hardcode credentials inside scripts.**
 
-All scripts must load configuration via their localized utility:
-
-```python
-import utils
-
-utils.setup_environment()
-```
-
-This guarantees:
-
-- Centralized credential management  
-- Secure configuration loading  
-- True microservice independence without fragile `sys.path.append` logic  
-- Simplified long-term maintenance  
+All services must load configuration via their localized environment setup utilities.
 
 ---
 
@@ -92,7 +86,7 @@ All flows run continuously or on defined schedules using **Docker Compose**. The
 |--------------------------------|----------------------------|------------------------------------|
 | `prefect-server`              | `/opt/prefect/prod/code/`  | `prefect server start`             |
 | `brandwatch-sync`             | `.../brandwatch`           | `sh -c "python brandwatch/... & wait"` |
-| `outlook-automation`          | `.../outlook_automation`   | `python -m outlook_automation.email_extraction_flow` |
+| `outlook-automation`          | `.../outlook_automation`   | `python -m outlook_app.flows.email_extraction_flow` |
 
 ---
 
@@ -129,68 +123,11 @@ Prefect UI:
 http://dew-insights01:4200
 ```
 
-If inaccessible from another machine, verify firewall rule:
-
-```bash
-sudo ufw allow 4200/tcp
-```
-
 ---
 
 ### Version Control (Git)
 
 Repository is managed using standard **Git**.
-
-**Executable:**
-
-```
-/usr/bin/git
-```
-
----
-
-### Standard Workflow
-
-Open Terminal in:
-
-```
-/opt/prefect/prod/code
-```
-
-Stage changes:
-
-```bash
-git add .
-```
-
-Commit:
-
-```bash
-git commit -m "Update message"
-```
-
----
-
-### Git Lock Errors
-
-If Git fails with:
-
-```
-fatal: unable to write new index file
-```
-
-This typically means a background process locked the file.
-
-**Resolution Steps:**
-
-1. Stop running containers
-2. Delete lock file:
-
-```bash
-rm .git/index.lock
-```
-
-3. Re-run Git command (use sudo if permissions issue)
 
 ---
 
@@ -210,7 +147,7 @@ For detailed business logic, API routing, database schema, or project-specific t
 
 🧠 **Parsers**  
 ```
-/opt/prefect/prod/code/outlook_automation/parsers/readme.md
+/opt/prefect/prod/code/outlook_automation/src/outlook_app/parsers/readme.md
 ```
 
 ---
