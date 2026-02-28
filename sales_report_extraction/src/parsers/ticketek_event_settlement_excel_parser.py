@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 from prefect import task, get_run_logger
-from outlook_app.core.models import ValidationResult
+from src.models import ValidationResult
 
 def clean_currency(value):
     if pd.isna(value) or value == '': return 0.0

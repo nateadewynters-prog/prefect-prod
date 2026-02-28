@@ -12,7 +12,7 @@
 
 This service automates financial data extraction from emails using the Microsoft Graph API. It uses a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
 
-The system is **Config-Driven**: Adding a new show or venue does *not* require changing code — only updating `src/outlook_app/config/show_reporting_rules.json`. It runs as a module via the command: `python -m outlook_app.flows.email_extraction_flow`.
+The system is **Config-Driven**: Add a new show or venue does *not* require changing code — only updating `config/show_reporting_rules.json`. It runs as a module via the command: `python main.py`.
 
 ---
 
@@ -21,9 +21,11 @@ The system is **Config-Driven**: Adding a new show or venue does *not* require c
 The project follows a strict `src` layout to separate infrastructure from application logic.
 
 ```text
-/opt/prefect/prod/code/outlook_automation/
-├── Dockerfile.outlook        # 🐳 Infrastructure: Container definition
+/opt/prefect/prod/code/sales_report_extraction/
+├── Dockerfile.sales          # 🐳 Infrastructure: Container definition
 ├── requirements.txt          # 📦 Infrastructure: Python dependencies
+├── main.py                   # 🤖 ORCHESTRATOR: Main Prefect Entrypoint
+├── config/                   # ⚙️ CONFIG: JSON routing rules
 ├── data/                     # 💾 STORAGE: Stateful Medallion data
 │   ├── inbox/                # Temp landing zone
 │   ├── processed/            # Final Output CSVs
@@ -32,28 +34,28 @@ The project follows a strict `src` layout to separate infrastructure from applic
 │   ├── lookups/              # Enrichment data
 │   └── processed_ids.txt     # Audit log
 ├── src/                      # 🛠️ APPLICATION: Core logic
-│   └── outlook_app/
-│       ├── clients/          # Pure API authentication and extraction
-│       ├── config/           # JSON routing rules
-│       ├── core/             # Business logic and state management
-│       ├── flows/            # Prefect orchestrators
-│       ├── parsers/          # Extraction logic (PDF/Excel)
-│       └── utils/            # Helper modules (DB, Env, Notifications)
+│   ├── graph_client.py       # Pure API authentication and extraction
+│   ├── file_processor.py     # Business logic and state management
+│   ├── models.py             # Data Contracts
+│   ├── database.py           # Shared internal utilities (DB)
+│   ├── env_setup.py          # Shared internal utilities (Env)
+│   ├── notifications.py      # Shared internal utilities (Notifications)
+│   └── parsers/              # Extraction logic (PDF/Excel)
 └── tests/                    # 🧪 TESTING: Isolated test suite
 ```
 
 ### Module Responsibilities
 
-- **`clients/graph_client.py`**: Handles pure Microsoft Graph API interaction, including authentication, email searching, and attachment downloading.
-- **`core/file_processor.py`**: Manages the "brain" of the operation—business logic, lookup merging, Medallion file I/O, and updating the stateful JSON configuration.
-- **`flows/email_extraction_flow.py`**: A lean Prefect orchestrator that ties the clients and core logic together into a scheduled workflow.
+- **`src/graph_client.py`**: Handles pure Microsoft Graph API interaction, including authentication, email searching, and attachment downloading.
+- **`src/file_processor.py`**: Manages the "brain" of the operation—business logic, lookup merging, Medallion file I/O, and updating the stateful JSON configuration.
+- **`main.py`**: A lean Prefect orchestrator that ties the clients and core logic together into a scheduled workflow.
 
 ---
 
 ## 3. Configuration & Routing
 
 All logic is controlled by:
-`src/outlook_app/config/show_reporting_rules.json`
+`config/show_reporting_rules.json`
 
 The engine routes emails based on:
 - Sender Domain  
@@ -73,10 +75,10 @@ To run the tests:
 
 ```bash
 # Navigate to the project root
-cd /opt/prefect/prod/code/outlook_automation
+cd /opt/prefect/prod/code/sales_report_extraction
 
-# Run pytest with the src directory in the PYTHONPATH
-export PYTHONPATH=$(pwd)/src && pytest tests/ -v
+# Run pytest with the project root in the PYTHONPATH
+export PYTHONPATH=$(pwd) && pytest tests/ -v
 ```
 
 ---
@@ -87,7 +89,7 @@ export PYTHONPATH=$(pwd)/src && pytest tests/ -v
 The pipeline resolves parser code references declared in the configuration at runtime using Python's `importlib`. This allows the system to scale to hundreds of vendors without bloating the main orchestrator.
 
 ### Strict Schema Validation & Data Contracts
-To protect downstream systems, parsers enforce strict schema validation via a **Generic Validation Pattern** using the `ValidationResult` dataclass (defined in `src/outlook_app/core/models.py`).
+To protect downstream systems, parsers enforce strict schema validation via a **Generic Validation Pattern** using the `ValidationResult` dataclass (defined in `src/models.py`).
 
 Each parser returns:
 1. **Parsed Data** (List of Dicts or DataFrame)

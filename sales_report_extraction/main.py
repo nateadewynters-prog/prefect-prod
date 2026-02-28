@@ -6,16 +6,16 @@ from prefect import flow, task, get_run_logger
 from prefect.artifacts import create_markdown_artifact
 
 # --- Absolute Imports from our new src/ layout ---
-from outlook_app.utils.env_setup import setup_environment
-from outlook_app.utils.notifications import send_teams_notification
-from outlook_app.clients.graph_client import GraphClient
-from outlook_app.core.file_processor import ProcessingEngine
+from src.env_setup import setup_environment
+from src.notifications import send_teams_notification
+from src.graph_client import GraphClient
+from src.file_processor import ProcessingEngine
 
 # 1. Setup Environment
 setup_environment()
 
 # 2. Load Configuration (Resolving path relative to this file)
-APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(APP_ROOT, "config", "show_reporting_rules.json")
 
 with open(CONFIG_PATH, 'r') as f:

@@ -19,24 +19,26 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # --- 2. OUTLOOK WORKER ---
-  outlook-automation:
+# --- 2. SALES REPORT EXTRACTION WORKER ---
+  sales-report-extraction:
     build:
-      context: ./outlook_automation  # <-- 1. Context isolated to outlook folder
-      dockerfile: Dockerfile.outlook
-    container_name: prefect-outlook-automation
+      context: ./sales_report_extraction  # <-- 1. Context updated to new folder name
+      dockerfile: Dockerfile.sales        # <-- Matches the renamed Dockerfile
+    container_name: prefect-sales-extraction
     restart: unless-stopped
     environment:
       - PREFECT_API_URL=http://prefect-server:4200/api
-      - PYTHONPATH=/opt/prefect/prod/code/outlook_automation/src
+      - PYTHONPATH=/opt/prefect/prod/code/sales_report_extraction  # <-- Pointing to the new root so 'from src.x' works
     volumes:
       - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
-      - ./outlook_automation/src/outlook_app/config:/opt/prefect/prod/code/outlook_automation/src/outlook_app/config
-      - /opt/data/outlook_automation/data:/opt/prefect/prod/code/outlook_automation/data
+      # 2. Updated volume mount for the new config location
+      - ./sales_report_extraction/config:/opt/prefect/prod/code/sales_report_extraction/config
+      # 3. Updated volume mount for Medallion data
+      - /opt/data/outlook_automation/data:/opt/prefect/prod/code/sales_report_extraction/data 
     depends_on:
       - prefect-server
-    # 3. Command uses your original path!
-    command: python -m outlook_app.flows.email_extraction_flow
+    # 4. The new, much cleaner startup command!
+    command: python main.py
     # Added Log Rotation
     logging:
       driver: "json-file"

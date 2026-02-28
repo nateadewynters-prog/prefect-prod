@@ -44,19 +44,21 @@ This architectural pattern prioritizes decoupled microservices over strict DRY p
 │   ├── brandwatch_channel_sync.py
 │   ├── brandwatch_comments_sync.py
 │   └── brandwatch_content_sync.py
-└── outlook_automation/           
+└── sales_report_extraction/           
     ├── readme.md                 <-- Email Extraction Project Documentation
-    ├── Dockerfile.outlook        <-- Isolated Build Context
+    ├── Dockerfile.sales          <-- Isolated Build Context
     ├── requirements.txt          <-- Local Python Dependencies
+    ├── main.py                   <-- Main Prefect Entrypoint
+    ├── config/                   # JSON routing rules
     ├── data/                     # Stateful Medallion data (inbox, processed, etc.)
     ├── src/                      # 🛠️ Application Source
-    │   └── outlook_app/
-    │       ├── clients/          # API Clients (Graph API, etc.)
-    │       ├── config/           # JSON routing rules
-    │       ├── core/             # Business logic & File processing
-    │       ├── flows/            # Prefect Orchestration Flows
-    │       ├── parsers/          # Vendor-specific PDF/Excel parsers
-    │       └── utils/            # Shared internal utilities (DB, Notifications)
+    │   ├── graph_client.py       # API Clients (Graph API, etc.)
+    │   ├── file_processor.py     # Business logic & File processing
+    │   ├── models.py             # Data Contracts
+    │   ├── database.py           # Shared internal utilities (DB)
+    │   ├── env_setup.py          # Shared internal utilities (Env)
+    │   ├── notifications.py      # Shared internal utilities (Notifications)
+    │   └── parsers/              # Vendor-specific PDF/Excel parsers
     └── tests/                    # Isolated test suite
 ```
 
@@ -86,7 +88,7 @@ All flows run continuously or on defined schedules using **Docker Compose**. The
 |--------------------------------|----------------------------|------------------------------------|
 | `prefect-server`              | `/opt/prefect/prod/code/`  | `prefect server start`             |
 | `brandwatch-sync`             | `.../brandwatch`           | `sh -c "python brandwatch/... & wait"` |
-| `outlook-automation`          | `.../outlook_automation`   | `python -m outlook_app.flows.email_extraction_flow` |
+| `sales-report-extraction`     | `.../sales_report_extraction` | `python main.py`                   |
 
 ---
 
@@ -107,7 +109,7 @@ You must rebuild and restart the respective service so changes load into memory.
 
 ```bash
 # Restart a specific service
-docker-compose up -d --build outlook-automation
+docker-compose up -d --build sales-report-extraction
 
 # Restart all services
 docker-compose up -d --build
@@ -142,12 +144,12 @@ For detailed business logic, API routing, database schema, or project-specific t
 
 📧 **Outlook Extraction**  
 ```
-/opt/prefect/prod/code/outlook_automation/readme.md
+/opt/prefect/prod/code/sales_report_extraction/readme.md
 ```
 
 🧠 **Parsers**  
 ```
-/opt/prefect/prod/code/outlook_automation/src/outlook_app/parsers/readme.md
+/opt/prefect/prod/code/sales_report_extraction/src/parsers/readme.md
 ```
 
 ---

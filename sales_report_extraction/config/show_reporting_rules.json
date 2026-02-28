@@ -1,6 +1,6 @@
 {
     "global_settings": {
-        "base_dir": "/opt/prefect/prod/code/outlook_automation",
+        "base_dir": "/opt/prefect/prod/code/sales_report_extraction",
         "data_dirs": {
             "inbox": "data/inbox",
             "processed": "data/processed",
@@ -28,7 +28,7 @@
                 "document_id": "503"
             },
             "processing": {
-                "parser_module": "outlook_app.parsers.malvern_theatre_contractual_report_pdf_parser",
+                "parser_module": "src.parsers.malvern_theatre_contractual_report_pdf_parser",
                 "parser_function": "extract_contractual_report",
                 "needs_lookup": false
             }
@@ -36,7 +36,7 @@
         {
             "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR",
             "active": true,
-            "backfill_since": "2026-02-23",
+            "backfill_since": "2026-02-27",
             "match_criteria": {
                 "sender_domain": "info@ticketek.com.sg",
                 "subject_keyword": "Jesus Christ Superstar (Sales Summary)",
@@ -50,7 +50,7 @@
                 "document_id": "504"
             },
             "processing": {
-                "parser_module": "outlook_app.parsers.ticketek_event_settlement_excel_parser",
+                "parser_module": "src.parsers.ticketek_event_settlement_excel_parser",
                 "parser_function": "extract_settlement_data",
                 "needs_lookup": true
             }

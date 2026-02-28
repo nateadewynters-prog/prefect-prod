@@ -1,0 +1,16 @@
+FROM python:3.13.5-slim
+
+WORKDIR /opt/prefect/prod/code/sales_report_extraction
+
+# Copy the local requirements and install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the context files INTO the specific sales_report_extraction subfolder
+COPY . .
+
+# Tell Python where the source code lives
+ENV PYTHONPATH=/opt/prefect/prod/code/sales_report_extraction
+
+# Command to run your flow
+CMD ["python", "main.py"]

@@ -2,7 +2,7 @@ import pdfplumber
 import re
 import os
 from prefect import task, get_run_logger
-from outlook_app.core.models import ValidationResult
+from src.models import ValidationResult
 
 def parse_currency(value_str):
     if not value_str: return 0.0

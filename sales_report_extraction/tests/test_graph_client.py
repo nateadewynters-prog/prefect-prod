@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from outlook_app.clients.graph_client import GraphClient
+from src.graph_client import GraphClient
 
 # 1. Setup a "Fixture" - This gives us a fresh client before every test
 @pytest.fixture
@@ -13,7 +13,7 @@ def mock_client():
     )
 
 # 2. Test the Authentication Logic
-@patch('outlook_app.clients.graph_client.msal.ConfidentialClientApplication')
+@patch('src.graph_client.msal.ConfidentialClientApplication')
 def test_get_token_success(mock_msal_class, mock_client):
     """Test that the client successfully extracts the token from MSAL."""
     
@@ -37,7 +37,7 @@ def test_get_token_success(mock_msal_class, mock_client):
     )
 
 # 3. Test Failure Handling
-@patch('outlook_app.clients.graph_client.msal.ConfidentialClientApplication')
+@patch('src.graph_client.msal.ConfidentialClientApplication')
 def test_get_token_failure(mock_msal_class, mock_client):
     """Test that the client raises an exception if authentication fails."""
     
