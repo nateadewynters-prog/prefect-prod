@@ -37,7 +37,7 @@ class ProcessingEngine:
     def generate_filename(self, metadata: dict, date_str: str, ext: str) -> str:
         dt = date_parser.parse(date_str).astimezone(timezone.utc) - timedelta(days=1)
         fmt_date = dt.strftime("%d_%m_%Y")
-        name = f"{metadata['show_name']}.{metadata['venue_name']}.{metadata['_show_id']}_{metadata['venue_id']}_{metadata['document_id']}_{fmt_date}{ext}"
+        name = f"{metadata['show_name']}.{metadata['venue_name']}_{metadata['show_id']}_{metadata['venue_id']}_{metadata['document_id']}_{fmt_date}{ext}"
         return name.replace(" ", "-").replace("/", "-")
 
     def process_file(self, temp_path: str, rule: dict) -> tuple:
