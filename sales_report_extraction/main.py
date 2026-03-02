@@ -10,6 +10,7 @@ from src.env_setup import setup_environment
 from src.notifications import send_teams_notification
 from src.graph_client import GraphClient
 from src.file_processor import ProcessingEngine
+from src.sftp_client import upload_to_sftp
 
 # 1. Setup Environment
 setup_environment()
@@ -82,7 +83,10 @@ def process_email(candidate):
             f.write(content_bytes)
 
         # 2. Process File
-        df, validation_result = engine.process_file(temp_path, rule)
+        df, validation_result, csv_path = engine.process_file(temp_path, rule)
+
+        # 2.5 Upload to SFTP if processing was successful
+        upload_to_sftp(local_file_path=csv_path, filename=os.path.basename(csv_path))
 
         # 3. Create Artifacts & Alerts
         md_table = f"## Validation Result: {validation_result.status}\n\n**Message:** {validation_result.message}\n\n| Metric | Value |\n|---|---|\n"

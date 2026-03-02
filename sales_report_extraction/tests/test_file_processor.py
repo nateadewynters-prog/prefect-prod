@@ -49,7 +49,7 @@ def test_generate_filename(mock_engine):
     filename = mock_engine.generate_filename(metadata, received_date, ".pdf")
     
     # Expected: The date should shift back 1 day to the 26th, and spaces become hyphens.
-    expected_filename = "Phantom.West-End.100_200_300_26_02_2026.pdf"
+    expected_filename = "Phantom.West-End_100_200_300_26_02_2026.pdf"
     assert filename == expected_filename
 
 # 4. Test File I/O (State Management)

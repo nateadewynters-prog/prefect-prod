@@ -77,7 +77,7 @@ class ProcessingEngine:
         archive_path = os.path.join(self.base_dir, self.dirs['archive'], filename)
         shutil.move(temp_path, archive_path)
         
-        return df, validation_result
+        return df, validation_result, csv_path
 
     def handle_failure(self, temp_path: str):
         if os.path.exists(temp_path):
