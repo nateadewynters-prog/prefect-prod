@@ -111,8 +111,8 @@ def update_state(successful_runs):
         engine.update_config_state(successful_runs)
         logger.info("💾 Saved updated state to show_reporting_rules.json")
 
-@flow(name="Email Extraction Flow", log_prints=True)
-def email_extraction_flow():
+@flow(name="Sales Extractor Flow", log_prints=True)
+def sales_extractor_flow():
     candidates = fetch_and_route_emails()
     successful_runs = []
     
@@ -124,8 +124,8 @@ def email_extraction_flow():
     update_state(successful_runs)
 
 if __name__ == "__main__":
-    email_extraction_flow.serve(
-        name="email-extraction-automated",
+    sales_extractor_flow.serve(
+        name="sales-extractor-flow",
         cron="*/15 * * * *",
         tags=["medallion-raw", "production"],
         description="Automated extraction of email attachments to CSVs."
