@@ -33,34 +33,40 @@ engine = ProcessingEngine(CONFIG['global_settings'], CONFIG_PATH)
 
 @task(name="Fetch and Route Emails", retries=2)
 def fetch_and_route_emails():
-    logger = get_run_logger()
-    processed_ids = engine.load_processed_ids()
-    candidates = []
+    logger = get_run_logger() #
+    processed_ids = engine.load_processed_ids() #
+    candidates = [] #
 
-    logger.info(f"🔎 Initiating search across {len(CONFIG['rules'])} active rules.")
+    logger.info(f"🔎 Initiating search across {len(CONFIG['rules'])} active rules.") #
 
-    for rule in CONFIG['rules']:
-        if not rule.get('active'): continue
+    for rule in CONFIG['rules']: #
+        if not rule.get('active'): continue #
 
-        crit = rule['match_criteria']
-        search_query = f'"{crit["sender_domain"]} {crit["subject_keyword"]}"'
-        backfill_dt = date_parser.parse(rule.get('backfill_since', '2000-01-01')).replace(tzinfo=timezone.utc)
+        crit = rule['match_criteria'] #
+        search_query = f'"{crit["sender_domain"]} {crit["subject_keyword"]}"' #
+        backfill_dt = date_parser.parse(rule.get('backfill_since', '2000-01-01')).replace(tzinfo=timezone.utc) #
 
-        logger.info(f"--- 📡 Searching for Rule: {rule['rule_name']} ---")
-        emails = graph.search_emails(search_query)
+        logger.info(f"--- 📡 Searching for Rule: {rule['rule_name']} ---") #
+        emails = graph.search_emails(search_query) #
+        
+        skipped = 0 # Added counter
 
-        for email in emails:
-            email_dt = date_parser.parse(email['receivedDateTime']).astimezone(timezone.utc)
+        for email in emails: #
+            email_dt = date_parser.parse(email['receivedDateTime']).astimezone(timezone.utc) #
             
             # Strict boundary checks
-            if email_dt < backfill_dt or email['id'] in processed_ids or not email.get('hasAttachments'):
-                continue
+            if email_dt < backfill_dt or email['id'] in processed_ids or not email.get('hasAttachments'): #
+                skipped += 1 # Added counter logic
+                continue #
 
-            actual_sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
-            if crit['sender_domain'].lower() in actual_sender:
-                candidates.append({"email_data": email, "rule": rule})
+            actual_sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower() #
+            if crit['sender_domain'].lower() in actual_sender: #
+                candidates.append({"email_data": email, "rule": rule}) #
+                
+        # Added Summary Log per rule
+        logger.info(f"📊 Rule '{rule['rule_name']}': Found {len(emails)} total, Skipped {skipped}, Candidates {len(emails) - skipped}")
 
-    return candidates
+    return candidates #
 
 @task(name="Process Email Attachment")
 def process_email(candidate):
@@ -117,15 +123,30 @@ def update_state(successful_runs):
 
 @flow(name="Sales Extractor Flow", log_prints=True)
 def sales_extractor_flow():
-    candidates = fetch_and_route_emails()
-    successful_runs = []
+    candidates = fetch_and_route_emails() #
+    successful_runs = [] #
+    failed_runs = [] # Added list to track failures
     
-    for candidate in candidates:
-        success, rec_date, r_name = process_email(candidate)
-        if success:
-            successful_runs.append((r_name, rec_date))
+    for candidate in candidates: #
+        success, rec_date, r_name = process_email(candidate) #
+        if success: #
+            successful_runs.append((r_name, rec_date)) #
+        else:
+            failed_runs.append(r_name) # Added failure tracking
             
-    update_state(successful_runs)
+    update_state(successful_runs) #
+    
+    # Added Flow Completion Summary Alert
+    if candidates:
+        logger = get_run_logger()
+        summary = (
+            f"📊 **Extraction Flow Complete**\n\n"
+            f"**Total Candidates:** {len(candidates)}\n"
+            f"**Successful:** {len(successful_runs)}\n"
+            f"**Failed:** {len(failed_runs)}"
+        )
+        logger.info(f"🏁 Flow Summary: {len(successful_runs)} successful, {len(failed_runs)} failed.")
+        send_teams_notification(summary, logger)
 
 if __name__ == "__main__":
     sales_extractor_flow.serve(
