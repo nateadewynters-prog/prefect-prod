@@ -12,7 +12,7 @@
 
 This service automates financial data extraction from emails using the Microsoft Graph API. It uses a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
 
-The system is **Config-Driven**: Add a new show or venue does *not* require changing code — only updating `config/show_reporting_rules.json`. It runs as a module via the command: `python main.py`.
+The system is **Config-Driven**: Adding a new show or venue does *not* require changing code — only updating `config/show_reporting_rules.json`. It runs as a module via the command: `python main.py`.
 
 ---
 
@@ -40,6 +40,7 @@ The project follows a strict `src` layout to separate infrastructure from applic
 │   ├── database.py           # Shared internal utilities (DB)
 │   ├── env_setup.py          # Shared internal utilities (Env)
 │   ├── notifications.py      # Shared internal utilities (Notifications)
+│   ├── sftp_client.py        # SFTP delivery client
 │   └── parsers/              # Extraction logic (PDF/Excel)
 └── tests/                    # 🧪 TESTING: Isolated test suite
 ```
@@ -48,6 +49,10 @@ The project follows a strict `src` layout to separate infrastructure from applic
 
 - **`src/graph_client.py`**: Handles pure Microsoft Graph API interaction, including authentication, email searching, and attachment downloading.
 - **`src/file_processor.py`**: Manages the "brain" of the operation—business logic, lookup merging, Medallion file I/O, and updating the stateful JSON configuration.
+- **`src/sftp_client.py`**: Pure client for delivery of processed CSVs to the legacy Sales Database via SFTP.
+- **`src/notifications.py`**: Standardized MS Teams Adaptive Card alerts for Power Automate integration.
+- **`src/database.py`**: SQL Server connectivity and execution (Shared across modules).
+- **`src/env_setup.py`**: Centralized environment loading from the root `.env` file.
 - **`main.py`**: A lean Prefect orchestrator that ties the clients and core logic together into a scheduled workflow.
 
 ---

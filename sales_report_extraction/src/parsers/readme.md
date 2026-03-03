@@ -1,9 +1,9 @@
-# 🧠 Outlook Automation Parsers
+# 🧠 Sales Report Parsers
 
 **Domain:** Custom Extraction Logic  
 **Architecture:** Pluggable Parser Modules  
 
-> **System Map Reference:** For orchestrator instructions and data flow details, refer to the **Outlook README** at `/opt/prefect/prod/code/outlook_automation/readme.md`.
+> **System Map Reference:** For orchestrator instructions and data flow details, refer to the **Sales Extraction README** at `/opt/prefect/prod/code/sales_report_extraction/readme.md`.
 
 ---
 
@@ -37,7 +37,7 @@ return extracted_rows, validation_result
 ### Import Path
 The validation contract must be imported as:
 ```python
-from outlook_app.core.models import ValidationResult
+from src.models import ValidationResult
 ```
 
 ### Contract Status Levels
@@ -59,9 +59,9 @@ from outlook_app.core.models import ValidationResult
 
 Follow these steps to integrate a new vendor into the automation pipeline:
 
-* **Step 1:** Create `new_vendor_parser.py` inside `src/outlook_app/parsers/`. Wrap the main function in a Prefect `@task` and ensure it returns a tuple: `(extracted_rows, ValidationResult)`.
-* **Step 2:** Open `src/outlook_app/config/show_reporting_rules.json`.
+* **Step 1:** Create `new_vendor_parser.py` inside `src/parsers/`. Wrap the main function in a Prefect `@task` and ensure it returns a tuple: `(extracted_rows, ValidationResult)`.
+* **Step 2:** Open `config/show_reporting_rules.json`.
 * **Step 3:** Add a new JSON object to the `"rules"` array. 
 * **Step 4:** Define the `"match_criteria"` (sender domain, subject keyword, extension).
 * **Step 5:** Define the Medallion `"metadata"` (show_id, venue_id, etc.).
-* **Step 6:** Set the `"processing"` block. Point `"parser_module"` to `"outlook_app.parsers.new_vendor_parser"` and set `"parser_function"` to the exact name of your Python function.
+* **Step 6:** Set the `"processing"` block. Point `"parser_module"` to `"src.parsers.new_vendor_parser"` and set `"parser_function"` to the exact name of your Python function.

@@ -16,9 +16,9 @@ To ensure **independent microservice isolation** and avoid tight coupling, each 
 
 - They share a centralized configuration file (`.env`) via volume mounts.
 - Infrastructure (Docker, requirements) is separated from application code.
-- Utility functions are strictly modularized (e.g., inside `src/outlook_app/utils/` and `src/outlook_app/core/`) rather than existing in a monolithic `utils.py`.
+- Utility functions are strictly modularized (e.g., inside `src/`) rather than existing in a monolithic `utils.py`.
 - A standardized `ValidationResult` Data Contract for ETL observability is maintained within the domain's core models.
-- **Orchestration of the Brandwatch and Outlook services is managed via `docker-compose.yml`**.
+- **Orchestration of the Brandwatch and Sales Report Extraction services is managed via `docker-compose.yml`**.
 
 This architectural pattern prioritizes decoupled microservices over strict DRY principles, ensuring:
 
@@ -58,6 +58,7 @@ This architectural pattern prioritizes decoupled microservices over strict DRY p
     │   ├── database.py           # Shared internal utilities (DB)
     │   ├── env_setup.py          # Shared internal utilities (Env)
     │   ├── notifications.py      # Shared internal utilities (Notifications)
+    │   ├── sftp_client.py        # SFTP delivery client
     │   └── parsers/              # Vendor-specific PDF/Excel parsers
     └── tests/                    # Isolated test suite
 ```
@@ -80,7 +81,7 @@ All services must load configuration via their localized environment setup utili
 
 ## 3. Docker Compose Orchestration
 
-All flows run continuously or on defined schedules using **Docker Compose**. The central `docker-compose.yml` file defines the `prefect-server`, `outlook-automation`, and `brandwatch-sync` services.
+All flows run continuously or on defined schedules using **Docker Compose**. The central `docker-compose.yml` file defines the `prefect-server`, `sales-report-extraction`, and `brandwatch-sync` services.
 
 ### Active Services
 
