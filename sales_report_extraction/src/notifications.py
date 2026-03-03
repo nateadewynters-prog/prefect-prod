@@ -8,7 +8,7 @@ def send_teams_notification(message: str, logger=None):
     Matches the schema required by the Medallion Email Extraction workflow.
     """
     webhook_url = os.getenv("TEAMS_WEBHOOK_URL")
-    ui_url = os.getenv("PREFECT_UI_URL", "http://10.1.50.126:4200")
+    ui_url = os.getenv("PREFECT_UI_URL", "http://10.1.50.127:4200")
 
     if not webhook_url:
         if logger: logger.warning("⚠️ No TEAMS_WEBHOOK_URL found. Skipping.")
