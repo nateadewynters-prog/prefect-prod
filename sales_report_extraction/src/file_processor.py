@@ -112,5 +112,10 @@ class ProcessingEngine:
                     updated = True 
                     
         if updated: 
-            with open(self.config_path, 'w') as f: 
-                json.dump(current_config, f, indent=4)
+            temp_config_path = self.config_path + ".tmp"
+            # 1. Write to a temporary file safely
+            with open(temp_config_path, 'w') as f: 
+                json.dump(current_config, f, indent=4) 
+            
+            # 2. Atomically replace the old config with the new one
+            os.replace(temp_config_path, self.config_path)
