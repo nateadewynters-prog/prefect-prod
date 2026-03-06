@@ -33,40 +33,39 @@ engine = ProcessingEngine(CONFIG['global_settings'], CONFIG_PATH)
 
 @task(name="Fetch and Route Emails", retries=2)
 def fetch_and_route_emails():
-    logger = get_run_logger() #
-    processed_ids = engine.load_processed_ids() #
-    candidates = [] #
+    logger = get_run_logger()
+    candidates = []
 
-    logger.info(f"🔎 Initiating search across {len(CONFIG['rules'])} active rules.") #
+    logger.info(f"🔎 Initiating search across {len(CONFIG['rules'])} active rules.")
 
-    for rule in CONFIG['rules']: #
-        if not rule.get('active'): continue #
+    for rule in CONFIG['rules']:
+        if not rule.get('active'): continue
 
-        crit = rule['match_criteria'] #
-        search_query = f'"{crit["sender_domain"]} {crit["subject_keyword"]}"' #
-        backfill_dt = date_parser.parse(rule.get('backfill_since', '2000-01-01')).replace(tzinfo=timezone.utc) #
+        crit = rule['match_criteria']
+        search_query = f'"{crit["sender_domain"]} {crit["subject_keyword"]}"'
+        backfill_dt = date_parser.parse(rule.get('backfill_since', '2000-01-01')).replace(tzinfo=timezone.utc)
 
-        logger.info(f"--- 📡 Searching for Rule: {rule['rule_name']} ---") #
-        emails = graph.search_emails(search_query) #
+        logger.info(f"--- 📡 Searching for Rule: {rule['rule_name']} ---")
+        emails = graph.search_emails(search_query)
         
-        skipped = 0 # Added counter
+        skipped = 0
 
-        for email in emails: #
-            email_dt = date_parser.parse(email['receivedDateTime']).astimezone(timezone.utc) #
+        for email in emails:
+            email_dt = date_parser.parse(email['receivedDateTime']).astimezone(timezone.utc)
             
-            # Strict boundary checks
-            if email_dt < backfill_dt or email['id'] in processed_ids or not email.get('hasAttachments'): #
-                skipped += 1 # Added counter logic
-                continue #
+            # Strict boundary checks: Date, Already Tagged, or No Attachments
+            if email_dt < backfill_dt or "sales_report_extracted" in email.get('categories', []) or not email.get('hasAttachments'):
+                skipped += 1
+                continue
 
-            actual_sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower() #
-            if crit['sender_domain'].lower() in actual_sender: #
-                candidates.append({"email_data": email, "rule": rule}) #
+            actual_sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
+            if crit['sender_domain'].lower() in actual_sender:
+                candidates.append({"email_data": email, "rule": rule})
                 
-        # Added Summary Log per rule
+        # Summary Log per rule
         logger.info(f"📊 Rule '{rule['rule_name']}': Found {len(emails)} total, Skipped {skipped}, Candidates {len(emails) - skipped}")
 
-    return candidates #
+    return candidates
 
 @task(name="Process Email Attachment")
 def process_email(candidate):
@@ -104,14 +103,17 @@ def process_email(candidate):
         if validation_result.status == "UNVALIDATED":
             send_teams_notification(f"⚠️ **Manual Review Required**\n\n**Rule:** {r_name}\n**Message:** {validation_result.message}", logger)
 
-        engine.save_processed_id(msg_id, r_name)
+        # Tag as processed so it doesn't get picked up again
+        graph.tag_email(msg_id, "sales_report_extracted")
         return True, email['receivedDateTime'], r_name
 
     except Exception as e:
         logger.error(f"❌ Failed: {e}")
         engine.handle_failure(temp_path if 'temp_path' in locals() else "")
         send_teams_notification(f"❌ **Extraction Failed**\n\n**Rule:** {r_name}\n**Error:** {str(e)}", logger)
-        engine.save_processed_id(msg_id, r_name)
+        
+        # We still tag it on failure to prevent an infinite loop of failing on the same corrupt email
+        graph.tag_email(msg_id, "sales_report_extracted") 
         return False, None, r_name
 
 @task(name="Update State")
@@ -123,20 +125,20 @@ def update_state(successful_runs):
 
 @flow(name="Sales Extractor Flow", log_prints=True)
 def sales_extractor_flow():
-    candidates = fetch_and_route_emails() #
-    successful_runs = [] #
-    failed_runs = [] # Added list to track failures
+    candidates = fetch_and_route_emails()
+    successful_runs = []
+    failed_runs = []
     
-    for candidate in candidates: #
-        success, rec_date, r_name = process_email(candidate) #
-        if success: #
-            successful_runs.append((r_name, rec_date)) #
+    for candidate in candidates:
+        success, rec_date, r_name = process_email(candidate)
+        if success:
+            successful_runs.append((r_name, rec_date))
         else:
-            failed_runs.append(r_name) # Added failure tracking
+            failed_runs.append(r_name)
             
-    update_state(successful_runs) #
+    update_state(successful_runs)
     
-    # Added Flow Completion Summary Alert
+    # Flow Completion Summary Alert
     if candidates:
         logger = get_run_logger()
         summary = (

@@ -39,7 +39,7 @@ class GraphClient:
         """Executes a fuzzy search and handles pagination/rate limiting."""
         logger = get_run_logger()
         endpoint = f"{self.base_url}/users/{self.target_user}/messages" #
-        params = {'$search': search_query, '$select': 'id,subject,from,hasAttachments,receivedDateTime', '$top': top} #
+        params = {'$search': search_query, '$select': 'id,subject,from,hasAttachments,receivedDateTime,categories', '$top': top} #
         
         all_emails = [] #
         headers = self.get_headers() #
@@ -88,3 +88,18 @@ class GraphClient:
         error_msg = f"No attachment found with extension {expected_ext}. Files found: {found_files}"
         logger.error(f"❌ {error_msg}") # Added
         raise ValueError(error_msg) #
+
+def tag_email(self, msg_id: str, tag_name: str) -> bool:
+        """Applies a category tag to an email in Microsoft Graph."""
+        logger = get_run_logger()
+        endpoint = f"{self.base_url}/users/{self.target_user}/messages/{msg_id}"
+        payload = {"categories": [tag_name]}
+        
+        resp = requests.patch(endpoint, headers=self.get_headers(), json=payload)
+        
+        if resp.status_code == 200:
+            logger.info(f"🏷️ Successfully tagged email with '{tag_name}'")
+            return True
+        else:
+            logger.error(f"❌ Failed to tag email: {resp.text}")
+            resp.raise_for_status()
