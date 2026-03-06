@@ -61,6 +61,8 @@ def fetch_and_route_emails():
             actual_sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
             if crit['sender_domain'].lower() in actual_sender:
                 candidates.append({"email_data": email, "rule": rule})
+            else:
+                skipped += 1
                 
         # Summary Log per rule
         logger.info(f"📊 Rule '{rule['rule_name']}': Found {len(emails)} total, Skipped {skipped}, Candidates {len(emails) - skipped}")
