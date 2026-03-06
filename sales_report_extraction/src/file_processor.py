@@ -28,7 +28,28 @@ class ProcessingEngine:
         """Invokes the parser, handles lookups, saves CSV, and moves to archive."""
         logger = get_run_logger()
         proc_config = rule['processing'] 
+        filename = os.path.basename(temp_path)
         
+        # 🚀 NEW: Check if this rule is just a raw file passthrough
+        if proc_config.get('passthrough_only', False):
+            logger.info(f"⏩ Passthrough mode enabled. Moving raw {filename} directly to SFTP pipeline.")
+            
+            # Move the raw file to the processed directory instead of making a CSV
+            final_path = os.path.join(self.base_dir, self.dirs['processed'], filename)
+            shutil.move(temp_path, final_path)
+            
+            # Create a success validation result
+            from src.models import ValidationResult
+            val_res = ValidationResult(
+                status="PASSED", 
+                message="File passed through in raw format.", 
+                metrics={"action": "passthrough", "file_type": os.path.splitext(filename)[1]}
+            )
+            
+            # Return None for the dataframe, but return the raw file path for the SFTP uploader
+            return None, val_res, final_path
+
+        # --- STANDARD PROCESSING BELOW ---
         # Dynamically load the parser
         logger.info(f"🔄 Dynamically loading parser: {proc_config['parser_module']}.{proc_config['parser_function']}")
         parser_module = importlib.import_module(proc_config['parser_module']) 
@@ -66,7 +87,6 @@ class ProcessingEngine:
                 raise ValueError(f"Lookup Merge Failed: Unmapped codes found {{{unmapped_str}}}") 
 
         # Save outputs with volume logging
-        filename = os.path.basename(temp_path) 
         csv_path = os.path.join(self.base_dir, self.dirs['processed'], filename.replace(os.path.splitext(filename)[1], '.csv')) 
         logger.info(f"💾 Saving {len(df)} rows to processed CSV: {csv_path}")
         df.to_csv(csv_path, index=False) 

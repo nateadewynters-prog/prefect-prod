@@ -7,14 +7,13 @@
             "archive": "data/archive",
             "failed": "data/failed",
             "lookups": "data/lookups"
-        },
-        "history_file": "data/processed_ids.txt"
+        }
     },
     "rules": [
         {
             "rule_name": "MALVERN_SILENCE_OF_THE_LAMBS",
             "active": true,
-            "backfill_since": "2026-02-27",
+            "backfill_since": "2026-03-05",
             "match_criteria": {
                 "sender_domain": "figures@malvern-theatres.co.uk",
                 "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs",
@@ -36,7 +35,7 @@
         {
             "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR",
             "active": true,
-            "backfill_since": "2026-02-27",
+            "backfill_since": "2026-03-06",
             "match_criteria": {
                 "sender_domain": "info@ticketek.com.sg",
                 "subject_keyword": "Jesus Christ Superstar (Sales Summary)",
@@ -53,6 +52,26 @@
                 "parser_module": "src.parsers.ticketek_event_settlement_excel_parser",
                 "parser_function": "extract_settlement_data",
                 "needs_lookup": true
+            }
+        },
+        {
+            "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR_SINGAPORE",
+            "active": true,
+            "backfill_since": "2025-01-01",
+            "match_criteria": {
+                "sender_domain": "sisticadmin@sistic.com.sg",
+                "subject_keyword": "Jesus Christ Superstar - Sales Summary Report",
+                "attachment_type": ".XLS"
+            },
+            "metadata": {
+                "show_name": "Jesus Christ Superstar",
+                "venue_name": "Singapore",
+                "show_id": "287",
+                "venue_id": "125",
+                "document_id": "501"
+            },
+            "processing": {
+                "passthrough_only": true
             }
         }
     ]
