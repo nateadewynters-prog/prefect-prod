@@ -36,23 +36,21 @@ This architectural pattern prioritizes decoupled microservices over strict DRY p
 ├── readme.md                     <-- Master System Documentation (This File)
 ├── docker-compose.yml            <-- Orchestration configuration
 ├── .env                          <-- Centralized Secrets & API Keys
-└── sales_report_extraction/           
-    ├── readme.md                 <-- Email Extraction Project Documentation
-    ├── Dockerfile.sales          <-- Isolated Build Context
+├── sales_report_extraction/           
+│   ├── readme.md                 <-- Email Extraction Project Documentation
+│   ├── Dockerfile.sales          <-- Isolated Build Context
+│   ├── requirements.txt          <-- Local Python Dependencies
+│   ├── main.py                   <-- Main Prefect Entrypoint
+│   └── ...
+└── brandwatch_extraction/           
+    ├── readme.md                 <-- Social Extraction Project Documentation
+    ├── Dockerfile.brandwatch     <-- Isolated Build Context
     ├── requirements.txt          <-- Local Python Dependencies
     ├── main.py                   <-- Main Prefect Entrypoint
-    ├── config/                   # JSON routing rules
-    ├── data/                     # Stateful Medallion data (inbox, processed, etc.)
-    ├── src/                      # 🛠️ Application Source
-    │   ├── graph_client.py       # API Clients (Graph API, etc.)
-    │   ├── file_processor.py     # Business logic & File processing
-    │   ├── models.py             # Data Contracts
-    │   ├── database.py           # Shared internal utilities (DB)
-    │   ├── env_setup.py          # Shared internal utilities (Env)
-    │   ├── notifications.py      # Shared internal utilities (Notifications)
-    │   ├── sftp_client.py        # SFTP delivery client
-    │   └── parsers/              # Vendor-specific PDF/Excel parsers
-    └── tests/                    # Isolated test suite
+    └── src/                      # 🛠️ Application Source
+        ├── api_client.py         # API Clients (Brandwatch/Falcon.io)
+        ├── database.py           # Shared internal utilities (DB)
+        └── env_setup.py          # Shared internal utilities (Env)
 ```
 
 ---
@@ -77,10 +75,11 @@ All flows run continuously or on defined schedules using **Docker Compose**. The
 
 ### Active Services
 
-| Service Name                   | Directory                  | Target Script / Command             |
-|--------------------------------|----------------------------|------------------------------------|
-| `prefect-server`              | `/opt/prefect/prod/code/`  | `prefect server start`             |
-| `sales-report-extraction`     | `.../sales_report_extraction` | `python main.py`                   |
+| Service Name                   | Directory                       | Target Script / Command            |
+|--------------------------------|---------------------------------|-----------------------------------|
+| `prefect-server`               | `/opt/prefect/prod/code/`       | `prefect server start`            |
+| `sales-report-extraction`      | `.../sales_report_extraction`   | `python main.py`                  |
+| `brandwatch-extraction`        | `.../brandwatch_extraction`     | `python main.py`                  |
 
 ---
 
@@ -102,6 +101,7 @@ You must rebuild and restart the respective service so changes load into memory.
 ```bash
 # Restart a specific service
 docker-compose up -d --build sales-report-extraction
+docker-compose up -d --build brandwatch-extraction
 
 # Restart all services
 docker-compose up -d --build
@@ -134,9 +134,9 @@ For detailed business logic, API routing, database schema, or project-specific t
 /opt/prefect/prod/code/sales_report_extraction/readme.md
 ```
 
-🧠 **Parsers**  
+📊 **Brandwatch Social Performance**  
 ```
-/opt/prefect/prod/code/sales_report_extraction/src/parsers/readme.md
+/opt/prefect/prod/code/brandwatch_extraction/readme.md
 ```
 
 ---

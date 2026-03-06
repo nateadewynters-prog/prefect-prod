@@ -45,3 +45,28 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+# --- 3. BRANDWATCH EXTRACTION SERVICE ---
+  brandwatch-extraction:
+    build:
+      context: ./brandwatch_extraction
+      dockerfile: Dockerfile.brandwatch
+    container_name: prefect-brandwatch-extraction
+    restart: unless-stopped
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - PYTHONPATH=/opt/prefect/prod/code/brandwatch_extraction
+    volumes:
+      # Shared secrets and environment variables
+      - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
+      # Modular config and mapping files
+      - ./brandwatch_extraction/config:/opt/prefect/prod/code/brandwatch_extraction/config
+      # Persistent data and medallion storage
+      - /opt/data/brandwatch_automation/data:/opt/prefect/prod/code/brandwatch_extraction/data
+    depends_on:
+      - prefect-server
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
