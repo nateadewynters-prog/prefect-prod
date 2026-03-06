@@ -45,30 +45,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-  # --- 3. BRANDWATCH WORKHORSE ---
-  brandwatch-sync:
-    build:
-      context: ./brandwatch          # <-- 1. Context isolated to brandwatch folder
-      dockerfile: Dockerfile.brandwatch
-    container_name: prefect-brandwatch-sync
-    restart: unless-stopped
-    environment:
-      - PREFECT_API_URL=http://prefect-server:4200/api
-    volumes:
-      - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
-      - /opt/data/brandwatch_outputs:/opt/data/brandwatch_outputs
-    depends_on:
-      - prefect-server
-    # 3. Command uses your original path!
-    command: >
-      sh -c "python brandwatch/brandwatch_channel_sync.py &
-             python brandwatch/brandwatch_content_sync.py &
-             python brandwatch/brandwatch_comments_sync.py &
-             wait"
-    # Added Log Rotation
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
