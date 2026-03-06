@@ -10,7 +10,7 @@
 
 ## 1. System Architecture
 
-This server hosts multiple automated data pipelines orchestrated by **Prefect 3.0**.
+This server hosts automated data pipelines orchestrated by **Prefect 3.0**.
 
 To ensure **independent microservice isolation** and avoid tight coupling, each project maintains its own isolated context:
 
@@ -18,7 +18,7 @@ To ensure **independent microservice isolation** and avoid tight coupling, each 
 - Infrastructure (Docker, requirements) is separated from application code.
 - Utility functions are strictly modularized (e.g., inside `src/`) rather than existing in a monolithic `utils.py`.
 - A standardized `ValidationResult` Data Contract for ETL observability is maintained within the domain's core models.
-- **Orchestration of the Brandwatch and Sales Report Extraction services is managed via `docker-compose.yml`**.
+- **Orchestration of the Sales Report Extraction service is managed via `docker-compose.yml`**.
 
 This architectural pattern prioritizes decoupled microservices over strict DRY principles, ensuring:
 
@@ -36,14 +36,6 @@ This architectural pattern prioritizes decoupled microservices over strict DRY p
 ├── readme.md                     <-- Master System Documentation (This File)
 ├── docker-compose.yml            <-- Orchestration configuration
 ├── .env                          <-- Centralized Secrets & API Keys
-├── brandwatch/                   
-│   ├── readme.md                 <-- Brandwatch Project Documentation
-│   ├── Dockerfile.brandwatch     <-- Isolated Build Context
-│   ├── requirements.txt          <-- Local Python Dependencies
-│   ├── utils.py                  # Localized utilities
-│   ├── brandwatch_channel_sync.py
-│   ├── brandwatch_comments_sync.py
-│   └── brandwatch_content_sync.py
 └── sales_report_extraction/           
     ├── readme.md                 <-- Email Extraction Project Documentation
     ├── Dockerfile.sales          <-- Isolated Build Context
@@ -81,14 +73,13 @@ All services must load configuration via their localized environment setup utili
 
 ## 3. Docker Compose Orchestration
 
-All flows run continuously or on defined schedules using **Docker Compose**. The central `docker-compose.yml` file defines the `prefect-server`, `sales-report-extraction`, and `brandwatch-sync` services.
+All flows run continuously or on defined schedules using **Docker Compose**. The central `docker-compose.yml` file defines the `prefect-server` and `sales-report-extraction` services.
 
 ### Active Services
 
 | Service Name                   | Directory                  | Target Script / Command             |
 |--------------------------------|----------------------------|------------------------------------|
 | `prefect-server`              | `/opt/prefect/prod/code/`  | `prefect server start`             |
-| `brandwatch-sync`             | `.../brandwatch`           | `sh -c "python brandwatch/... & wait"` |
 | `sales-report-extraction`     | `.../sales_report_extraction` | `python main.py`                   |
 
 ---
@@ -137,11 +128,6 @@ Repository is managed using standard **Git**.
 ## 5. Project-Specific Documentation
 
 For detailed business logic, API routing, database schema, or project-specific troubleshooting, refer to:
-
-📊 **Brandwatch Sync**  
-```
-/opt/prefect/prod/code/brandwatch/readme.md
-```
 
 📧 **Outlook Extraction**  
 ```
