@@ -2,17 +2,15 @@
 
 **Host:** `dew-insights01`  
 **Status:** 🟢 Active (Polling every 15m)  
-**Architecture:** JSON-Driven Medallion Pattern  
-
-> **System Map Reference:** For global server settings, Docker Compose service management, and Python environment details, refer to the **Master README** at `/opt/prefect/prod/code/readme.md`.
+**Architecture:** JSON-Driven Medallion Pattern with Server-Side State  
 
 ---
 
 ## 1. Project Overview
 
-This service automates financial data extraction from emails using the Microsoft Graph API. It uses a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
+This service automates financial data extraction from emails using the Microsoft Graph API. It employs a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
 
-The system is **Config-Driven**: Adding a new show or venue does *not* require changing code — only updating `config/show_reporting_rules.json`. It runs as a module via the command: `python main.py`.
+The system is **Config-Driven**: Adding a new show or venue only requires updating `config/show_reporting_rules.json`. It tracks processed state directly on the Exchange server using Microsoft Graph categories, ensuring high idempotency and eliminating local state files.
 
 ---
 
@@ -30,86 +28,55 @@ The project follows a strict `src` layout to separate infrastructure from applic
 │   ├── inbox/                # Temp landing zone
 │   ├── processed/            # Final Output CSVs
 │   ├── archive/              # Renamed Raw Files (PDF/XLS)
-│   ├── failed/               # Error files
-│   ├── lookups/              # Enrichment data
-│   └── processed_ids.txt     # Audit log
+│   ├── failed/               # Error files (Quarantine)
+│   └── lookups/              # Enrichment data (Event date mappings)
 ├── src/                      # 🛠️ APPLICATION: Core logic
-│   ├── graph_client.py       # Pure API authentication and extraction
-│   ├── file_processor.py     # Business logic and state management
-│   ├── models.py             # Data Contracts
+│   ├── graph_client.py       # API authentication, searching, and tagging
+│   ├── file_processor.py     # Business logic and Medallion I/O
+│   ├── models.py             # Data Contracts (ValidationResult)
 │   ├── database.py           # Shared internal utilities (DB)
-│   ├── env_setup.py          # Shared internal utilities (Env)
-│   ├── notifications.py      # Shared internal utilities (Notifications)
+│   ├── env_setup.py          # Environment loading
+│   ├── notifications.py      # MS Teams notification logic
 │   ├── sftp_client.py        # SFTP delivery client
 │   └── parsers/              # Extraction logic (PDF/Excel)
 └── tests/                    # 🧪 TESTING: Isolated test suite
 ```
 
-### Module Responsibilities
-
-- **`src/graph_client.py`**: Handles pure Microsoft Graph API interaction, including authentication, email searching, and attachment downloading.
-- **`src/file_processor.py`**: Manages the "brain" of the operation—business logic, lookup merging, Medallion file I/O, and updating the stateful JSON configuration.
-- **`src/sftp_client.py`**: Pure client for delivery of processed CSVs to the legacy Sales Database via SFTP.
-- **`src/notifications.py`**: Standardized MS Teams Adaptive Card alerts for Power Automate integration.
-- **`src/database.py`**: SQL Server connectivity and execution (Shared across modules).
-- **`src/env_setup.py`**: Centralized environment loading from the root `.env` file.
-- **`main.py`**: A lean Prefect orchestrator that ties the clients and core logic together into a scheduled workflow.
-
 ---
 
-## 3. Configuration & Routing
+## 3. Configuration & State Management
 
-All logic is controlled by:
-`config/show_reporting_rules.json`
-
-The engine routes emails based on:
+### 📡 Routing Logic
+All logic is controlled by `config/show_reporting_rules.json`. The engine routes emails based on:
 - Sender Domain  
 - Subject Keyword  
 - Explicit Attachment Type  
 
-### Stateful Backfilling & Progress Tracking
-Each rule in the JSON config tracks its own progress using `"backfill_since": "YYYY-MM-DD"`. After successful processing, the system automatically advances this date, eliminating redundant API calls and enabling seamless historical backfills.
+### 🏷️ Server-Side Idempotency
+Instead of local tracking files, this system uses the Microsoft Graph API to manage state:
+1. **Filtering:** The fetch task specifically filters for emails *without* the `"sales_report_extracted"` category tag.
+2. **Tagging:** Once an email is processed (successfully or with a handled error), the orchestrator sends a `PATCH` request to apply the `"sales_report_extracted"` tag to the message on the server.
+
+### 📈 Temporal Boundaries
+Each rule uses a `"backfill_since": "YYYY-MM-DD"` field to bound the search query, which is automatically advanced after successful runs to optimize API performance.
 
 ---
 
-## 4. Testing
+## 4. Testing & Validation
 
-This project includes an isolated test suite to verify client connectivity and processing logic without affecting production data.
+This project includes a comprehensive test suite using `pytest`.
 
-To run the tests:
-
+To run the tests inside the production container:
 ```bash
-# Navigate to the project root
-cd /opt/prefect/prod/code/sales_report_extraction
-
-# Run pytest with the project root in the PYTHONPATH
-export PYTHONPATH=$(pwd) && pytest tests/ -v
+sudo docker exec -it prefect-sales-extraction pytest tests/
 ```
 
----
-
-## 5. Technical Details
-
-### Dynamic Parser Loading
-The pipeline resolves parser code references declared in the configuration at runtime using Python's `importlib`. This allows the system to scale to hundreds of vendors without bloating the main orchestrator.
-
-### Strict Schema Validation & Data Contracts
-To protect downstream systems, parsers enforce strict schema validation via a **Generic Validation Pattern** using the `ValidationResult` dataclass (defined in `src/models.py`).
-
-Each parser returns:
-1. **Parsed Data** (List of Dicts or DataFrame)
-2. **ValidationResult** (Status, Message, and Metrics)
-
-### Orchestrator Behavior & Teams Integration
-The system integrates with Microsoft Teams via Adaptive Card Webhooks. 
-- `FAILED`: Hard failure. File moved to `failed/`. Red ❌ Teams alert.
-- `UNVALIDATED`: Warning ⚠️ Teams alert. Manual review required.
-- `PASSED`: Silently logged.
+For more details on writing and mocking tests, see `tests/readme.md`.
 
 ---
 
-## ✅ Architectural Guarantees
+## 5. Technical Highlights
 
-- **Infrastructure/Code Separation**: Docker and requirements are decoupled from the `src` logic.
-- **Modularized Utilities**: No more monolithic `utils.py`; logic is split into `database.py`, `notifications.py`, etc.
-- **Config-driven**: Idempotent and observable via Prefect Artifacts.
+- **Dynamic Parser Loading:** Resolves parser code at runtime via `importlib`.
+- **Strict Data Contracts:** Parsers return a `ValidationResult` (Status, Message, Metrics) to ensure observability.
+- **Medallion Movement:** Raw files are moved from `inbox` to `archive` (on success) or `failed` (on error).
