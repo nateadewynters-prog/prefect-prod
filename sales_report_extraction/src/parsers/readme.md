@@ -33,3 +33,12 @@ return extracted_rows, validation_result
 1. **Create the script:** e.g., `new_vendor_parser.py` in this directory.
 2. **Implement logic:** Ensure it accepts a file path and returns the required tuple.
 3. **Update Config:** Add a rule to `show_reporting_rules.json` pointing `parser_module` to `src.parsers.new_vendor_parser`.
+
+**Note:** If extraction is not required and the raw file can be uploaded directly, consider using the `"passthrough_only": true` flag in the rule configuration instead of creating a new parser.
+
+---
+
+## 4. Design Guidelines
+
+- **Isolation:** Avoid external dependencies within parsers where possible.
+- **Robustness:** Use standard libraries for parsing (e.g., `pdfplumber` for PDFs, `openpyxl` for Excel) and always return a `ValidationResult`.

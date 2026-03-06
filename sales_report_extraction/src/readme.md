@@ -14,11 +14,11 @@ This directory contains the application logic, decoupled from the orchestration 
 ## 2. Component Layout
 
 ### 📡 API & External Clients
-- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, fuzzy searching, attachment downloading, and **category tagging** for state management.
-- **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs to the Sales Database.
+- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, fuzzy searching, attachment downloading, and **category tagging** for state management. Features HTTP 409/412 retry logic for robust tagging.
+- **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs or raw passthrough files to the Sales Database.
 
 ### 🧠 Core Engine
-- **`file_processor.py`**: The `ProcessingEngine` class. Manages file lifecycles (renaming, moving across medallion zones) and dynamic parser invocation.
+- **`file_processor.py`**: The `ProcessingEngine` class. Manages file lifecycles (renaming, moving across medallion zones) and dynamic parser invocation. Handles the `"passthrough_only"` logic for raw file routing.
 
 ### 🧱 Shared Models & Utilities
 - **`models.py`**: Data contracts (e.g., `ValidationResult`).
@@ -31,5 +31,6 @@ This directory contains the application logic, decoupled from the orchestration 
 ## 3. Design Principles
 
 1. **Microservice Isolation:** Logic is split into specialized modules to prevent cross-domain regressions.
-2. **Server-Side State:** The pipeline relies on external API state (Graph Tags) for idempotency, making the `src` logic largely stateless regarding message IDs.
-3. **Absolute Imports:** All internal imports use the `src.` prefix (e.g., `from src.models import ...`).
+2. **Server-Side State:** The pipeline relies on external API state (Graph Tags) for idempotency, eliminating the need for local state files (like `processed_ids.txt`).
+3. **Data Integrity:** Employs `f.flush()` and `os.fsync()` before SFTP uploads to ensure complete file writes.
+4. **Absolute Imports:** All internal imports use the `src.` prefix (e.g., `from src.models import ...`).

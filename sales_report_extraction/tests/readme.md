@@ -7,28 +7,16 @@
 
 ## 1. Overview
 
-This suite verifies client authentication, file processing logic, and date calculations without touching production data or external services.
+This suite verifies client authentication, file processing logic, server-side tagging, and date calculations without touching production data or external services (via extensive mocking).
 
 ---
 
-## 2. How to Create a Test File
+## 2. Key Test Areas
 
-### Naming Convention
-All test files must be named `test_*.py` and located in this directory to be automatically discovered by `pytest`.
-
-### Basic Structure
-```python
-import pytest
-from unittest.mock import patch, MagicMock
-
-def test_my_feature():
-    # Arrange
-    expected = 10
-    # Act
-    actual = 5 + 5
-    # Assert
-    assert actual == expected
-```
+- **Graph API Tagging:** `test_categorization.py` verifies the ability to search for and apply the `"sales_report_extracted"` category tag to emails, ensuring idempotency.
+- **File Processing:** `test_file_processor.py` tests both standard extraction and the new `"passthrough_only"` logic.
+- **SFTP Integration:** `test_sftp_client.py` ensures that files are correctly handled and uploaded, including checks for proper buffer flushing.
+- **Orchestration:** `test_main.py` validates the overall Prefect flow logic.
 
 ---
 

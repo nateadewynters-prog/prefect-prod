@@ -57,11 +57,11 @@
         {
             "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR_SINGAPORE",
             "active": true,
-            "backfill_since": "2025-01-01",
+            "backfill_since": "2026-03-05",
             "match_criteria": {
                 "sender_domain": "sisticadmin@sistic.com.sg",
                 "subject_keyword": "Jesus Christ Superstar - Sales Summary Report",
-                "attachment_type": ".XLS"
+                "attachment_type": ".xls"
             },
             "metadata": {
                 "show_name": "Jesus Christ Superstar",

@@ -10,7 +10,7 @@
 
 This service automates financial data extraction from emails using the Microsoft Graph API. It employs a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
 
-The system is **Config-Driven**: Adding a new show or venue only requires updating `config/show_reporting_rules.json`. It tracks processed state directly on the Exchange server using Microsoft Graph categories, ensuring high idempotency and eliminating local state files.
+The system is **Config-Driven**: Adding a new show or venue only requires updating `config/show_reporting_rules.json`. It tracks processed state directly on the Exchange server using Microsoft Graph categories, ensuring high idempotency and eliminating the need for local state files.
 
 ---
 
@@ -23,10 +23,11 @@ The project follows a strict `src` layout to separate infrastructure from applic
 ├── Dockerfile.sales          # 🐳 Infrastructure: Container definition
 ├── requirements.txt          # 📦 Infrastructure: Python dependencies
 ├── main.py                   # 🤖 ORCHESTRATOR: Main Prefect Entrypoint
+├── architecture_flow.md      # 🗺️ DOCUMENTATION: High-level system diagram
 ├── config/                   # ⚙️ CONFIG: JSON routing rules
 ├── data/                     # 💾 STORAGE: Stateful Medallion data
 │   ├── inbox/                # Temp landing zone
-│   ├── processed/            # Final Output CSVs
+│   ├── processed/            # Final Output (CSVs or Raw Passthrough)
 │   ├── archive/              # Renamed Raw Files (PDF/XLS)
 │   ├── failed/               # Error files (Quarantine)
 │   └── lookups/              # Enrichment data (Event date mappings)
@@ -53,9 +54,17 @@ All logic is controlled by `config/show_reporting_rules.json`. The engine routes
 - Explicit Attachment Type  
 
 ### 🏷️ Server-Side Idempotency
-Instead of local tracking files, this system uses the Microsoft Graph API to manage state:
+This system uses the Microsoft Graph API to manage state, eliminating local `processed_ids.txt` files:
 1. **Filtering:** The fetch task specifically filters for emails *without* the `"sales_report_extracted"` category tag.
 2. **Tagging:** Once an email is processed (successfully or with a handled error), the orchestrator sends a `PATCH` request to apply the `"sales_report_extracted"` tag to the message on the server.
+3. **Robustness:** The tagging logic includes HTTP 409/412 retry logic to handle Exchange server concurrency conflicts.
+
+### ⏩ Passthrough Feature
+Rules can be configured with `"passthrough_only": true` in the `processing` section. When enabled:
+- The engine skips Pandas/CSV extraction.
+- The raw attachment is moved directly to the `data/processed/` directory.
+- The raw file is uploaded to SFTP in its original format.
+- The email is tagged as successful.
 
 ### 📈 Temporal Boundaries
 Each rule uses a `"backfill_since": "YYYY-MM-DD"` field to bound the search query, which is automatically advanced after successful runs to optimize API performance.
@@ -80,3 +89,4 @@ For more details on writing and mocking tests, see `tests/readme.md`.
 - **Dynamic Parser Loading:** Resolves parser code at runtime via `importlib`.
 - **Strict Data Contracts:** Parsers return a `ValidationResult` (Status, Message, Metrics) to ensure observability.
 - **Medallion Movement:** Raw files are moved from `inbox` to `archive` (on success) or `failed` (on error).
+- **Data Integrity:** Employs `f.flush()` and `os.fsync()` before SFTP uploads to prevent 0-byte file errors.

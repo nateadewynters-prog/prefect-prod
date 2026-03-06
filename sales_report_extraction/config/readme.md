@@ -25,9 +25,10 @@ Each object in the `"rules"` array controls one unique data flow:
 - **`show_id`**, **`venue_id`**, **`document_id`**: Identifiers for downstream systems.
 
 ### ⚙️ Processing Block
-- **`parser_module`**: Python module path (e.g., `src.parsers.malvern_theatre_parser`).
-- **`parser_function`**: The specific entrypoint function name.
-- **`needs_lookup`**: Boolean toggle for event-date enrichment via `data/lookups/`.
+- **`passthrough_only`**: (Boolean) If `true`, skips parsing and moves the raw attachment directly to the `processed/` folder for SFTP upload.
+- **`parser_module`**: Python module path (e.g., `src.parsers.malvern_theatre_parser`). Required if `passthrough_only` is false.
+- **`parser_function`**: The specific entrypoint function name. Required if `passthrough_only` is false.
+- **`needs_lookup`**: (Boolean) Toggle for event-date enrichment via `data/lookups/`. Only applicable when `passthrough_only` is false.
 
 ---
 
@@ -36,7 +37,7 @@ Each object in the `"rules"` array controls one unique data flow:
 The orchestrator uses the **`backfill_since`** field (YYYY-MM-DD) as a temporal search boundary.
 1. The system searches for emails received AFTER this date.
 2. After successful extraction, this date is updated to the latest received timestamp.
-3. **Note:** Email-level idempotency is handled by the `"sales_report_extracted"` category tag on the Exchange server, not by this date alone.
+3. **Note:** Email-level idempotency is handled by the `"sales_report_extracted"` category tag on the Exchange server, not by this date alone. Local state files (like `processed_ids.txt`) have been removed in favor of this server-side tagging.
 
 ---
 

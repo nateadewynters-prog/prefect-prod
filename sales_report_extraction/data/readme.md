@@ -16,11 +16,14 @@ This directory serves as the storage layer for the pipeline. It follows the **Me
 ### 📥 1. Inbox (Landing Zone)
 Temporary landing zone for raw attachments downloaded from the Graph API. Files are standardized using metadata before processing.
 
-### ✅ 2. Processed (Curated CSVs)
-The final extraction output. Parsed data is saved here as standardized CSVs before being uploaded to the Sales Database via SFTP.
+### ✅ 2. Processed (Curated CSVs & Raw Passthrough)
+The final extraction output. This directory contains:
+- Standardized CSVs generated from successful extraction.
+- Raw attachments for rules configured with `"passthrough_only": true`.
+All files in this directory are subsequently uploaded to the Sales Database via SFTP.
 
 ### 📦 3. Archive (Historical Raw)
-Raw files are moved here after successful extraction for long-term retention.
+Raw files are moved here after successful extraction for long-term retention. **Note:** For `"passthrough_only"` rules, the file is moved directly to the `Processed` zone and not archived separately here.
 
 ### ⚠️ 4. Failed (Quarantine)
 Files that fail validation or cause processing errors are moved here for manual investigation.
@@ -32,9 +35,9 @@ Reference CSVs containing event-date mappings (e.g., `show_id_venue_id_event_dat
 
 ## 3. State Management Note
 
-As of the latest refactor, **local state files (like `processed_ids.txt`) have been removed.** 
+**Local state files (like `processed_ids.txt`) have been removed.** 
 
-Email processing state is now tracked directly on the Microsoft Exchange server using the **`sales_report_extracted`** category tag. This ensures that even if the local data directory is wiped, the pipeline will not process the same email twice.
+Email processing state is now tracked directly on the Microsoft Exchange server using the **`sales_report_extracted`** category tag via the Graph API. This ensures that even if the local data directory is wiped, the pipeline will not process the same email twice.
 
 ---
 
