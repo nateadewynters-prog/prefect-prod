@@ -31,6 +31,6 @@ This directory contains the application logic, decoupled from the orchestration 
 ## 3. Design Principles
 
 1. **Microservice Isolation:** Logic is split into specialized modules to prevent cross-domain regressions.
-2. **Server-Side State:** The pipeline relies on external API state (Graph Tags) for idempotency, eliminating the need for local state files (like `processed_ids.txt`).
+2. **Server-Side State:** The pipeline relies on external API state (Graph Tags) for idempotency, ensuring the system remains stateless locally.
 3. **Data Integrity:** Employs `f.flush()` and `os.fsync()` before SFTP uploads to ensure complete file writes.
 4. **Absolute Imports:** All internal imports use the `src.` prefix (e.g., `from src.models import ...`).

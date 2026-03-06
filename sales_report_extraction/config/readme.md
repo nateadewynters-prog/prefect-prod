@@ -37,7 +37,7 @@ Each object in the `"rules"` array controls one unique data flow:
 The orchestrator uses the **`backfill_since`** field (YYYY-MM-DD) as a temporal search boundary.
 1. The system searches for emails received AFTER this date.
 2. After successful extraction, this date is updated to the latest received timestamp.
-3. **Note:** Email-level idempotency is handled by the `"sales_report_extracted"` category tag on the Exchange server, not by this date alone. Local state files (like `processed_ids.txt`) have been removed in favor of this server-side tagging.
+3. **Note:** Email-level idempotency is handled by the `"sales_report_extracted"` category tag on the Exchange server, ensuring that the system remains stateless locally.
 
 ---
 

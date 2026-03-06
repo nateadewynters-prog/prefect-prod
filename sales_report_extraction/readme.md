@@ -10,7 +10,7 @@
 
 This service automates financial data extraction from emails using the Microsoft Graph API. It employs a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
 
-The system is **Config-Driven**: Adding a new show or venue only requires updating `config/show_reporting_rules.json`. It tracks processed state directly on the Exchange server using Microsoft Graph categories, ensuring high idempotency and eliminating the need for local state files.
+The system is **Config-Driven**: Adding a new show or venue only requires updating `config/show_reporting_rules.json`. It tracks processed state directly on the Exchange server using Microsoft Graph categories, ensuring high idempotency and ensuring the system remains stateless locally.
 
 ---
 
@@ -54,7 +54,7 @@ All logic is controlled by `config/show_reporting_rules.json`. The engine routes
 - Explicit Attachment Type  
 
 ### 🏷️ Server-Side Idempotency
-This system uses the Microsoft Graph API to manage state, eliminating local `processed_ids.txt` files:
+This system uses the Microsoft Graph API to manage state directly on the email server:
 1. **Filtering:** The fetch task specifically filters for emails *without* the `"sales_report_extracted"` category tag.
 2. **Tagging:** Once an email is processed (successfully or with a handled error), the orchestrator sends a `PATCH` request to apply the `"sales_report_extracted"` tag to the message on the server.
 3. **Robustness:** The tagging logic includes HTTP 409/412 retry logic to handle Exchange server concurrency conflicts.
