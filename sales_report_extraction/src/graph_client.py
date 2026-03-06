@@ -96,11 +96,21 @@ class GraphClient:
         endpoint = f"{self.base_url}/users/{self.target_user}/messages/{msg_id}"
         payload = {"categories": [tag_name]}
         
-        resp = requests.patch(endpoint, headers=self.get_headers(), json=payload)
-        
-        if resp.status_code == 200:
-            logger.info(f"🏷️ Successfully tagged email with '{tag_name}'")
-            return True
-        else:
+        # Add a simple retry loop for Exchange server conflicts
+        for attempt in range(3):
+            resp = requests.patch(endpoint, headers=self.get_headers(), json=payload)
+            
+            if resp.status_code == 200:
+                logger.info(f"🏷️ Successfully tagged email with '{tag_name}'")
+                return True
+                
+            # If we hit an irresolvable conflict (412 or 409), sleep and try again
+            if resp.status_code in [409, 412]:
+                logger.warning(f"⚠️ Exchange conflict on tag attempt {attempt + 1}. Retrying...")
+                time.sleep(2)
+                continue
+                
             logger.error(f"❌ Failed to tag email: {resp.text}")
             resp.raise_for_status()
+            
+        return False

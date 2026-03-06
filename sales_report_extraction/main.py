@@ -86,6 +86,8 @@ def process_email(candidate):
         
         with open(temp_path, 'wb') as f: 
             f.write(content_bytes)
+            f.flush()               # <-- Force write out of Python buffer
+            os.fsync(f.fileno())    # <-- Force write out of OS buffer
 
         # 2. Process File
         df, validation_result, csv_path = engine.process_file(temp_path, rule)
