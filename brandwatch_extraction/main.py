@@ -5,7 +5,7 @@ import io
 from datetime import datetime, timedelta, timezone
 from prefect import flow, task, get_run_logger
 
-# 1. LOAD ENVIRONMENT FIRST (Matches Sales Report style)
+# 1. LOAD ENVIRONMENT FIRST
 from src.env_setup import setup_environment
 setup_environment()
 
@@ -26,6 +26,14 @@ if not API_KEYS:
 # Initialize Client
 client = BrandwatchClient(API_KEYS)
 
+@task(name="Stage Raw JSON", retries=3, retry_delay_seconds=30)
+def stage_data(endpoint_tag, raw_data):
+    """
+    Wraps the database insertion in a Prefect task to handle 
+    transient connection issues (like HYT00 timeouts).
+    """
+    insert_raw_json(endpoint_tag, raw_data)
+
 @flow(name="Brandwatch Social Extraction", log_prints=True)
 def brandwatch_flow():
     logger = get_run_logger()
@@ -42,7 +50,7 @@ def brandwatch_flow():
     channels_res = client.call('GET', '/channels')
     channels = channels_res.get('items', [])
     ch_uuids = [c['uuid'] for c in channels]
-    insert_raw_json('CHANNELS', channels)
+    stage_data('CHANNELS', channels)
 
     # --- 2. Section A: Post Metrics (90-Day Sweep) ---
     curr = long_start
@@ -51,12 +59,12 @@ def brandwatch_flow():
         s_iso = curr.strftime('%Y-%m-%dT00:00:00.000Z')
         u_iso = nxt.strftime('%Y-%m-%dT23:59:59.999Z')
         
-        logger.info(f"📑 Processing Posts: {s_iso[:10]} to {u_iso[:10]}")
+        logger.info(f"⏳ Processing Posts: {s_iso[:10]} to {u_iso[:10]}")
         posts_res = client.call('GET', '/publish/items', {'since': s_iso, 'until': u_iso, 'limit': 100})
         posts = posts_res.get('items', [])
         
         if posts:
-            insert_raw_json('POST_META', posts_res)
+            stage_data('POST_META', posts_res)
             
             # Map posts to channels for batching
             c_to_p = {}
@@ -83,7 +91,7 @@ def brandwatch_flow():
 
     # --- 3. Section B: Daily Growth & Comments (Settled Data) ---
     s_sh = target_date.strftime('%Y-%m-%d')
-    logger.info(f"📊 Syncing Settled Data for: {s_sh}")
+    logger.info(f"📤 Syncing Settled Data for: {s_sh}")
 
     # Channel Metrics Batching
     for j in range(0, len(ch_uuids), 15):
@@ -103,13 +111,13 @@ def brandwatch_flow():
     csv_url = client.poll_insight(eng_req['uuid'], 'ENGAGE_EXPORTS', prefix='/engage/v2/exports')
     
     if csv_url:
-        logger.info("📝 Ingesting Engage Comments...")
+        logger.info("📑 Ingesting Engage Comments...")
         res = requests.get(csv_url)
         rows = list(csv.DictReader(io.StringIO(res.text)))
         for k in range(0, len(rows), 500):
-            insert_raw_json('ENGAGE_EXPORTS', rows[k:k+500])
+            stage_data('ENGAGE_EXPORTS', rows[k:k+500])
 
-    logger.info("🎉 Brandwatch Pipeline Finished Successfully.")
+    logger.info("✅ Brandwatch Pipeline Finished Successfully.")
 
 if __name__ == "__main__":
     # Serves the flow to the Prefect Dashboard with a 1:00 PM schedule

@@ -32,7 +32,7 @@ graph = GraphClient(
 engine = ProcessingEngine(CONFIG['global_settings'], CONFIG_PATH)
 
 @task(name="Fetch and Route Emails", retries=2)
-def fetch_and_route_emails(days_back: int, target_rule: str = None):
+def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
     logger = get_run_logger()
     candidates = []
 
@@ -129,7 +129,7 @@ def process_email(candidate):
         return False, None, r_name
 
 @flow(name="Sales Extractor Flow", log_prints=True)
-def sales_extractor_flow(days_back: int = 30, target_rule_name: str = None):
+def sales_extractor_flow(days_back: int = 30, target_rule_name: str | None = None):
     # Pass parameters down to the fetch task
     candidates = fetch_and_route_emails(days_back, target_rule_name)
     successful_runs = []
