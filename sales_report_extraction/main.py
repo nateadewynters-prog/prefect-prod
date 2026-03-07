@@ -61,13 +61,17 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
 
         for email in emails:
             email_dt = date_parser.parse(email['receivedDateTime']).astimezone(timezone.utc)
+
+            # Define existing_tags before using it
+            existing_tags = email.get('categories', [])
             
-            # Boundary checks: Compare against our dynamic start_date_dt instead of JSON backfill_dt
-            if email_dt < start_date_dt or "sales_report_extracted" in email.get('categories', []) or not email.get('hasAttachments'):
+            if email_dt < start_date_dt or "sales_report_extracted" in existing_tags or "sales_report_failed" in existing_tags or not email.get('hasAttachments'):
                 skipped += 1
                 continue
 
+            # This line must align with the 'if' block above
             actual_sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
+            
             if crit['sender_domain'].lower() in actual_sender:
                 candidates.append({"email_data": email, "rule": rule})
             else:
@@ -122,10 +126,26 @@ def process_email(candidate):
     except Exception as e:
         logger.error(f"❌ Failed: {e}")
         engine.handle_failure(temp_path if 'temp_path' in locals() else "")
-        send_teams_notification(f"❌ **Extraction Failed**\n\n**Rule:** {r_name}\n**Error:** {str(e)}", logger)
         
-        # We still tag it on failure to prevent an infinite loop of failing on the same corrupt email
-        graph.tag_email(msg_id, "sales_report_extracted") 
+        # Actionable Teams Alert
+        if isinstance(e, ValueError):
+            teams_msg = (
+                f"⚠️ **Action Required: Data Mapping Failed for {rule['rule_name']}**\n\n"
+                f"**Error Details:** {str(e)}\n\n"
+                f"**How to Fix & Replay:**\n"
+                f"1. Update the lookup CSV.\n"
+                f"2. Go to Outlook and remove the **'sales_report_failed'** category tag.\n\n"
+            )
+            send_teams_notification(teams_msg, logger)
+        else:
+            send_teams_notification(f"❌ **Extraction Failed**\n\n**Rule:** {r_name}\n**Error:** {str(e)}", logger)
+        
+        # 🚀 THE FIX: Tag it as explicitly failed
+        try:
+            graph.tag_email(msg_id, "sales_report_failed") 
+        except Exception as tag_err:
+            logger.error(f"Failed to tag email after failure: {tag_err}")
+            
         return False, None, r_name
 
 @flow(name="Sales Extractor Flow", log_prints=True)
