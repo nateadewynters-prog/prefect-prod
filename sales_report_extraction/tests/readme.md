@@ -7,16 +7,16 @@
 
 ## 1. Overview
 
-This suite verifies client authentication, file processing logic, server-side tagging, and date calculations without touching production data or external services (via extensive mocking).
+This suite verifies client authentication, file processing logic, server-side tagging, and **dynamic backfill parameters** without touching production data or external services (via extensive mocking).
 
 ---
 
 ## 2. Key Test Areas
 
 - **Graph API Tagging:** `test_categorization.py` verifies the ability to search for and apply the `"sales_report_extracted"` category tag to emails, ensuring idempotency.
-- **File Processing:** `test_file_processor.py` tests both standard extraction and the new `"passthrough_only"` logic.
+- **File Processing:** `test_file_processor.py` tests both standard extraction and the `"passthrough_only"` logic.
+- **Dynamic Orchestration:** `test_main.py` validates the 30-day rolling window calculation and ensures UI parameters like `days_back` and `target_rule_name` are correctly passed to the fetching logic.
 - **SFTP Integration:** `test_sftp_client.py` ensures that files are correctly handled and uploaded, including checks for proper buffer flushing.
-- **Orchestration:** `test_main.py` validates the overall Prefect flow logic.
 
 ---
 
@@ -61,4 +61,4 @@ sudo docker exec -it prefect-sales-extraction pytest tests/ -v
 The `test_graph_client.py` uses `unittest.mock.patch` to simulate API responses:
 1. It mocks the MSAL token acquisition.
 2. It mocks `requests.get` to return a JSON payload simulating a list of emails.
-3. This allows us to verify that the search filters and categorization logic work correctly without an internet connection.
+3. This allows us to verify that the **subject-only search** and **Python-side sender validation** work correctly without an internet connection.

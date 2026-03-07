@@ -16,8 +16,8 @@ This directory contains the central configuration layer. All email routing, meda
 Each object in the `"rules"` array controls one unique data flow:
 
 ### 📡 Match Criteria
-- **`sender_domain`**: The verified source domain of the email.
-- **`subject_keyword`**: String used to filter target reports.
+- **`sender_domain`**: The verified source domain of the email (Validated in Python).
+- **`subject_keyword`**: String used for simplified KQL filtering in the Graph API.
 - **`attachment_type`**: Strict extension enforcement (e.g., `.pdf`).
 
 ### 🏷️ Metadata Mapping (Medallion)
@@ -32,12 +32,12 @@ Each object in the `"rules"` array controls one unique data flow:
 
 ---
 
-## 3. Stateful Backfilling
+## 3. Dynamic Backfilling
 
-The orchestrator uses the **`backfill_since`** field (YYYY-MM-DD) as a temporal search boundary.
-1. The system searches for emails received AFTER this date.
-2. After successful extraction, this date is updated to the latest received timestamp.
-3. **Note:** Email-level idempotency is handled by the `"sales_report_extracted"` category tag on the Exchange server, ensuring that the system remains stateless locally.
+The orchestrator has moved away from local JSON-based state tracking (`backfill_since`).
+1. **Rolling Window:** By default, the system scans for untagged emails received within the last **30 days**.
+2. **Stateless Logic:** Once an email is successfully processed, it is tagged as `"sales_report_extracted"` on the Exchange server, ensuring it is ignored in subsequent runs.
+3. **Custom Runs:** Historical backfills beyond 30 days can be triggered via the Prefect UI using the `days_back` parameter.
 
 ---
 

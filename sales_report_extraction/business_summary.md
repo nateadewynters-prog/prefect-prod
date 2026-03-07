@@ -6,8 +6,8 @@ To help our operations and accounting teams focus on what matters most, we have 
 
 ### 📬 How the "Assistant" Works in 5 Simple Steps
 
-1.  **Continuous Monitoring:** Every 15 minutes, the Assistant wakes up and checks our shared "Figures" email inbox. It never takes a break and never misses an email.
-2.  **Smart Filtering:** The Assistant looks for specific emails from vendors like **Ticketek** or **Malvern Theatres**. It is smart enough to ignore anything it has already processed, ensuring we never have duplicate data in our systems.
+1.  **Continuous Monitoring:** Every 15 minutes, the Assistant wakes up and checks our shared "Figures" email inbox. It scans a **dynamic 30-day window** to ensure no email is ever missed, regardless of when it was received.
+2.  **Smart Filtering:** The Assistant looks for specific emails from vendors like **Ticketek** or **Malvern Theatres**. It is smart enough to ignore anything it has already processed using a "Done" stamp, ensuring we never have duplicate data in our systems.
 3.  **Opening the Mail:** When it finds a new sales report, it "opens the envelope" by downloading the attachment (like a PDF or Excel spreadsheet).
 4.  **Sorting & Translating:** Depending on who sent the email, the Assistant does one of two things:
     *   **Translation (Extraction):** It reads the complex report, pulls out only the exact sales numbers we need, and creates a clean, standardized spreadsheet.
@@ -21,9 +21,9 @@ To help our operations and accounting teams focus on what matters most, we have 
 If you were to see this on a PowerPoint slide, here is the journey of a single sales report:
 
 *   **Step 1: THE SEARCH** 🔎
-    *   The Assistant scans the inbox for new, untagged emails from our partners.
+    *   The Assistant scans the inbox for new, untagged emails matching specific keywords received within the last 30 days.
 *   **Step 2: THE PICKUP** 📥
-    *   It identifies a matching report and downloads it to a secure temporary workspace.
+    *   It identifies a matching report, validates the sender, and downloads it to a secure temporary workspace.
 *   **Step 3: THE ACTION** ⚙️
     *   **Standard:** Extracts the numbers into a clean CSV format.
     *   **Passthrough:** Keeps the original file as-is.

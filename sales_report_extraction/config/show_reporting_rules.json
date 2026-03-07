@@ -13,7 +13,6 @@
         {
             "rule_name": "MALVERN_SILENCE_OF_THE_LAMBS",
             "active": true,
-            "backfill_since": "2026-03-05",
             "match_criteria": {
                 "sender_domain": "figures@malvern-theatres.co.uk",
                 "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs",
@@ -35,7 +34,6 @@
         {
             "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR",
             "active": true,
-            "backfill_since": "2026-03-06",
             "match_criteria": {
                 "sender_domain": "info@ticketek.com.sg",
                 "subject_keyword": "Jesus Christ Superstar (Sales Summary)",
@@ -57,7 +55,6 @@
         {
             "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR_SINGAPORE",
             "active": true,
-            "backfill_since": "2026-03-05",
             "match_criteria": {
                 "sender_domain": "sisticadmin@sistic.com.sg",
                 "subject_keyword": "Jesus Christ Superstar - Sales Summary Report",
@@ -69,6 +66,25 @@
                 "show_id": "287",
                 "venue_id": "125",
                 "document_id": "501"
+            },
+            "processing": {
+                "passthrough_only": true
+            }
+        },
+        {
+            "rule_name": "GOLDILOCKS_AND_THE_THREE_BEARS_ABERDEEN",
+            "active": true,
+            "match_criteria": {
+                "sender_domain": "aberdeenperformingarts.com",
+                "subject_keyword": "Goldilocks and the 3 Bears Sales Report - Aberdeen",
+                "attachment_type": ".xls"
+            },
+            "metadata": {
+                "show_name": "Goldilocks and the Three Bears",
+                "venue_name": "Aberdeen",
+                "show_id": "290",
+                "venue_id": "29",
+                "document_id": "355"
             },
             "processing": {
                 "passthrough_only": true

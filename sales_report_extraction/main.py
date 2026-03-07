@@ -1,6 +1,6 @@
 import os
 import json
-from datetime import timezone
+from datetime import datetime, timezone, timedelta
 from dateutil import parser as date_parser
 from prefect import flow, task, get_run_logger
 from prefect.artifacts import create_markdown_artifact
@@ -32,18 +32,27 @@ graph = GraphClient(
 engine = ProcessingEngine(CONFIG['global_settings'], CONFIG_PATH)
 
 @task(name="Fetch and Route Emails", retries=2)
-def fetch_and_route_emails():
+def fetch_and_route_emails(days_back: int, target_rule: str = None):
     logger = get_run_logger()
     candidates = []
 
-    logger.info(f"🔎 Initiating search across {len(CONFIG['rules'])} active rules.")
+    # 🚀 Calculate the dynamic start date based on the parameter
+    start_date_dt = datetime.now(timezone.utc) - timedelta(days=days_back)
+    start_date_str = start_date_dt.strftime('%Y-%m-%d')
+    
+    logger.info(f"🔎 Scanning for untagged emails received since {start_date_str}")
 
     for rule in CONFIG['rules']:
         if not rule.get('active'): continue
+        
+        # 🚀 BACKFILL LOGIC: If a specific target rule is provided, skip all others
+        if target_rule and rule['rule_name'] != target_rule:
+            continue
 
         crit = rule['match_criteria']
-        search_query = f'"{crit["sender_domain"]} {crit["subject_keyword"]}"'
-        backfill_dt = date_parser.parse(rule.get('backfill_since', '2000-01-01')).replace(tzinfo=timezone.utc)
+        
+        # Append KQL received date filter to the Graph API search query
+        search_query = f'"{crit["subject_keyword"]}"'
 
         logger.info(f"--- 📡 Searching for Rule: {rule['rule_name']} ---")
         emails = graph.search_emails(search_query)
@@ -53,8 +62,8 @@ def fetch_and_route_emails():
         for email in emails:
             email_dt = date_parser.parse(email['receivedDateTime']).astimezone(timezone.utc)
             
-            # Strict boundary checks: Date, Already Tagged, or No Attachments
-            if email_dt < backfill_dt or "sales_report_extracted" in email.get('categories', []) or not email.get('hasAttachments'):
+            # Boundary checks: Compare against our dynamic start_date_dt instead of JSON backfill_dt
+            if email_dt < start_date_dt or "sales_report_extracted" in email.get('categories', []) or not email.get('hasAttachments'):
                 skipped += 1
                 continue
 
@@ -64,7 +73,6 @@ def fetch_and_route_emails():
             else:
                 skipped += 1
                 
-        # Summary Log per rule
         logger.info(f"📊 Rule '{rule['rule_name']}': Found {len(emails)} total, Skipped {skipped}, Candidates {len(emails) - skipped}")
 
     return candidates
@@ -120,16 +128,10 @@ def process_email(candidate):
         graph.tag_email(msg_id, "sales_report_extracted") 
         return False, None, r_name
 
-@task(name="Update State")
-def update_state(successful_runs):
-    logger = get_run_logger()
-    if successful_runs:
-        engine.update_config_state(successful_runs)
-        logger.info("💾 Saved updated state to show_reporting_rules.json")
-
 @flow(name="Sales Extractor Flow", log_prints=True)
-def sales_extractor_flow():
-    candidates = fetch_and_route_emails()
+def sales_extractor_flow(days_back: int = 30, target_rule_name: str = None):
+    # Pass parameters down to the fetch task
+    candidates = fetch_and_route_emails(days_back, target_rule_name)
     successful_runs = []
     failed_runs = []
     
@@ -139,8 +141,6 @@ def sales_extractor_flow():
             successful_runs.append((r_name, rec_date))
         else:
             failed_runs.append(r_name)
-            
-    update_state(successful_runs)
     
     # Flow Completion Summary Alert
     if candidates:
@@ -159,5 +159,5 @@ if __name__ == "__main__":
         name="sales-extractor-flow",
         cron="*/15 * * * *",
         tags=["medallion-raw", "production"],
-        description="Automated extraction of email attachments to CSVs."
+        description="Automated email extraction. By default, scans a rolling 30-day window. Use 'Custom Run' to perform historical backfills."
     )

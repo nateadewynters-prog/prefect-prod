@@ -8,50 +8,53 @@ graph TD
     A[Prefect Cron Trigger] --> B[Load Rules from JSON]
     
     %% 2. Search & Filter
-    B --> C{Search MS Graph API}
+    B --> C{Subject-Only Keyword Search}
     C -->|Filter: No Tag Found| D[Identify Candidate Emails]
-    C -->|Filter: Has Tag| E[Skip Already Processed]
+    D --> E[Python Sender Validation]
+    C -->|Filter: Has Tag| F[Skip Already Processed]
     
     %% 3. Download
-    D --> F[Download Attachment to Inbox]
+    E --> G[Download Attachment to Inbox]
     
     %% 4. Routing Logic
-    F --> G{Passthrough Only?}
+    G --> H{Passthrough Only?}
     
     %% 5a. Passthrough Path
-    G -->|Yes| H[Move Raw File to Processed Zone]
-    H --> I[Flush & Sync to Disk]
+    H -->|Yes| I[Move Raw File to Processed Zone]
+    I --> J[Flush & Sync to Disk]
     
     %% 5b. Standard Path
-    G -->|No| J[Invoke Dynamic Parser]
-    J --> K[Validate Data Schema]
-    K -->|Success| L[Save Standardized CSV to Processed Zone]
-    L --> I
+    H -->|No| K[Invoke Dynamic Parser]
+    K --> L[Validate Data Schema]
+    L -->|Success| M[Save Standardized CSV to Processed Zone]
+    M --> J
     
     %% 6. Delivery
-    I --> M[Upload to SFTP Server]
+    J --> N[Upload to SFTP Server]
     
     %% 7. Finalize State
-    M --> N{Process Success?}
-    N -->|Yes| O[Apply 'sales_report_extracted' Tag]
-    N -->|No| P[Apply 'sales_report_extracted' Tag]
+    N --> O{Process Success?}
+    O -->|Yes| P[Apply 'sales_report_extracted' Tag]
+    O -->|No| Q[Apply 'sales_report_extracted' Tag]
     
     %% 8. Alerts
-    O --> Q[Post Teams Success Alert]
-    P --> R[Move File to Failed Zone]
-    R --> S[Post Teams Failure Alert]
+    P --> R[Post Teams Success Alert]
+    Q --> S[Move File to Failed Zone]
+    S --> T[Post Teams Failure Alert]
     
     %% Styling
     style A fill:#f9f,stroke:#333,stroke-width:2px
-    style O fill:#afa,stroke:#333,stroke-width:2px
-    style S fill:#faa,stroke:#333,stroke-width:2px
-    style G fill:#fff,stroke:#333,stroke-width:4px
+    style P fill:#afa,stroke:#333,stroke-width:2px
+    style T fill:#faa,stroke:#333,stroke-width:2px
+    style H fill:#fff,stroke:#333,stroke-width:4px
 ```
 
 ## Key Architectural Highlights
 
-- **Prefect Orchestration:** Manages the overall lifecycle, retries, and monitoring.
+- **Prefect Orchestration:** Manages the overall lifecycle, retries, and monitoring. Supports UI parameters (`days_back`, `target_rule_name`) for historical backfills.
 - **Server-Side Idempotency:** The Microsoft Graph API acts as the state store via the `"sales_report_extracted"` category tag, ensuring each email is only processed once.
 - **Dynamic Routing:** Supports both complex parsing (Standard Path) and simple file delivery (Passthrough Path) within the same engine.
+- **Robust Search:** Employs a simplified, subject-only keyword search to bypass KQL query limitations, with sender validation handled purely in Python.
+- **Stateless Operation:** Uses a 30-day dynamic rolling window instead of local persistence, ensuring high resilience to local storage failure.
 - **Data Integrity:** Employs explicit OS-level flushing (`os.fsync`) before SFTP delivery to ensure zero-byte errors are avoided.
 - **Observability:** Provides detailed validation artifacts and real-time Teams alerts for both successful and failed extractions.

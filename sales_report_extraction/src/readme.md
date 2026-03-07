@@ -14,7 +14,7 @@ This directory contains the application logic, decoupled from the orchestration 
 ## 2. Component Layout
 
 ### 📡 API & External Clients
-- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, fuzzy searching, attachment downloading, and **category tagging** for state management. Features HTTP 409/412 retry logic for robust tagging.
+- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading, and **category tagging** for state management. Features HTTP 409/412 retry logic for robust tagging.
 - **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs or raw passthrough files to the Sales Database.
 
 ### 🧠 Core Engine
@@ -31,6 +31,7 @@ This directory contains the application logic, decoupled from the orchestration 
 ## 3. Design Principles
 
 1. **Microservice Isolation:** Logic is split into specialized modules to prevent cross-domain regressions.
-2. **Server-Side State:** The pipeline relies on external API state (Graph Tags) for idempotency, ensuring the system remains stateless locally.
-3. **Data Integrity:** Employs `f.flush()` and `os.fsync()` before SFTP uploads to ensure complete file writes.
-4. **Absolute Imports:** All internal imports use the `src.` prefix (e.g., `from src.models import ...`).
+2. **Server-Side State:** The pipeline relies on external API state (Graph Tags) for idempotency and a **30-day dynamic rolling window**, ensuring the system remains stateless locally.
+3. **Robust Retrieval:** The system performs a broad subject-only search via KQL and handles the more nuanced **sender domain validation** in Python to maximize reliability.
+4. **Data Integrity:** Employs `f.flush()` and `os.fsync()` before SFTP uploads to ensure complete file writes.
+5. **Absolute Imports:** All internal imports use the `src.` prefix (e.g., `from src.models import ...`).

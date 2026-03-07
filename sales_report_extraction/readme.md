@@ -10,7 +10,7 @@
 
 This service automates financial data extraction from emails using the Microsoft Graph API. It employs a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
 
-The system is **Config-Driven**: Adding a new show or venue only requires updating `config/show_reporting_rules.json`. It tracks processed state directly on the Exchange server using Microsoft Graph categories, ensuring high idempotency and ensuring the system remains stateless locally.
+The system is **Stateless Locally**: It does not track progress in local JSON files. Instead, it uses a 30-day dynamic rolling window and tracks processed state directly on the Exchange server using Microsoft Graph categories, ensuring high idempotency.
 
 ---
 
@@ -49,9 +49,9 @@ The project follows a strict `src` layout to separate infrastructure from applic
 
 ### 📡 Routing Logic
 All logic is controlled by `config/show_reporting_rules.json`. The engine routes emails based on:
-- Sender Domain  
-- Subject Keyword  
-- Explicit Attachment Type  
+- **Subject Keyword:** A simplified, robust subject-only search via Graph API.
+- **Sender Domain:** Validated purely in Python after retrieval for maximum reliability. 
+- **Explicit Attachment Type:** Strict extension enforcement (e.g., `.pdf`, `.xls`).
 
 ### 🏷️ Server-Side Idempotency
 This system uses the Microsoft Graph API to manage state directly on the email server:
@@ -59,15 +59,17 @@ This system uses the Microsoft Graph API to manage state directly on the email s
 2. **Tagging:** Once an email is processed (successfully or with a handled error), the orchestrator sends a `PATCH` request to apply the `"sales_report_extracted"` tag to the message on the server.
 3. **Robustness:** The tagging logic includes HTTP 409/412 retry logic to handle Exchange server concurrency conflicts.
 
+### 📈 Parameterized Backfills (Prefect UI)
+Local state tracking (`backfill_since`) has been removed in favor of a 30-day dynamic rolling window. For historical runs, the Prefect 3.0 flow accepts UI parameters:
+- **`days_back`**: (Default: 30) Controls how far back the system scans for untagged emails.
+- **`target_rule_name`**: (Optional) Allows a "Custom Run" to target a specific vendor/show rule.
+
 ### ⏩ Passthrough Feature
 Rules can be configured with `"passthrough_only": true` in the `processing` section. When enabled:
 - The engine skips Pandas/CSV extraction.
 - The raw attachment is moved directly to the `data/processed/` directory.
 - The raw file is uploaded to SFTP in its original format.
 - The email is tagged as successful.
-
-### 📈 Temporal Boundaries
-Each rule uses a `"backfill_since": "YYYY-MM-DD"` field to bound the search query, which is automatically advanced after successful runs to optimize API performance.
 
 ---
 
@@ -86,6 +88,7 @@ For more details on writing and mocking tests, see `tests/readme.md`.
 
 ## 5. Technical Highlights
 
+- **Simplified Search:** Uses a subject-only KQL query to avoid Graph API "AND" logic limitations, with secondary validation in Python.
 - **Dynamic Parser Loading:** Resolves parser code at runtime via `importlib`.
 - **Strict Data Contracts:** Parsers return a `ValidationResult` (Status, Message, Metrics) to ensure observability.
 - **Medallion Movement:** Raw files are moved from `inbox` to `archive` (on success) or `failed` (on error).

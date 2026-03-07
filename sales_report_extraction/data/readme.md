@@ -37,7 +37,7 @@ Reference CSVs containing event-date mappings (e.g., `show_id_venue_id_event_dat
 
 **Local state tracking has been replaced by server-side tagging.** 
 
-Email processing state is now tracked directly on the Microsoft Exchange server using the **`sales_report_extracted`** category tag via the Graph API. This ensures that even if the local data directory is wiped, the pipeline will not process the same email twice.
+Email processing state is now tracked directly on the Microsoft Exchange server using the **`sales_report_extracted`** category tag via the Graph API. The pipeline is entirely stateless locally and operates on a **30-day dynamic rolling window**. This ensures that even if the local data directory is wiped, the pipeline will not process the same email twice.
 
 ---
 

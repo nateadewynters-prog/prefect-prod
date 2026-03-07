@@ -105,37 +105,3 @@ class ProcessingEngine:
             failed_path = os.path.join(self.base_dir, self.dirs['failed'], filename) 
             logger.warning(f"⚠️ Moving failed file to quarantine: {failed_path}")
             shutil.move(temp_path, failed_path) 
-
-    def update_config_state(self, successful_runs: list):
-        if not successful_runs: return 
-        logger = get_run_logger()
-        max_dates = {} 
-        
-        for r_name, date_str in successful_runs: 
-            dt = date_parser.parse(date_str).astimezone(timezone.utc) 
-            if r_name not in max_dates or dt > max_dates[r_name]: 
-                max_dates[r_name] = dt 
-                
-        with open(self.config_path, 'r') as f: 
-            current_config = json.load(f) 
-            
-        updated = False 
-        for rule in current_config['rules']: 
-            r_name = rule['rule_name'] 
-            if r_name in max_dates: 
-                new_date_str = max_dates[r_name].strftime('%Y-%m-%d') 
-                current_date_str = rule.get('backfill_since', '1900-01-01') 
-                
-                if new_date_str > current_date_str: 
-                    logger.info(f"📈 Advancing state for '{r_name}': {current_date_str} -> {new_date_str}")
-                    rule['backfill_since'] = new_date_str 
-                    updated = True 
-                    
-        if updated: 
-            temp_config_path = self.config_path + ".tmp"
-            # 1. Write to a temporary file safely
-            with open(temp_config_path, 'w') as f: 
-                json.dump(current_config, f, indent=4) 
-            
-            # 2. Atomically replace the old config with the new one
-            os.replace(temp_config_path, self.config_path)
