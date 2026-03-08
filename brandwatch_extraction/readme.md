@@ -1,7 +1,7 @@
 # 📊 Brandwatch Social Performance Extraction (Prefect 3.0)
 
 **Host:** `dew-insights01`  
-**Status:** 🟢 Active (Scheduled 1:00 PM Daily)  
+**Status:** 🟢 Active (Scheduled 8:30 AM Daily)  
 **Orchestration:** Prefect 3.0  
 
 > **System Map Reference:** For global server settings, Docker Compose service management, and Python environment details, refer to the **Master README** at `/opt/prefect/prod/code/readme.md`.
@@ -10,78 +10,91 @@
 
 ## 1. Project Overview
 
-This service automates the extraction of social performance data (Posts, Channels, and Comments) from the Brandwatch (Falcon.io) API. It ensures that organic social metrics are synchronized with the central Azure SQL data warehouse for unified reporting.
+This service is a high-performance, **KISS-compliant** ELT pipeline designed to extract social performance data (Posts, Channels, and Engage Comments) from the Brandwatch (Falcon.io) API. It enforces an enterprise-grade stateless architecture, moving data directly from the API to Azure SQL with zero local disk dependency.
 
 ---
 
-## 2. Directory Structure & Modular Layout
+## 2. Architecture & Logical Flow
 
-The project follows a strict `src` layout to separate infrastructure from application logic.
+The pipeline follows a strictly ordered data journey to ensure all dependencies (like Channel UUIDs) are resolved before deep metric extraction begins.
 
-```text
-/opt/prefect/prod/code/brandwatch_extraction/
-├── Dockerfile.brandwatch     # 🐳 Infrastructure: Container definition
-├── requirements.txt          # 📦 Infrastructure: Python dependencies
-├── main.py                   # 🤖 ORCHESTRATOR: Main Prefect Entrypoint
-├── config/                   # ⚙️ CONFIG: Local configuration
-├── data/                     # 💾 STORAGE: Temporary data landing
-└── src/                      # 🛠️ APPLICATION: Core logic
-    ├── api_client.py         # API requests and multi-key rotation
-    ├── database.py           # Azure SQL ingestion (ODBC Driver 18)
-    ├── env_setup.py          # Shared internal utilities (Env)
-    └── constants.py          # Project-specific constants
+### 🔄 Data Journey
+1.  **Trigger**: Prefect Cron initiates the flow at **8:30 AM** daily.
+2.  **Discovery**: `sync_channels` fetches active channel UUIDs to use as filters for downstream tasks.
+3.  **Metadata Acquisition**: `sync_post_metrics` performs a 90-day sweep of `/publish/items` to capture new posts and updates to existing ones.
+4.  **Async Polling**: The `BrandwatchClient` initiates asynchronous Insight requests. It polls the Brandwatch backend (up to 30 minutes) until data is `READY`.
+5.  **Memory-Safe Ingestion**: 
+    *   **JSON**: Large payloads are handled as Python dictionaries and dumped directly to SQL.
+    *   **CSV**: Engage comments are requested as exports and **streamed** (chunk-by-chunk) to avoid RAM exhaustion.
+6.  **Landing**: All data is committed to the unified staging table `dbo.stg_bw_raw_json`.
+
+### 🏗️ Workflow Diagram
+```mermaid
+graph TD
+    A[Prefect Cron 08:30] --> B{main.py Flow}
+    B --> C[task: sync_channels]
+    C --> D[task: sync_post_metrics 90-Day]
+    D --> E[task: sync_settled_data T-2]
+    E --> F[API Async Job Polling]
+    F --> G[CSV Streaming / JSON Batching]
+    G --> H[(Azure SQL: dbo.stg_bw_raw_json)]
+    H --> I[Teams Success/Fail Alert]
 ```
 
-### Module Responsibilities (Brain & Muscles)
+---
 
-- **`main.py`**: The "Brain" of the operation. It manages the Prefect Flow orchestration and handles the 1:00 PM daily cron schedule.
-- **`src/api_client.py`**: Handles all communication with the Brandwatch/Falcon.io API, including complex multi-key rotation logic to manage rate limits.
-- **`src/database.py`**: Manages Azure SQL ingestion using the ODBC Driver 18. It handles the "Muscles" of moving data into the staging environment.
-- **`src/env_setup.py`**: Ensures explicit loading of the shared environment configuration from `/opt/prefect/prod/.env`.
+## 3. Key Architectural Pillars
+
+### 🧊 Stateless Design
+This pipeline is strictly **pure API-to-Database**. There is no Docker volume mapping for data storage. All data exists only in-memory during transit (streaming) before being committed to SQL. This ensures the container can be destroyed and recreated on any host without data loss.
+
+### 🎯 Granular Failability
+The logic is decomposed into distinct Prefect `@tasks`. If a transient API error occurs during the `sync_post_metrics` task, Prefect will retry **only that task** (up to 2 times), preventing a full restart of the 90-day sweep and saving API quota.
+- **`sync_channels`**: 2 Retries
+- **`sync_post_metrics`**: 2 Retries
+- **`sync_settled_data`**: 2 Retries
+- **`stage_data`**: 3 Retries (Handles SQL connection blips)
+
+### 🛡️ Observability & Alerting
+Integrated with **Microsoft Teams** via Adaptive Cards. The system features proactive monitoring for:
+- **SQL Failures**: Connection timeouts (ODBC 18) and insertion errors.
+- **API Exhaustion**: Automatic rotation of multiple API keys; alerts after 5 failed retries.
+- **Zombie Run Protection**: A strict **30-minute timeout** (90 polls x 20s) on all async polling loops to prevent hung processes from consuming resources.
+- **Async Failures**: Detects and alerts on `FAILED` status within the Brandwatch internal job queue.
+
+### ⚡ Concurrency & Memory
+- **Strict Concurrency**: Configured with `limit=1` to prevent overlapping runs and API rate-limit collisions.
+- **Streaming Implementation**: Uses `requests.get(stream=True)` for Engage Exports. Data is decoded and parsed as a line-generator, then inserted in batches of **500 rows**, maintaining a near-zero memory footprint even for large CSV exports.
 
 ---
 
-## 3. Data Strategy
+## 4. Data Contract (Azure SQL)
 
-To maintain data integrity and capture late-arriving engagement metrics, the system employs a two-tiered synchronization strategy:
+The system enforces a strict "Raw-to-Staging" contract. No transformation occurs in Python; the goal is 100% fidelity to the source API.
 
-- **90-Day Post Sweep**: A rolling window that scans the last 90 days of posts to update engagement metrics (likes, shares, etc.) as they mature.
-- **2-Day Settled Sync**: A focused sync for channel-level metrics and comments, ensuring that recently settled data is captured with high precision.
+- **Target Table**: `dbo.stg_bw_raw_json`
+- **Columns**:
+    - `SourceEndpoint`: The origin tag (e.g., `POST_METRICS`, `CH_METRICS`, `ENGAGE_EXPORTS`).
+    - `RawData`: The raw JSON or CSV-row-batch payload (NVARCHAR(MAX)).
 
 ---
 
-## 4. Operations
-
-The service is managed via Docker Compose from the root directory.
+## 5. Operations
 
 ### Build & Deploy
-To rebuild the container after code changes:
 ```bash
 docker-compose up -d --build brandwatch-extraction
 ```
 
 ### Monitoring Logs
-To view real-time execution logs:
 ```bash
 docker-compose logs -f brandwatch-extraction
 ```
 
 ---
 
-## 5. Data Contract
-
-The system enforces a strict landing zone schema to ensure compatibility with downstream ETL processes.
-
-- **Landing Zone**: `[organicsocial].[dbo].[stg_bw_raw_json]`
-- **Schema**:
-    - `SourceEndpoint`: The API endpoint origin (e.g., `/posts`, `/channels`).
-    - `RawData`: The raw JSON payload as received from the API.
-
----
-
-## ✅ Architectural Guarantees
-
-- **Microservice Isolation**: Independent build context and dependencies.
-- **Key Rotation**: Resilient API handling to maximize throughput.
-- **Centralized Config**: Leverages the shared `/opt/prefect/prod/.env` volume mount.
-- **Observability**: Fully integrated with Prefect 3.0 dashboard and logging.
+## ✅ Technical Specs & Retries
+- **API Retries**: 5 attempts with multi-key rotation.
+- **Database Retries**: 3 attempts for connection timeouts.
+- **Polling Timeout**: 30-minute hard-cap on backend job processing.
+- **API Keys**: Dynamically loaded from `BRANDWATCH_API_KEY*` environment variables.

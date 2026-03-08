@@ -151,7 +151,7 @@ def brandwatch_flow():
 if __name__ == "__main__":
     brandwatch_flow.serve(
         name="brandwatch-daily-sync",
-        cron="0 13 * * *",
-        tags=["production", "social-media"],
-        limit=1 
+        cron="30 8 * * *",
+        tags=["production", "social-media", "brandwatch"],
+        limit=1
     )

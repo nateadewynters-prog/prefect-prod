@@ -15,7 +15,7 @@ This suite verifies client authentication, file processing logic, server-side ta
 
 - **Graph API Tagging:** `test_categorization.py` verifies the ability to search for and apply the `"sales_report_extracted"` category tag to emails, ensuring idempotency.
 - **File Processing:** `test_file_processor.py` tests both standard extraction and the `"passthrough_only"` logic.
-- **Dynamic Orchestration:** `test_main.py` validates the 30-day rolling window calculation and ensures UI parameters like `days_back` and `target_rule_name` are correctly passed to the fetching logic.
+- **Dynamic Orchestration:** `test_main.py` validates the 30-day rolling window calculation and ensures UI parameters like `days_back` and `target_rule_name` are correctly passed to the fetching logic. This now includes validation for both successful routing and failure-tagging logic. Specifically, the `test_process_email_handles_lookup_failure_and_tags_failed` case verifies that the `"sales_report_failed"` tag is applied and a Teams alert is sent during `ValueError` exceptions.
 - **SFTP Integration:** `test_sftp_client.py` ensures that files are correctly handled and uploaded, including checks for proper buffer flushing.
 
 ---
@@ -30,6 +30,7 @@ When writing tests, you must mock external dependencies to ensure isolation and 
   @patch('src.graph_client.get_run_logger')
   def test_something(mock_logger): ...
   ```
+- **`os.fsync`**: Mocked to prevent `"Bad file descriptor"` errors when testing file-writing logic with in-memory `mock_open`.
 - **MSAL (Auth):** Mock `msal.ConfidentialClientApplication` to avoid real login attempts.
 - **SFTP (Paramiko):** Mock `paramiko.SSHClient` and `SFTPClient` in `test_sftp_client.py`.
 - **Global Config:** If a test needs specific config values, patch the `open` call or the `json.load` that reads `show_reporting_rules.json`.
