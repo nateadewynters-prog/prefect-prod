@@ -57,14 +57,11 @@ services:
       - PREFECT_API_URL=http://prefect-server:4200/api
       - PYTHONPATH=/opt/prefect/prod/code/brandwatch_extraction
     volumes:
-      # Shared secrets and environment variables
+      # 🚀 THE FIX: Removed /config and /data volumes. This is a purely stateless API-to-DB container!
       - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
-      # Modular config and mapping files
-      - ./brandwatch_extraction/config:/opt/prefect/prod/code/brandwatch_extraction/config
-      # Persistent data and medallion storage
-      - /opt/data/brandwatch_automation/data:/opt/prefect/prod/code/brandwatch_extraction/data
     depends_on:
       - prefect-server
+    command: python main.py # 🚀 THE FIX: Tell it to run the script!
     logging:
       driver: "json-file"
       options:

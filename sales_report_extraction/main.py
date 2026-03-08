@@ -179,5 +179,6 @@ if __name__ == "__main__":
         name="sales-extractor-flow",
         cron="*/15 * * * *",
         tags=["medallion-raw", "production"],
-        description="Automated email extraction. By default, scans a rolling 30-day window. Use 'Custom Run' to perform historical backfills."
+        description="Automated email extraction. By default, scans a rolling 30-day window. Use 'Custom Run' to perform historical backfills.",
+        limit=1 
     )

@@ -3,6 +3,7 @@ import pyodbc
 import json
 import time
 from prefect import get_run_logger
+from src.notifications import send_teams_notification
 
 def get_db_connection(retries=3, delay=5):
     """Attempts to connect to Azure SQL with a retry mechanism."""
@@ -23,19 +24,36 @@ def get_db_connection(retries=3, delay=5):
                 logger.warning(f"Database connection timeout. Retrying in {delay}s... (Attempt {attempt + 1}/{retries})")
                 time.sleep(delay)
             else:
+                error_msg = f"Database Connection Failed: {str(e)}"
+                logger.error(f"❌ {error_msg}")
+                send_teams_notification(f"🚨 **Database Connection Error**\n\n{error_msg}", logger)
                 raise e
 
 def insert_raw_json(endpoint_tag, raw_data):
+    """Inserts API JSON payloads directly into the staging table."""
     logger = get_run_logger()
+    
     try:
-        # get_db_connection now handles the retry logic internally
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO stg_bw_raw_json (SourceEndpoint, RawData) VALUES (?, ?)", 
-                endpoint_tag, json.dumps(raw_data)
-            )
+            
+            # 🚀 THE FIX: Restored your exact table name and columns!
+            query = """
+                INSERT INTO dbo.stg_bw_raw_json (SourceEndpoint, RawData) 
+                VALUES (?, ?)
+            """
+            
+            # Dump dict to string for the JSON/NVARCHAR column
+            json_payload = json.dumps(raw_data)
+            
+            cursor.execute(query, (endpoint_tag, json_payload))
             conn.commit()
+            
+            logger.info(f"💾 Successfully staged {endpoint_tag} data to SQL.")
+            
     except Exception as e:
-        logger.error(f"Critical SQL Error for {endpoint_tag}: {e}")
+        # Catch specific database errors (like the invalid object name we just saw)
+        error_msg = f"SQL Insertion Failed for {endpoint_tag}: {str(e)}"
+        logger.error(f"❌ {error_msg}")
+        send_teams_notification(f"🚨 **Brandwatch Database Error**\n\n{error_msg}", logger)
         raise
