@@ -16,32 +16,26 @@ This directory contains the central configuration layer. All email routing, meda
 Each object in the `"rules"` array controls one unique data flow:
 
 ### 📡 Match Criteria
-- **`sender_domain`**: The verified source domain of the email (Validated in Python).
+- **`sender_domain`**: The verified source domain of the email.
 - **`subject_keyword`**: String used for simplified KQL filtering in the Graph API.
 - **`attachment_type`**: Strict extension enforcement (e.g., `.pdf`).
 
 ### 🏷️ Metadata Mapping (Medallion)
 - **`show_name`**, **`venue_name`**: Used for standard filename generation.
 - **`show_id`**, **`venue_id`**, **`document_id`**: Identifiers for downstream systems.
-- **`timezone`**: The exact IANA Time Zone (e.g., `America/New_York`, `Europe/London`) used to perfectly align the UTC email receipt time with the venue's local reporting date.
+- **`timezone`**: The exact IANA Time Zone (e.g., `Asia/Singapore`).
 
-### ⚙️ Processing Block
-- **`passthrough_only`**: (Boolean) If `true`, skips parsing and moves the raw attachment directly to the `processed/` folder for SFTP upload.
-- **`parser_module`**: Python module path (e.g., `src.parsers.malvern_theatre_parser`). Required if `passthrough_only` is false.
-- **`parser_function`**: The specific entrypoint function name. Required if `passthrough_only` is false.
-- **`needs_lookup`**: (Boolean) Toggle for event-date enrichment via `data/lookups/`. Only applicable when `passthrough_only` is false.
+### 🌐 Deterministic Timezone Logic
+The engine uses the `timezone` field to perfectly align the UTC email receipt time with the venue's local reporting date:
+1. **Conversion:** UTC (from MS Graph) is converted to the venue's local time using `pytz`.
+2. **Standardization:** The system subtracts **1 day** from the local time because reports received today reflect yesterday's business.
+3. **Consistency:** This ensures that reports from Singapore, London, and New York are all dated accurately relative to their own business days, regardless of the UTC offset at the time of the email arrival.
 
 ---
 
 ## 3. Dynamic Backfilling
 
-The orchestrator has moved away from local JSON-based state tracking (`backfill_since`).
+The orchestrator has moved away from local JSON-based state tracking.
 1. **Rolling Window:** By default, the system scans for untagged emails received within the last **30 days**.
-2. **Stateless Logic:** Once an email is successfully processed, it is tagged as `"sales_report_extracted"` on the Exchange server, ensuring it is ignored in subsequent runs.
-3. **Custom Runs:** Historical backfills beyond 30 days can be triggered via the Prefect UI using the `days_back` parameter.
-
----
-
-## 4. Global Settings
-
-The `global_settings` block defines the relative paths to the Medallion zones (`inbox`, `processed`, `archive`, `failed`, `lookups`).
+2. **Stateless Logic:** Successful runs apply the `"sales_report_extracted"` tag to the email on the server.
+3. **Custom Runs:** Historical backfills can be triggered via the Prefect UI using the `days_back` and `target_rule_name` parameters.

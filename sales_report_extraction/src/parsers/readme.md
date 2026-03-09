@@ -1,7 +1,7 @@
 # 🧠 Sales Report Parsers
 
 **Domain:** Custom Extraction Logic  
-**Architecture:** Pluggable Parser Modules  
+**Architecture:** Observable ETL / Pluggable Parser Modules  
 
 ---
 
@@ -11,9 +11,9 @@ This directory contains specialized extraction modules. The orchestrator dynamic
 
 ---
 
-## 2. The Validation Data Contract
+## 2. The Validation Data Contract (Observable ETL)
 
-Every parser **MUST** return a specific tuple:
+To maintain high observability across the medallion pipeline, every parser **MUST** return a specific tuple:
 ```python
 return extracted_rows, validation_result
 ```
@@ -26,19 +26,4 @@ return extracted_rows, validation_result
 - `FAILED`: Hard schema mismatch (triggers ❌ Teams alert).
 - `UNVALIDATED`: Extraction completed but couldn't be mathematically verified (triggers ⚠️ Teams alert).
 
----
-
-## 3. Adding a New Parser
-
-1. **Create the script:** e.g., `new_vendor_parser.py` in this directory.
-2. **Implement logic:** Ensure it accepts a file path and returns the required tuple.
-3. **Update Config:** Add a rule to `show_reporting_rules.json` pointing `parser_module` to `src.parsers.new_vendor_parser`.
-
-**Note:** If extraction is not required and the raw file can be uploaded directly, consider using the `"passthrough_only": true` flag in the rule configuration instead of creating a new parser.
-
----
-
-## 4. Design Guidelines
-
-- **Isolation:** Avoid external dependencies within parsers where possible.
-- **Robustness:** Use standard libraries for parsing (e.g., `pdfplumber` for PDFs, `openpyxl` for Excel) and always return a `ValidationResult`.
+This contract ensures that even if a parser succeeds in extracting data, it can proactively flag data quality issues before they reach the Sales Database.

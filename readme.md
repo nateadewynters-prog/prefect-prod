@@ -10,22 +10,15 @@
 
 ## 1. System Architecture
 
-This server hosts automated data pipelines orchestrated by **Prefect 3.0**.
+This server hosts automated data pipelines orchestrated by **Prefect 3.0**. The architecture is built on **stateless container design**, ensuring that containers can be destroyed and recreated without data loss or state corruption.
 
-To ensure **independent microservice isolation** and avoid tight coupling, each project maintains its own isolated context:
+### 🧭 Core Architectural Pillars
 
-- They share a centralized configuration file (`.env`) via volume mounts.
-- Infrastructure (Docker, requirements) is separated from application code.
-- Utility functions are strictly modularized (e.g., inside `src/`) rather than existing in a monolithic `utils.py`.
-- A standardized `ValidationResult` Data Contract for ETL observability is maintained within the domain's core models.
-- **Orchestration of the Sales Report Extraction service is managed via `docker-compose.yml`**.
-
-This architectural pattern prioritizes decoupled microservices over strict DRY principles, ensuring:
-
-- True service isolation  
-- Independent dependency management per domain  
-- Self-contained Docker build contexts  
-- Localized utility evolution without cross-domain regressions  
+- **Microservice Isolation:** Each project maintains its own isolated context, Docker build context, and localized utility evolution.
+- **Stateless Design:** Services are strictly "API-to-Database" (Brandwatch) or rely on server-side state (Sales Report Extraction via MS Graph Tags), eliminating local disk dependencies.
+- **Granular Task Routing:** Orchestration is decomposed into distinct Prefect `@tasks` with specific retry logic (e.g., handling SQL blips or API rate limits) to ensure resilient execution without full pipeline restarts.
+- **Deterministic Logic:** Time-sensitive operations (like report dating) use deterministic timezone logic defined in JSON configurations to ensure global consistency.
+- **Unified Data Contracts:** All ETL modules adhere to strict `ValidationResult` contracts for observability and automated alerting.
 
 ---
 
@@ -63,15 +56,13 @@ All environment variables, database credentials, and API keys are stored in:
 /opt/prefect/prod/.env
 ```
 
-⚠️ **Never hardcode credentials inside scripts.**
-
-All services must load configuration via their localized environment setup utilities.
+⚠️ **Never hardcode credentials inside scripts.** All services load configuration via localized `src/env_setup.py` utilities.
 
 ---
 
 ## 3. Docker Compose Orchestration
 
-All flows run continuously or on defined schedules using **Docker Compose**. The central `docker-compose.yml` file defines the `prefect-server` and `sales-report-extraction` services.
+All flows run continuously or on defined schedules using **Docker Compose**. 
 
 ### Active Services
 
@@ -85,18 +76,9 @@ All flows run continuously or on defined schedules using **Docker Compose**. The
 
 ## 4. Global Administration & Troubleshooting
 
----
-
 ### Restarting Services
 
-If you update:
-
-- Any `.py` script  
-- The `.env` file  
-- Any `.json` configuration  
-- The `docker-compose.yml` file
-
-You must rebuild and restart the respective service so changes load into memory.
+Rebuild and restart services after updating scripts, `.env`, or configurations:
 
 ```bash
 # Restart a specific service
@@ -107,50 +89,16 @@ docker-compose up -d --build brandwatch-extraction
 docker-compose up -d --build
 ```
 
----
+### Dashboard Access
 
-### Dashboard Access & Firewall
-
-Prefect UI:
-
-```
-http://dew-insights01:4200
-```
-
----
-
-### Version Control (Git)
-
-Repository is managed using standard **Git**.
+Prefect UI: `http://dew-insights01:4200`
 
 ---
 
 ## 5. Project-Specific Documentation
 
-For detailed business logic, API routing, database schema, or project-specific troubleshooting, refer to:
-
-📧 **Outlook Extraction**  
-```
-/opt/prefect/prod/code/sales_report_extraction/readme.md
-```
+📧 **Outlook Extraction (Sales Reports)**  
+`.../sales_report_extraction/readme.md`
 
 📊 **Brandwatch Social Performance**  
-```
-/opt/prefect/prod/code/brandwatch_extraction/readme.md
-```
-
----
-
-## 🧭 Operational Principles
-
-This server is designed around:
-
-- **Independent microservice isolation (prioritized over DRY principles)**
-- Centralized configuration via `.env` volume mounts
-- Docker Compose service-based orchestration
-- Strict idempotency
-- Secure credential handling
-- Observable ETL patterns
-- Clear separation of business logic and dependencies by domain
-
-All automation pipelines deployed on `dew-insights01` must adhere to this standard.
+`.../brandwatch_extraction/readme.md`

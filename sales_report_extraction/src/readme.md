@@ -14,24 +14,27 @@ This directory contains the application logic, decoupled from the orchestration 
 ## 2. Component Layout
 
 ### 📡 API & External Clients
-- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading, and **category tagging** for state management. Features HTTP 409/412 retry logic for robust tagging.
-- **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs or raw passthrough files to the Sales Database.
+- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading, and **category tagging** for state management. Features HTTP 409/412 retry logic for robust tagging of `"sales_report_extracted"` and `"sales_report_failed"`.
+- **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs or raw passthrough files. It logs file size (KB), utilizes centralized environment variables, and includes error alerting for Teams.
 
 ### 🧠 Core Engine
-- **`file_processor.py`**: The `ProcessingEngine` class. Manages file lifecycles (renaming, moving across medallion zones) and dynamic parser invocation. Handles the `"passthrough_only"` logic for raw file routing.
+- **`file_processor.py`**: The `ProcessingEngine` class. Manages the full file lifecycle:
+    - **Deterministic Report Dating:** Converts UTC to local venue time via `pytz` and standardizes dates.
+    - **Medallion I/O:** Standardizes filenames and moves files across zones (`inbox` -> `archive`/`processed`/`failed`).
+    - **Dynamic Parser Invocation:** Uses `importlib` to route files to specialized parsers.
+    - **Passthrough Logic:** Routes raw attachments directly for rules configured with `"passthrough_only": true`.
 
 ### 🧱 Shared Models & Utilities
-- **`models.py`**: Data contracts (e.g., `ValidationResult`).
-- **`database.py`**: Shared pyodbc logic.
-- **`env_setup.py`**: Centralized environment loader.
-- **`notifications.py`**: MS Teams adaptive card logic.
+- **`models.py`**: Unified Data Contracts (e.g., `ValidationResult`).
+- **`database.py`**: Shared logic for internal databases.
+- **`env_setup.py`**: Centralized environment variable loader.
+- **`notifications.py`**: Microsoft Teams Adaptive Card logic for alerting.
 
 ---
 
 ## 3. Design Principles
 
-1. **Microservice Isolation:** Logic is split into specialized modules to prevent cross-domain regressions.
-2. **Server-Side State:** The pipeline relies on external API state (Graph Tags) for idempotency and a **30-day dynamic rolling window**, ensuring the system remains stateless locally.
-3. **Robust Retrieval:** The system performs a broad subject-only search via KQL and handles the more nuanced **sender domain validation** in Python to maximize reliability.
-4. **Data Integrity:** Employs `f.flush()` and `os.fsync()` before SFTP uploads to ensure complete file writes.
-5. **Absolute Imports:** All internal imports use the `src.` prefix (e.g., `from src.models import ...`).
+1. **Stateless Logic:** The system relies on Graph tags and a **30-day dynamic rolling window**, ensuring it remains stateless locally.
+2. **Robust Retrieval:** Combines Graph KQL (fuzzy) with secondary Python-side domain validation to maximize reliability.
+3. **Data Integrity:** Employs `f.flush()` and `os.fsync()` before SFTP uploads to prevent 0-byte file delivery.
+4. **Resilient Tagging:** Exchange server conflicts are mitigated with automatic retries for HTTP 409/412 responses.
