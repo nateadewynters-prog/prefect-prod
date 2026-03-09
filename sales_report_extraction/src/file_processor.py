@@ -3,6 +3,7 @@ import json
 import shutil
 import importlib
 import pandas as pd
+import pytz
 from datetime import datetime, timezone, timedelta
 from dateutil import parser as date_parser
 from prefect import get_run_logger
@@ -19,10 +20,22 @@ class ProcessingEngine:
             os.makedirs(os.path.join(self.base_dir, relative_path), exist_ok=True) 
 
     def generate_filename(self, metadata: dict, date_str: str, ext: str) -> str:
-        dt = date_parser.parse(date_str).astimezone(timezone.utc) - timedelta(days=1) 
-        fmt_date = dt.strftime("%d_%m_%Y") 
+        # 1. Parse the Microsoft Graph UTC string
+        utc_dt = date_parser.parse(date_str).astimezone(timezone.utc)
+        
+        # 2. Look up the deterministic timezone from config (Defaults to UTC if missing)
+        venue_tz = pytz.timezone(metadata.get('timezone', 'UTC'))
+        
+        # 3. Convert UTC to the venue's exact local time
+        local_dt = utc_dt.astimezone(venue_tz)
+        
+        # 4. Subtract 1 day because these are end-of-day reports reflecting yesterday's sales
+        report_dt = local_dt - timedelta(days=1)
+        
+        # 5. Format and return
+        fmt_date = report_dt.strftime("%d_%m_%Y") 
         name = f"{metadata['show_name']}.{metadata['venue_name']}_{metadata['show_id']}_{metadata['venue_id']}_{metadata['document_id']}_{fmt_date}{ext}" 
-        return name.replace(" ", "-").replace("/", "-") 
+        return name.replace(" ", "-").replace("/", "-")
 
     def process_file(self, temp_path: str, rule: dict) -> tuple:
         """Invokes the parser, handles lookups, saves CSV, and moves to archive."""

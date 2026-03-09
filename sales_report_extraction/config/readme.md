@@ -23,6 +23,7 @@ Each object in the `"rules"` array controls one unique data flow:
 ### 🏷️ Metadata Mapping (Medallion)
 - **`show_name`**, **`venue_name`**: Used for standard filename generation.
 - **`show_id`**, **`venue_id`**, **`document_id`**: Identifiers for downstream systems.
+- **`timezone`**: The exact IANA Time Zone (e.g., `America/New_York`, `Europe/London`) used to perfectly align the UTC email receipt time with the venue's local reporting date.
 
 ### ⚙️ Processing Block
 - **`passthrough_only`**: (Boolean) If `true`, skips parsing and moves the raw attachment directly to the `processed/` folder for SFTP upload.
@@ -43,4 +44,4 @@ The orchestrator has moved away from local JSON-based state tracking (`backfill_
 
 ## 4. Global Settings
 
-The `global_settings` block defines the relative paths to the Medallion zones (inbox, processed, etc.), allowing the `ProcessingEngine` to remain portable across environments.
+The `global_settings` block defines the relative paths to the Medallion zones (`inbox`, `processed`, `archive`, `failed`, `lookups`).

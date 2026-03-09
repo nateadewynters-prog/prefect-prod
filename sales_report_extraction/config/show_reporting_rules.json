@@ -23,33 +23,13 @@
                 "venue_name": "Malvern Theatres",
                 "show_id": "285",
                 "venue_id": "174",
-                "document_id": "503"
+                "document_id": "503",
+                "timezone": "Europe/London"
             },
             "processing": {
                 "parser_module": "src.parsers.malvern_theatre_contractual_report_pdf_parser",
                 "parser_function": "extract_contractual_report",
                 "needs_lookup": false
-            }
-        },
-        {
-            "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR",
-            "active": true,
-            "match_criteria": {
-                "sender_domain": "info@ticketek.com.sg",
-                "subject_keyword": "Jesus Christ Superstar (Sales Summary)",
-                "attachment_type": ".xls"
-            },
-            "metadata": {
-                "show_name": "Jesus Christ Superstar",
-                "venue_name": "Manila",
-                "show_id": "287",
-                "venue_id": "220",
-                "document_id": "504"
-            },
-            "processing": {
-                "parser_module": "src.parsers.ticketek_event_settlement_excel_parser",
-                "parser_function": "extract_settlement_data",
-                "needs_lookup": true
             }
         },
         {
@@ -65,7 +45,8 @@
                 "venue_name": "Singapore",
                 "show_id": "287",
                 "venue_id": "125",
-                "document_id": "501"
+                "document_id": "501",
+                "timezone": "Asia/Singapore"
             },
             "processing": {
                 "passthrough_only": true
@@ -84,7 +65,8 @@
                 "venue_name": "Aberdeen",
                 "show_id": "290",
                 "venue_id": "29",
-                "document_id": "355"
+                "document_id": "355",
+                "timezone": "Europe/London"
             },
             "processing": {
                 "passthrough_only": true
