@@ -1,12 +1,11 @@
 import os
-import json
 import shutil
 import importlib
 import pandas as pd
-import pytz
-from datetime import datetime, timezone, timedelta
-from dateutil import parser as date_parser
 from prefect import get_run_logger
+from src.models import ValidationResult
+from src.naming import generate_standard_filename, get_medallion_folders
+from src.mapping import apply_event_lookups
 
 class ProcessingEngine:
     def __init__(self, global_config: dict, config_path: str):
@@ -16,105 +15,67 @@ class ProcessingEngine:
         self._ensure_directories() 
 
     def _ensure_directories(self):
+        """Creates top-level directories if they do not exist."""
         for relative_path in self.dirs.values(): 
             os.makedirs(os.path.join(self.base_dir, relative_path), exist_ok=True) 
 
     def generate_filename(self, metadata: dict, date_str: str, ext: str) -> str:
-        # 1. Parse the Microsoft Graph UTC string
-        utc_dt = date_parser.parse(date_str).astimezone(timezone.utc)
-        
-        # 2. Look up the deterministic timezone from config (Defaults to UTC if missing)
-        venue_tz = pytz.timezone(metadata.get('timezone', 'UTC'))
-        
-        # 3. Convert UTC to the venue's exact local time
-        local_dt = utc_dt.astimezone(venue_tz)
-        
-        # 4. Subtract 1 day because these are end-of-day reports reflecting yesterday's sales
-        report_dt = local_dt - timedelta(days=1)
-        
-        # 5. Format and return
-        fmt_date = report_dt.strftime("%d_%m_%Y") 
-        name = f"{metadata['show_name']}.{metadata['venue_name']}_{metadata['show_id']}_{metadata['venue_id']}_{metadata['document_id']}_{fmt_date}{ext}" 
-        return name.replace(" ", "-").replace("/", "-")
+        """Wrapper for standard naming utility."""
+        return generate_standard_filename(metadata, date_str, ext)
 
     def process_file(self, temp_path: str, rule: dict) -> tuple:
-        """Invokes the parser, handles lookups, saves CSV, and moves to archive."""
+        """Main orchestrator: loads parsers, manages flow, and saves files."""
         logger = get_run_logger()
         proc_config = rule['processing'] 
         filename = os.path.basename(temp_path)
         
-        # 🚀 NEW: Check if this rule is just a raw file passthrough
+        # 1. Setup nested folders (Show/Venue)
+        proc_dir, arch_dir = get_medallion_folders(self.base_dir, self.dirs, rule['metadata'])
+        os.makedirs(proc_dir, exist_ok=True)
+        os.makedirs(arch_dir, exist_ok=True)
+
+        # 2. Handle Passthrough Files (No parsing needed)
         if proc_config.get('passthrough_only', False):
-            logger.info(f"⏩ Passthrough mode enabled. Moving raw {filename} directly to SFTP pipeline.")
-            
-            # Move the raw file to the processed directory instead of making a CSV
-            final_path = os.path.join(self.base_dir, self.dirs['processed'], filename)
+            logger.info(f"⏩ Passthrough mode: Moving {filename} directly to SFTP pipeline.")
+            final_path = os.path.join(proc_dir, filename)
             shutil.move(temp_path, final_path)
-            
-            # Create a success validation result
-            from src.models import ValidationResult
             val_res = ValidationResult(
-                status="PASSED", 
-                message="File passed through in raw format.", 
-                metrics={"action": "passthrough", "file_type": os.path.splitext(filename)[1]}
+                status="PASSED", message="File passed through.", 
+                metrics={"action": "passthrough"}
             )
-            
-            # Return None for the dataframe, but return the raw file path for the SFTP uploader
             return None, val_res, final_path
 
-        # --- STANDARD PROCESSING BELOW ---
-        # Dynamically load the parser
-        logger.info(f"🔄 Dynamically loading parser: {proc_config['parser_module']}.{proc_config['parser_function']}")
+        # 3. Dynamic Parsing
+        logger.info(f"🔄 Loading parser: {proc_config['parser_module']}.{proc_config['parser_function']}")
         parser_module = importlib.import_module(proc_config['parser_module']) 
         parser_func = getattr(parser_module, proc_config['parser_function']) 
         
         parsed_data, validation_result = parser_func(temp_path) 
-        
-        # Log validation failures before raising
         if validation_result.status == "FAILED" or not parsed_data: 
-            logger.error(f"❌ Parser validation failed for {temp_path}: {validation_result.message}")
             raise ValueError(f"Validation Failed: {validation_result.message}") 
 
         df = pd.DataFrame(parsed_data) 
 
+        # 4. Data Mapping (Lookups)
         if proc_config.get('needs_lookup'): 
-            meta = rule['metadata'] 
-            lookup_file = os.path.join(self.base_dir, self.dirs['lookups'], f"{meta['show_id']}_{meta['venue_id']}_event_dates.csv") 
-            
-            # Log exact missing lookup path
-            if not os.path.exists(lookup_file): 
-                logger.error(f"❌ Missing required lookup file at absolute path: {os.path.abspath(lookup_file)}")
-                raise ValueError(f"Missing lookup file: {lookup_file}") 
-            
-            lookup_df = pd.read_csv(lookup_file) 
-            df['Performance/Event Code'] = df['Performance/Event Code'].astype(str).str.strip() 
-            lookup_df['Show Code'] = lookup_df['Show Code'].astype(str).str.strip() 
-            
-            df = df.merge(lookup_df[['Show Code', 'Performance Date Time']], left_on='Performance/Event Code', right_on='Show Code', how='left') 
-            unmapped = df[df['Performance Date Time'].isna()]['Performance/Event Code'].unique() 
-            
-            # Log the specific unmapped codes
-            if len(unmapped) > 0: 
-                unmapped_str = ', '.join(map(str, unmapped[:5]))
-                logger.error(f"❌ Lookup Merge Failed. Unmapped codes: {{{unmapped_str}}}")
-                raise ValueError(f"Lookup Merge Failed: Unmapped codes found {{{unmapped_str}}}") 
+            lookups_dir = os.path.join(self.base_dir, self.dirs['lookups'])
+            df = apply_event_lookups(df, rule, lookups_dir)
 
-        # Save outputs with volume logging
-        csv_path = os.path.join(self.base_dir, self.dirs['processed'], filename.replace(os.path.splitext(filename)[1], '.csv')) 
+        # 5. Save Processed File & Archive Raw File
+        csv_path = os.path.join(proc_dir, filename.replace(os.path.splitext(filename)[1], '.csv')) 
         logger.info(f"💾 Saving {len(df)} rows to processed CSV: {csv_path}")
         df.to_csv(csv_path, index=False) 
         
-        # Log Medallion movement to archive
-        archive_path = os.path.join(self.base_dir, self.dirs['archive'], filename) 
-        logger.info(f"📦 Archiving raw file from {temp_path} -> {archive_path}")
+        archive_path = os.path.join(arch_dir, filename) 
+        logger.info(f"📦 Archiving raw file -> {archive_path}")
         shutil.move(temp_path, archive_path) 
         
         return df, validation_result, csv_path 
 
     def handle_failure(self, temp_path: str):
+        """Moves a failing file from the inbox to the quarantine/failed folder."""
         logger = get_run_logger()
         if os.path.exists(temp_path): 
-            filename = os.path.basename(temp_path) 
-            failed_path = os.path.join(self.base_dir, self.dirs['failed'], filename) 
+            failed_path = os.path.join(self.base_dir, self.dirs['failed'], os.path.basename(temp_path)) 
             logger.warning(f"⚠️ Moving failed file to quarantine: {failed_path}")
-            shutil.move(temp_path, failed_path) 
+            shutil.move(temp_path, failed_path)
