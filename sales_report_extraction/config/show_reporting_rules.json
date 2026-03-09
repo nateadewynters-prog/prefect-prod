@@ -53,6 +53,28 @@
             }
         },
         {
+            "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR_MANILA",
+            "active": true,
+            "match_criteria": {
+                "sender_domain": "info@ticketek.com.sg",
+                "subject_keyword": "Jesus Christ Superstar (Sales Summary)",
+                "attachment_type": ".xls"
+            },
+            "metadata": {
+                "show_name": "Jesus Christ Superstar",
+                "venue_name": "Manila",
+                "show_id": "287",
+                "venue_id": "220",
+                "document_id": "504",
+                "timezone": "Asia/Singapore"
+            },
+            "processing": {
+                "parser_module": "src.parsers.ticketek_event_settlement_excel_parser",
+                "parser_function": "extract_settlement_data",
+                "needs_lookup": true
+            }
+        },
+        {
             "rule_name": "GOLDILOCKS_AND_THE_THREE_BEARS_ABERDEEN",
             "active": true,
             "match_criteria": {
