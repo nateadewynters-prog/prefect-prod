@@ -36,13 +36,18 @@ class ProcessingEngine:
 
         # 2. Handle Passthrough Files (No parsing needed)
         if proc_config.get('passthrough_only', False):
-            logger.info(f"⏩ Passthrough mode: Moving {filename} directly to SFTP pipeline.")
-            final_path = os.path.join(proc_dir, filename)
+            logger.info(f"⏩ Passthrough mode: Archiving {filename} and sending directly to SFTP.")
+            
+            # 🚀 THE FIX: Use arch_dir instead of proc_dir
+            final_path = os.path.join(arch_dir, filename) 
             shutil.move(temp_path, final_path)
+            
             val_res = ValidationResult(
-                status="PASSED", message="File passed through.", 
+                status="PASSED", message="File passed through and archived.", 
                 metrics={"action": "passthrough"}
             )
+            
+            # We still return final_path so main.py knows where to find it for the SFTP upload
             return None, val_res, final_path
 
         # 3. Dynamic Parsing
