@@ -5,7 +5,7 @@ import time
 from prefect import get_run_logger
 from src.notifications import send_teams_notification
 
-def get_db_connection(retries=3, delay=5):
+def get_db_connection(retries=5, delay=10):
     """Attempts to connect to Azure SQL with a retry mechanism."""
     logger = get_run_logger()
     db_str = (
