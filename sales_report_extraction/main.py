@@ -34,7 +34,7 @@ engine = ProcessingEngine(CONFIG['global_settings'], CONFIG_PATH)
 @task(name="Fetch and Route Emails", retries=2)
 def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
     logger = get_run_logger()
-    candidates = []
+    queued_sales_reports = []
 
     # 🚀 Calculate the dynamic start date based on the parameter
     start_date_dt = datetime.now(timezone.utc) - timedelta(days=days_back)
@@ -73,19 +73,19 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
             actual_sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
             
             if crit['sender_domain'].lower() in actual_sender:
-                candidates.append({"email_data": email, "rule": rule})
+                queued_sales_reports.append({"email_data": email, "rule": rule})
             else:
                 skipped += 1
                 
-        logger.info(f"📊 Rule '{rule['rule_name']}': Found {len(emails)} total, Skipped {skipped}, Candidates {len(emails) - skipped}")
+        logger.info(f"📊 Rule '{rule['rule_name']}': Found {len(emails)} total, Skipped {skipped}, Queued Sales Reports {len(emails) - skipped}")
 
-    return candidates
+    return queued_sales_reports
 
 @task(name="Process Email Attachment")
-def process_email(candidate):
+def process_email(queued_sales_report):
     logger = get_run_logger()
-    email = candidate['email_data']
-    rule = candidate['rule']
+    email = queued_sales_report['email_data']
+    rule = queued_sales_report['rule']
     r_name = rule['rule_name']
     msg_id = email['id']
     expected_ext = rule['match_criteria']['attachment_type'].lower()
@@ -151,23 +151,23 @@ def process_email(candidate):
 @flow(name="Sales Extractor Flow", log_prints=True)
 def sales_extractor_flow(days_back: int = 30, target_rule_name: str | None = None):
     # Pass parameters down to the fetch task
-    candidates = fetch_and_route_emails(days_back, target_rule_name)
+    queued_sales_reports = fetch_and_route_emails(days_back, target_rule_name)
     successful_runs = []
     failed_runs = []
     
-    for candidate in candidates:
-        success, rec_date, r_name = process_email(candidate)
+    for queued_sales_report in queued_sales_reports:
+        success, rec_date, r_name = process_email(queued_sales_report)
         if success:
             successful_runs.append((r_name, rec_date))
         else:
             failed_runs.append(r_name)
     
     # Flow Completion Summary Alert
-    if candidates:
+    if queued_sales_reports:
         logger = get_run_logger()
         summary = (
             f"📊 **Extraction Flow Complete**\n\n"
-            f"**Total Candidates:** {len(candidates)}\n"
+            f"**Total Queued Sales Reports:** {len(queued_sales_reports)}\n"
             f"**Successful:** {len(successful_runs)}\n"
             f"**Failed:** {len(failed_runs)}"
         )
