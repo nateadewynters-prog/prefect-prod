@@ -16,11 +16,16 @@ def get_db_connection():
     username = os.getenv('SQL_USERNAME') #
     password = os.getenv('SQL_PASSWORD') #
     
-    if not all([server, database, username, password]): #
+    if not all([server, database, username, password]): 
         error_msg = "Missing SQL environment variables in centralized .env"
         if logger: logger.error(f"❌ {error_msg}")
-        send_teams_notification(f"🚨 **Database Config Error**\n\n{error_msg}", logger) # Added alert
-        raise ValueError(error_msg) #
+        
+        send_teams_notification(
+            message="🚨 **Database Config Error**", 
+            logger=logger,
+            facts={"Server": server or "Missing", "Database": database or "Missing", "Issue": "Missing variables in .env"}
+        ) 
+        raise ValueError(error_msg)
 
     conn_str = (
         f'DRIVER={{ODBC Driver 18 for SQL Server}};'
@@ -35,5 +40,10 @@ def get_db_connection():
     except Exception as e:
         error_msg = f"Failed to connect to SQL Database '{database}' on '{server}': {str(e)}"
         if logger: logger.error(f"❌ {error_msg}")
-        send_teams_notification(f"🚨 **Database Connection Failed**\n\n{error_msg}", logger) # Added critical alert
+        
+        send_teams_notification(
+            message="🚨 **Database Connection Failed**", 
+            logger=logger,
+            facts={"Server": server, "Database": database, "Error": str(e)}
+        ) 
         raise #

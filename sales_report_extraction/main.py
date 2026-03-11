@@ -117,7 +117,11 @@ def process_email(queued_sales_report):
         create_markdown_artifact(key=f"val-{msg_id[:15].lower()}", markdown=md_table, description=r_name)
 
         if validation_result.status == "UNVALIDATED":
-            send_teams_notification(f"⚠️ **Manual Review Required**\n\n**Rule:** {r_name}\n**Message:** {validation_result.message}", logger)
+            send_teams_notification(
+                message="⚠️ **Manual Review Required**", 
+                logger=logger,
+                facts={"Rule": r_name, "Message": validation_result.message}
+            )
 
         # Tag as processed so it doesn't get picked up again
         graph.tag_email(msg_id, "sales_report_extracted")
@@ -167,24 +171,51 @@ def sales_extractor_flow(days_back: int = 30, target_rule_name: str | None = Non
     successful_runs = []
     failed_runs = []
     
+    # 🚀 NEW: Dictionaries to count up successes and failures by Show/Venue
+    success_breakdown = {}
+    failed_breakdown = {}
+    
     for queued_sales_report in queued_sales_reports:
         success, rec_date, r_name = process_email(queued_sales_report)
+        
+        # Extract the Show and Venue for our clean display names
+        meta = queued_sales_report['rule']['metadata']
+        display_name = f"{meta.get('show_name', 'Unknown')} - {meta.get('venue_name', 'Unknown')}"
+        
         if success:
             successful_runs.append((r_name, rec_date))
+            # Tally up the successes
+            success_breakdown[display_name] = success_breakdown.get(display_name, 0) + 1
         else:
             failed_runs.append(r_name)
+            # Tally up the failures
+            failed_breakdown[display_name] = failed_breakdown.get(display_name, 0) + 1
     
     # Flow Completion Summary Alert
     if queued_sales_reports:
         logger = get_run_logger()
-        summary = (
-            f"📊 **Extraction Flow Complete**\n\n"
-            f"**Total Queued Sales Reports:** {len(queued_sales_reports)}\n"
-            f"**Successful:** {len(successful_runs)}\n"
-            f"**Failed:** {len(failed_runs)}"
-        )
         logger.info(f"🏁 Flow Summary: {len(successful_runs)} successful, {len(failed_runs)} failed.")
-        send_teams_notification(summary, logger)
+        
+        # 1. Base Facts
+        summary_facts = {
+            "Total Queued": len(queued_sales_reports),
+            "Successful": len(successful_runs),
+            "Failed": len(failed_runs)
+        }
+        
+        # 2. 🚀 Dynamically inject a new row for each successful Venue!
+        for name, count in success_breakdown.items():
+            summary_facts[f"✅ {name}"] = f"{count} report(s) extracted"
+            
+        # 3. 🚀 Dynamically inject a new row for each failed Venue!
+        for name, count in failed_breakdown.items():
+            summary_facts[f"❌ {name}"] = f"{count} report(s) failed"
+
+        send_teams_notification(
+            message="📊 **Extraction Flow Complete**", 
+            logger=logger,
+            facts=summary_facts
+        )
 
 if __name__ == "__main__":
     sales_extractor_flow.serve(

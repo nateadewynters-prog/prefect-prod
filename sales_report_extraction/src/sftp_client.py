@@ -36,6 +36,11 @@ def upload_to_sftp(local_file_path: str, filename: str):
         transport.close() #
     except Exception as e:
         error_msg = f"SFTP Upload failed for {filename}: {str(e)}"
-        logger.error(f"❌ {error_msg}") #
-        send_teams_notification(f"🚨 **SFTP Delivery Failed**\n\n{error_msg}", logger) # Added alert
-        raise #
+        logger.error(f"❌ {error_msg}") 
+        
+        send_teams_notification(
+            message="🚨 **SFTP Delivery Failed**", 
+            logger=logger,
+            facts={"File": filename, "Target Host": host, "Port": port, "Error": str(e)}
+        )
+        raise
