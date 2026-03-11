@@ -1,6 +1,7 @@
 import os
 import requests
 from prefect import get_run_logger
+from prefect.runtime import flow_run  # 🚀 ADD THIS
 
 def send_teams_notification(message: str, logger, facts: dict = None, button_title: str = None, button_url: str = None):
     """
@@ -39,11 +40,19 @@ def send_teams_notification(message: str, logger, facts: dict = None, button_tit
         })
 
     # 4. 🚀 THE NEW FEATURE: Dynamic Action Buttons
+    ui_url = os.getenv("PREFECT_UI_URL", "http://10.1.50.127:4200")
+    
+    try:
+        current_run_id = flow_run.get_id()
+        run_link = f"{ui_url}/runs/flow-run/{current_run_id}" if current_run_id else f"{ui_url}/dashboard"
+    except Exception:
+        run_link = f"{ui_url}/dashboard"
+
     actions = [
         {
             "type": "Action.OpenUrl",
             "title": "🔍 View Prefect Logs",
-            "url": "https://app.prefect.cloud/" # Update this to your local Prefect UI if needed
+            "url": run_link
         }
     ]
     
