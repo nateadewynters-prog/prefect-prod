@@ -147,6 +147,18 @@ def brandwatch_flow():
 
         logger.info("✅ Brandwatch Pipeline Finished Successfully.")
         
+        # 🚀 NEW: The Data Engineer's Dream Success Alert
+        send_teams_notification(
+            message="✅ **Brandwatch Extraction Complete**",
+            logger=logger,
+            facts={
+                "Status": "Success",
+                "Channels Synced": len(ch_uuids),
+                "Settled Data Date": target_date.strftime('%Y-%m-%d'),
+                "Destination": "dbo.stg_bw_raw_json"
+            }
+        )
+        
     except Exception as e:
         logger.error(f"Pipeline crashed: {str(e)}")
         send_teams_notification(
