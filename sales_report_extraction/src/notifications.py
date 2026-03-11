@@ -1,60 +1,81 @@
 import os
-import requests as r
-from prefect.runtime import flow_run
+import requests
+from prefect import get_run_logger
 
-def send_teams_notification(message: str, logger=None):
+def send_teams_notification(message: str, logger, facts: dict = None, button_title: str = None, button_url: str = None):
     """
-    Standardized Adaptive Card notification for Power Automate.
-    Matches the schema required by the Medallion Email Extraction workflow.
+    Sends a beautifully formatted Adaptive Card to Microsoft Teams.
+    Supports dynamic FactSets (tables) and custom action buttons.
     """
     webhook_url = os.getenv("TEAMS_WEBHOOK_URL")
-    ui_url = os.getenv("PREFECT_UI_URL", "http://10.1.50.127:4200")
-
     if not webhook_url:
-        if logger: logger.warning("⚠️ No TEAMS_WEBHOOK_URL found. Skipping.")
+        logger.warning("⚠️ TEAMS_WEBHOOK_URL not set. Skipping notification.")
         return
 
-    # Dynamic Run Link Generation
-    try:
-        current_run_id = flow_run.get_id()
-        run_link = f"{ui_url}/runs/flow-run/{current_run_id}" if current_run_id else ui_url
-    except Exception:
-        run_link = ui_url
+    # 1. Determine the color/theme based on the message content
+    color = "Default" 
+    if any(x in message for x in ["Failed", "❌", "⚠️", "Error", "Action Required"]):
+        color = "Attention" # Red
+    elif any(x in message for x in ["Complete", "Successful", "🏁", "✅"]):
+        color = "Good" # Green
 
-    # Adaptive Card Payload
+    # 2. Build the Core Text Block
+    body_elements = [
+        {
+            "type": "TextBlock",
+            "text": message,
+            "wrap": True,
+            "color": color,
+            "weight": "Bolder" if color != "Default" else "Default"
+        }
+    ]
+
+    # 3. 🚀 THE NEW FEATURE: Inject the FactSet if facts are provided
+    if facts:
+        fact_list = [{"title": str(key), "value": str(value)} for key, value in facts.items()]
+        body_elements.append({
+            "type": "FactSet",
+            "facts": fact_list
+        })
+
+    # 4. 🚀 THE NEW FEATURE: Dynamic Action Buttons
+    actions = [
+        {
+            "type": "Action.OpenUrl",
+            "title": "🔍 View Prefect Logs",
+            "url": "https://app.prefect.cloud/" # Update this to your local Prefect UI if needed
+        }
+    ]
+    
+    # If a specific fix button is provided, add it!
+    if button_title and button_url:
+        actions.append({
+            "type": "Action.OpenUrl",
+            "title": button_title,
+            "url": button_url
+        })
+
+    # 5. Assemble the final Adaptive Card JSON payload
     payload = {
         "type": "message",
         "attachments": [
             {
                 "contentType": "application/vnd.microsoft.card.adaptive",
                 "content": {
-                    "type": "AdaptiveCard",
-                    "body": [
-                        {
-                            "type": "TextBlock",
-                            "text": message,
-                            "wrap": True,
-                            "weight": "Bolder" if any(x in message for x in ["Failed", "❌", "⚠️"]) else "Default",
-                            "color": "Attention" if any(x in message for x in ["Failed", "❌", "⚠️"]) else "Default"
-                        }
-                    ],
-                    "actions": [
-                        {
-                            "type": "Action.OpenUrl",
-                            "title": "🔍 View Flow Run",
-                            "url": run_link
-                        }
-                    ],
                     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "version": "1.2"
+                    "type": "AdaptiveCard",
+                    "version": "1.2",
+                    "body": body_elements,
+                    "actions": actions
                 }
             }
         ]
     }
-    
+
+    # 6. Send it to Teams
     try:
-        response = r.post(webhook_url, json=payload)
-        response.raise_for_status()
-        if logger: logger.info("✅ Teams Notification Sent.")
+        resp = requests.post(webhook_url, json=payload, headers={"Content-Type": "application/json"})
+        resp.raise_for_status()
+        logger.debug("📢 Teams notification sent successfully.")
     except Exception as e:
-        if logger: logger.error(f"❌ Teams Webhook Failed: {e}")
+        logger.error(f"❌ Failed to send Teams notification: {e}")

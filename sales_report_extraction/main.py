@@ -129,16 +129,28 @@ def process_email(queued_sales_report):
         
         # Actionable Teams Alert
         if isinstance(e, ValueError):
-            teams_msg = (
-                f"⚠️ **Action Required: Data Mapping Failed for {rule['rule_name']}**\n\n"
-                f"**Error Details:** {str(e)}\n\n"
-                f"**How to Fix & Replay:**\n"
-                f"1. Update the lookup CSV.\n"
-                f"2. Go to Outlook and remove the **'sales_report_failed'** category tag.\n\n"
+            
+            # 🚀 1. Build the Data Table (FactSet)
+            error_facts = {
+                "Rule": rule['rule_name'],
+                "Show": rule['metadata'].get('show_name', 'Unknown'),
+                "Venue": rule['metadata'].get('venue_name', 'Unknown'),
+                "Error Details": str(e)
+            }
+            
+            # 🚀 2. Send the message with the facts (No SharePoint button yet!)
+            send_teams_notification(
+                message="⚠️ **Action Required: Data Mapping Failed**\n\nPlease update the local lookup CSV on the server and remove the 'sales_report_failed' tag in Outlook to replay.", 
+                logger=logger,
+                facts=error_facts
             )
-            send_teams_notification(teams_msg, logger)
         else:
-            send_teams_notification(f"❌ **Extraction Failed**\n\n**Rule:** {r_name}\n**Error:** {str(e)}", logger)
+            # Catch-all for other random errors
+            send_teams_notification(
+                message=f"❌ **Extraction Failed**\n\nAn unexpected error occurred.", 
+                logger=logger,
+                facts={"Rule": r_name, "Error Type": type(e).__name__, "Details": str(e)}
+            )
         
         # 🚀 THE FIX: Tag it as explicitly failed
         try:
