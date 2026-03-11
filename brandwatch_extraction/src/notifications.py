@@ -2,10 +2,11 @@ import os
 import requests as r
 from prefect.runtime import flow_run
 
-def send_teams_notification(message: str, logger=None):
+# 🚀 THE FIX: Added the facts dictionary parameter
+def send_teams_notification(message: str, logger=None, facts: dict = None):
     """
-    Standardized Adaptive Card notification for Power Automate.
-    Matches the schema required by the Medallion Email Extraction workflow.
+    Standardized Adaptive Card notification.
+    Supports dynamic FactSets (tables) for easy reading.
     """
     webhook_url = os.getenv("TEAMS_WEBHOOK_URL")
     ui_url = os.getenv("PREFECT_UI_URL", "http://10.1.50.127:4200")
@@ -14,14 +15,31 @@ def send_teams_notification(message: str, logger=None):
         if logger: logger.warning("⚠️ No TEAMS_WEBHOOK_URL found. Skipping.")
         return
 
-    # Dynamic Run Link Generation
     try:
         current_run_id = flow_run.get_id()
         run_link = f"{ui_url}/runs/flow-run/{current_run_id}" if current_run_id else ui_url
     except Exception:
         run_link = ui_url
 
-    # Adaptive Card Payload
+    # 1. Build the core message block
+    body_elements = [
+        {
+            "type": "TextBlock",
+            "text": message,
+            "wrap": True,
+            "weight": "Bolder" if any(x in message for x in ["Failed", "❌", "⚠️", "🚨"]) else "Default",
+            "color": "Attention" if any(x in message for x in ["Failed", "❌", "⚠️", "🚨"]) else "Default"
+        }
+    ]
+
+    # 2. 🚀 THE NEW FEATURE: Inject the FactSet if facts are provided
+    if facts:
+        fact_list = [{"title": str(key), "value": str(value)} for key, value in facts.items()]
+        body_elements.append({
+            "type": "FactSet",
+            "facts": fact_list
+        })
+
     payload = {
         "type": "message",
         "attachments": [
@@ -29,15 +47,7 @@ def send_teams_notification(message: str, logger=None):
                 "contentType": "application/vnd.microsoft.card.adaptive",
                 "content": {
                     "type": "AdaptiveCard",
-                    "body": [
-                        {
-                            "type": "TextBlock",
-                            "text": message,
-                            "wrap": True,
-                            "weight": "Bolder" if any(x in message for x in ["Failed", "❌", "⚠️"]) else "Default",
-                            "color": "Attention" if any(x in message for x in ["Failed", "❌", "⚠️"]) else "Default"
-                        }
-                    ],
+                    "body": body_elements,
                     "actions": [
                         {
                             "type": "Action.OpenUrl",

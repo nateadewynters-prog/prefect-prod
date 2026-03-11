@@ -23,7 +23,11 @@ API_KEYS = [
 
 if not API_KEYS:
     error_msg = "No Brandwatch API keys found! Check /opt/prefect/prod/.env"
-    send_teams_notification(f"🚨 **Brandwatch Config Error**\n\n{error_msg}") # 🚀 Alert if config is missing
+    send_teams_notification(
+        message="🚨 **Brandwatch Config Error**", 
+        logger=None,
+        facts={"Issue": "Missing API Keys", "Action Required": "Check /opt/prefect/prod/.env"}
+    ) 
     raise ValueError(error_msg)
 
 # Initialize Client
@@ -144,9 +148,13 @@ def brandwatch_flow():
         logger.info("✅ Brandwatch Pipeline Finished Successfully.")
         
     except Exception as e:
-        # Fires the standard Adaptive Card with a direct link to the Prefect UI
-        send_teams_notification(f"❌ **Brandwatch Pipeline Failed**\n\n**Error:** {str(e)}", logger)
-        raise # Ensure Prefect still registers this flow run as FAILED
+        logger.error(f"Pipeline crashed: {str(e)}")
+        send_teams_notification(
+            message="❌ **Brandwatch Pipeline Failed**", 
+            logger=logger,
+            facts={"Status": "Terminal Failure", "Error": str(e)}
+        )
+        raise
 
 if __name__ == "__main__":
     brandwatch_flow.serve(

@@ -36,9 +36,12 @@ class BrandwatchClient:
                 if attempt == retries - 1: 
                     error_msg = f"API Call Failed after {retries} attempts to {endpoint}: {e}"
                     logger.error(f"❌ {error_msg}")
-                    send_teams_notification(f"🚨 **Brandwatch API Error**\n\n{error_msg}", logger)
+                    send_teams_notification(
+                        message="🚨 **Brandwatch API Error**", 
+                        logger=logger,
+                        facts={"Endpoint": endpoint, "Attempts": retries, "Error": str(e)}
+                    )
                     raise e
-                time.sleep(10)
 
     def poll_insight(self, req_id, tag, prefix="/measure/v2/insights"):
         logger = get_run_logger()
@@ -50,24 +53,30 @@ class BrandwatchClient:
         while attempts < max_attempts:
             res = self.call('GET', f"{prefix}/{req_id}")
             status = res.get('status')
-            
+
             if status in ['READY', 'COMPLETED']:
                 if tag != 'ENGAGE_EXPORTS':
                     insert_raw_json(tag, res)
                 return res.get('url') if tag == 'ENGAGE_EXPORTS' else True
-                
+
             elif status == 'FAILED':
-                # Catch specific backend job failures explicitly returned by Brandwatch
                 error_msg = f"Brandwatch processing failed for {tag} request {req_id}"
                 logger.error(f"❌ {error_msg}")
-                send_teams_notification(f"🚨 **Brandwatch Async Job Failed**\n\n{error_msg}", logger)
+                send_teams_notification(
+                    message="🚨 **Brandwatch Async Job Failed**", 
+                    logger=logger,
+                    facts={"Tag": tag, "Request ID": req_id, "Backend Status": "FAILED"}
+                )
                 raise Exception(error_msg)
-                
+
             time.sleep(20)
             attempts += 1
             
-        # 🚀 THE FIX: If the loop finishes without returning, throw a timeout exception!
         timeout_msg = f"Backend processing for {tag} request {req_id} timed out after 30 minutes. Aborting to prevent Zombie Run."
         logger.error(f"❌ {timeout_msg}")
-        send_teams_notification(f"🚨 **Brandwatch API Timeout**\n\n{timeout_msg}", logger)
+        send_teams_notification(
+            message="🚨 **Brandwatch API Timeout**", 
+            logger=logger,
+            facts={"Tag": tag, "Request ID": req_id, "Duration": "> 30 Minutes"}
+        )
         raise TimeoutError(timeout_msg)

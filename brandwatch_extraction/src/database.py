@@ -26,7 +26,11 @@ def get_db_connection(retries=5, delay=10):
             else:
                 error_msg = f"Database Connection Failed: {str(e)}"
                 logger.error(f"❌ {error_msg}")
-                send_teams_notification(f"🚨 **Database Connection Error**\n\n{error_msg}", logger)
+                send_teams_notification(
+                    message="🚨 **Database Connection Error**", 
+                    logger=logger,
+                    facts={"Server": os.getenv('SQL_SERVER'), "Database": os.getenv('SQL_ORGANICSOCIAL_DATABASE'), "Error": str(e)}
+                )
                 raise e
 
 def insert_raw_json(endpoint_tag, raw_data):
@@ -55,5 +59,9 @@ def insert_raw_json(endpoint_tag, raw_data):
         # Catch specific database errors (like the invalid object name we just saw)
         error_msg = f"SQL Insertion Failed for {endpoint_tag}: {str(e)}"
         logger.error(f"❌ {error_msg}")
-        send_teams_notification(f"🚨 **Brandwatch Database Error**\n\n{error_msg}", logger)
+        send_teams_notification(
+            message="🚨 **Brandwatch Database Error**", 
+            logger=logger,
+            facts={"Endpoint Tag": endpoint_tag, "Target Table": "dbo.stg_bw_raw_json", "Error": str(e)}
+        )
         raise
