@@ -133,25 +133,32 @@ def process_email(queued_sales_report):
         
         # Actionable Teams Alert
         if isinstance(e, ValueError):
+            error_details = str(e)
             
-            # 🚀 1. Build the Data Table (FactSet)
+            # 🚀 NEW: Smart check to see if the error came from mapping.py or a parser
+            is_mapping = "lookup" in error_details.lower() or "mapping" in error_details.lower() or "code" in error_details.lower()
+            
+            alert_title = "⚠️ **Action Required: Data Mapping Failed**" if is_mapping else "❌ **Action Required: File Parsing Failed**"
+            alert_body = "Please update the local lookup CSV on the server." if is_mapping else "The extraction script rejected this file's formatting."
+
+            # 1. Build the Data Table (FactSet)
             error_facts = {
                 "Rule": rule['rule_name'],
                 "Show": rule['metadata'].get('show_name', 'Unknown'),
                 "Venue": rule['metadata'].get('venue_name', 'Unknown'),
-                "Error Details": str(e)
+                "Error Details": error_details
             }
             
-            # 🚀 2. Send the message with the facts (No SharePoint button yet!)
+            # 2. Send the message with the dynamic facts
             send_teams_notification(
-                message="⚠️ **Action Required: Data Mapping Failed**\n\nPlease update the local lookup CSV on the server and remove the 'sales_report_failed' tag in Outlook to replay.", 
+                message=f"{alert_title}\n\n{alert_body}", 
                 logger=logger,
                 facts=error_facts
             )
         else:
-            # Catch-all for other random errors
+            # Catch-all for other random errors (like network crashes or graph API timeouts)
             send_teams_notification(
-                message=f"❌ **Extraction Failed**\n\nAn unexpected error occurred.", 
+                message=f"❌ **System Error: Extraction Failed**\n\nAn unexpected Python exception occurred.", 
                 logger=logger,
                 facts={"Rule": r_name, "Error Type": type(e).__name__, "Details": str(e)}
             )

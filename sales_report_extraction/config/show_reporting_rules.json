@@ -1,98 +1,120 @@
 {
-    "global_settings": {
-        "base_dir": "/opt/prefect/prod/code/sales_report_extraction",
-        "data_dirs": {
-            "inbox": "data/inbox",
-            "processed": "data/processed",
-            "archive": "data/archive",
-            "failed": "data/failed",
-            "lookups": "data/lookups"
-        }
+  "global_settings": {
+    "base_dir": "/opt/prefect/prod/code/sales_report_extraction",
+    "data_dirs": {
+      "inbox": "data/inbox",
+      "processed": "data/processed",
+      "archive": "data/archive",
+      "failed": "data/failed",
+      "lookups": "data/lookups"
+    }
+  },
+  "rules": [
+    {
+      "rule_name": "MALVERN_SILENCE_OF_THE_LAMBS",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "figures@malvern-theatres.co.uk",
+        "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs",
+        "attachment_type": ".pdf"
+      },
+      "metadata": {
+        "show_name": "The Silence of the Lambs",
+        "venue_name": "Malvern Theatres",
+        "show_id": "285",
+        "venue_id": "174",
+        "document_id": "503",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "parser_module": "src.parsers.malvern_theatre_contractual_report_pdf_parser",
+        "parser_function": "extract_contractual_report",
+        "needs_lookup": false
+      }
     },
-    "rules": [
-        {
-            "rule_name": "MALVERN_SILENCE_OF_THE_LAMBS",
-            "active": true,
-            "match_criteria": {
-                "sender_domain": "figures@malvern-theatres.co.uk",
-                "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs",
-                "attachment_type": ".pdf"
-            },
-            "metadata": {
-                "show_name": "The Silence of the Lambs",
-                "venue_name": "Malvern Theatres",
-                "show_id": "285",
-                "venue_id": "174",
-                "document_id": "503",
-                "timezone": "Europe/London"
-            },
-            "processing": {
-                "parser_module": "src.parsers.malvern_theatre_contractual_report_pdf_parser",
-                "parser_function": "extract_contractual_report",
-                "needs_lookup": false
-            }
-        },
-        {
-            "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR_SINGAPORE",
-            "active": true,
-            "match_criteria": {
-                "sender_domain": "sisticadmin@sistic.com.sg",
-                "subject_keyword": "Jesus Christ Superstar - Sales Summary Report",
-                "attachment_type": ".xls"
-            },
-            "metadata": {
-                "show_name": "Jesus Christ Superstar",
-                "venue_name": "Singapore",
-                "show_id": "287",
-                "venue_id": "125",
-                "document_id": "501",
-                "timezone": "Asia/Singapore"
-            },
-            "processing": {
-                "passthrough_only": true
-            }
-        },
-        {
-            "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR_MANILA",
-            "active": true,
-            "match_criteria": {
-                "sender_domain": "info@ticketek.com.sg",
-                "subject_keyword": "Jesus Christ Superstar (Sales Summary)",
-                "attachment_type": ".xls"
-            },
-            "metadata": {
-                "show_name": "Jesus Christ Superstar",
-                "venue_name": "Manila",
-                "show_id": "287",
-                "venue_id": "220",
-                "document_id": "504",
-                "timezone": "Asia/Singapore"
-            },
-            "processing": {
-                "parser_module": "src.parsers.ticketek_event_settlement_excel_parser",
-                "parser_function": "extract_settlement_data",
-                "needs_lookup": true
-            }
-        },
-        {
-            "rule_name": "GOLDILOCKS_AND_THE_THREE_BEARS_ABERDEEN",
-            "active": true,
-            "match_criteria": {
-                "sender_domain": "aberdeenperformingarts.com",
-                "subject_keyword": "Goldilocks and the 3 Bears Sales Report - Aberdeen",
-                "attachment_type": ".xls"
-            },
-            "metadata": {
-                "show_name": "Goldilocks and the Three Bears",
-                "venue_name": "Aberdeen",
-                "show_id": "290",
-                "venue_id": "29",
-                "document_id": "355",
-                "timezone": "Europe/London"
-            },
-            "processing": {
-                "passthrough_only": true
-            }
-        }
-    ]
+    {
+      "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR_SINGAPORE",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "sisticadmin@sistic.com.sg",
+        "subject_keyword": "Jesus Christ Superstar - Sales Summary Report",
+        "attachment_type": ".xls"
+      },
+      "metadata": {
+        "show_name": "Jesus Christ Superstar",
+        "venue_name": "Singapore",
+        "show_id": "287",
+        "venue_id": "125",
+        "document_id": "501",
+        "timezone": "Asia/Singapore"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR_MANILA",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "info@ticketek.com.sg",
+        "subject_keyword": "Jesus Christ Superstar (Sales Summary)",
+        "attachment_type": ".xls"
+      },
+      "metadata": {
+        "show_name": "Jesus Christ Superstar",
+        "venue_name": "Manila",
+        "show_id": "287",
+        "venue_id": "220",
+        "document_id": "504",
+        "timezone": "Asia/Singapore"
+      },
+      "processing": {
+        "parser_module": "src.parsers.ticketek_event_settlement_excel_parser",
+        "parser_function": "extract_settlement_data",
+        "needs_lookup": true
+      }
+    },
+    {
+      "rule_name": "GOLDILOCKS_AND_THE_THREE_BEARS_ABERDEEN",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "aberdeenperformingarts.com",
+        "subject_keyword": "Goldilocks and the 3 Bears Sales Report - Aberdeen",
+        "attachment_type": ".xls"
+      },
+      "metadata": {
+        "show_name": "Goldilocks and the Three Bears",
+        "venue_name": "Aberdeen",
+        "show_id": "290",
+        "venue_id": "29",
+        "document_id": "355",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "NEDERLANDER_DEVIL_WEARS_PRADA_DOMINION_CUMULATIVE_PDF",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "primarytix@nederlander.co.uk",
+        "subject_keyword": "TDWP Cumulative Sales",
+        "attachment_type": ".pdf"
+      },
+      "metadata": {
+        "show_name": "Devil Wears Prada",
+        "venue_name": "Dominion Theatre",
+        "show_id": "180",
+        "venue_id": "1",
+        "document_id": "505",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "parser_module": "src.parsers.nederlandaer_devil_wears_prada_cumulative_extraction_pdf",
+        "parser_function": "nederlandaer_devil_wears_prada_cumulative_extraction_pdf",
+        "needs_lookup": false
+      }
+    }
+  ]
 }
