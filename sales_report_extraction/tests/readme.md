@@ -13,9 +13,10 @@ This suite verifies client authentication, file processing logic, server-side ta
 
 ## 2. Key Test Areas
 
-- **Graph API Tagging:** `test_categorization.py` verifies the ability to search for and apply the `"sales_report_extracted"` category tag to emails, ensuring idempotency.
+- **Graph API Tagging:** `test_categorization.py` verifies the ability to search for, apply, and remove category tags (`sales_report_extracted`, `sales_report_failed`), ensuring idempotency and retry capability.
 - **File Processing:** `test_file_processor.py` tests both standard extraction and the `"passthrough_only"` logic.
-- **Dynamic Orchestration:** `test_main.py` validates the 30-day rolling window calculation and ensures UI parameters like `days_back` and `target_rule_name` are correctly passed to the fetching logic. This now includes validation for both successful routing and failure-tagging logic. Specifically, the `test_process_email_handles_lookup_failure_and_tags_failed` case verifies that the `"sales_report_failed"` tag is applied and a Teams alert is sent during `ValueError` exceptions.
+- **Dynamic Orchestration:** `test_main.py` validates the 30-day rolling window calculation and ensures UI parameters like `days_back`, `target_rule_name`, `retry_failed`, and `disable_notifications` are correctly handled.
+- **Failure Resilience:** Specifically, `test_process_email_handles_lookup_failure_and_tags_failed` verifies that mapping errors (e.g., missing lookups) result in the `"sales_report_failed"` tag and appropriate Teams alerts.
 - **SFTP Integration:** `test_sftp_client.py` ensures that files are correctly handled and uploaded, including checks for proper buffer flushing.
 
 ---

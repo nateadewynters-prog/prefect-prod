@@ -37,9 +37,9 @@ The system is **Stateless Locally**: It tracks processed state directly on the E
 
 ### 🏷️ Server-Side Idempotency (Graph API Tagging)
 This system uses the Microsoft Graph API to manage state directly on the email server:
-1. **Filtering:** The fetch task specifically filters for emails *without* the `"sales_report_extracted"` category tag.
-2. **Tagging:** Once an email is processed, the orchestrator sends a `PATCH` request to apply the `"sales_report_extracted"` tag.
-3. **Failure Handling:** If a `ValueError` (like a missing lookup) occurs, the `"sales_report_failed"` tag is applied to prevent zombie retries and trigger a Teams alert.
+1. **Filtering:** The fetch task specifically filters for emails *without* the `"sales_report_extracted"` or `"sales_report_failed"` category tags.
+2. **Tagging:** Once an email is processed, the orchestrator applies the `"sales_report_extracted"` tag.
+3. **Failure Handling:** If a `ValueError` (mapping issue) or system error occurs, the `"sales_report_failed"` tag is applied to prevent zombie retries and trigger a Teams alert.
 4. **Robustness:** Includes HTTP 409/412 retry logic to handle Exchange server concurrency conflicts.
 
 ### 🌐 Deterministic Timezone Logic
@@ -48,9 +48,11 @@ To ensure 100% accurate reporting dates, the engine uses venue-specific timezone
 2. It subtracts **1 day** (since reports reflect the previous day's sales).
 3. This ensures the filename and database entry perfectly align with the local business day regardless of when the email was received.
 
-### 📈 Parameterized Backfills (Prefect UI)
+### 📈 Parameterized Execution (Prefect UI)
 - **`days_back`**: (Default: 30) Controls the dynamic rolling window for untagged email scans.
 - **`target_rule_name`**: (Optional) Filters execution to a specific vendor/show rule for historical correction.
+- **`retry_failed`**: (Default: False) When enabled, bulk-resets emails tagged with `"sales_report_failed"` within the `days_back` window, allowing them to be reprocessed.
+- **`disable_notifications`**: (Default: False) Silences Microsoft Teams alerts for the duration of the run—ideal for testing or massive backfills.
 
 ---
 
@@ -60,6 +62,7 @@ To ensure 100% accurate reporting dates, the engine uses venue-specific timezone
 The pipeline is decomposed into resilient Prefect `@tasks`:
 - **`fetch_and_route_emails`**: Handles search and routing with 2 retries for transient API blips.
 - **`process_email`**: Encapsulates the full lifecycle of a single file, ensuring that a failure in one vendor report does not crash the entire flow.
+- **`reset_failed_emails`**: Manages the bulk removal of failure tags for reprocessing.
 
 ### 📤 SFTP Upload Mechanism
 Processed files (CSVs or raw passthroughs) are delivered to the Sales Database via a dedicated SFTP client:

@@ -11,7 +11,17 @@ This directory contains specialized extraction modules. The orchestrator dynamic
 
 ---
 
-## 2. The Validation Data Contract (Observable ETL)
+## 2. Active Parsers
+
+The following parsers are currently implemented and active:
+
+- **`malvern_theatre_contractual_report_pdf_parser.py`**: Extracts contractual data from Malvern Theatre PDF reports.
+- **`nederlandaer_devil_wears_prada_cumulative_extraction_pdf.py`**: Specialized cumulative extractor for "The Devil Wears Prada" reports from Nederlandaer.
+- **`ticketek_event_settlement_excel_parser.py`**: Robust Excel parser for Ticketek settlement reports, supporting complex lookups.
+
+---
+
+## 3. The Validation Data Contract (Observable ETL)
 
 To maintain high observability across the medallion pipeline, every parser **MUST** return a specific tuple:
 ```python

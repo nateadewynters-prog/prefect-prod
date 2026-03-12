@@ -14,7 +14,7 @@ This directory contains the application logic, decoupled from the orchestration 
 ## 2. Component Layout
 
 ### 📡 API & External Clients
-- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading, and **category tagging** for state management. Features HTTP 409/412 retry logic for robust tagging of `"sales_report_extracted"` and `"sales_report_failed"`.
+- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading, and **category tagging** for state management. Features `tag_email` and `untag_email` methods with HTTP 409/412 retry logic to handle Exchange server conflicts.
 - **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs or raw passthrough files. It logs file size (KB), utilizes centralized environment variables, and includes error alerting for Teams.
 
 ### 🧠 Core Engine
@@ -23,12 +23,13 @@ This directory contains the application logic, decoupled from the orchestration 
     - **Medallion I/O:** Standardizes filenames and moves files across zones (`inbox` -> `archive`/`processed`/`failed`).
     - **Dynamic Parser Invocation:** Uses `importlib` to route files to specialized parsers.
     - **Passthrough Logic:** Routes raw attachments directly for rules configured with `"passthrough_only": true`.
+    - **Failure Handling:** Moves problematic files to the `failed/` zone.
 
 ### 🧱 Shared Models & Utilities
 - **`models.py`**: Unified Data Contracts (e.g., `ValidationResult`).
 - **`database.py`**: Shared logic for internal databases.
 - **`env_setup.py`**: Centralized environment variable loader.
-- **`notifications.py`**: Microsoft Teams Adaptive Card logic for alerting.
+- **`notifications.py`**: Microsoft Teams Adaptive Card logic for alerting. Features a `disable_notifications` toggle for silent runs.
 
 ---
 
@@ -37,4 +38,5 @@ This directory contains the application logic, decoupled from the orchestration 
 1. **Stateless Logic:** The system relies on Graph tags and a **30-day dynamic rolling window**, ensuring it remains stateless locally.
 2. **Robust Retrieval:** Combines Graph KQL (fuzzy) with secondary Python-side domain validation to maximize reliability.
 3. **Data Integrity:** Employs `f.flush()` and `os.fsync()` before SFTP uploads to prevent 0-byte file delivery.
-4. **Resilient Tagging:** Exchange server conflicts are mitigated with automatic retries for HTTP 409/412 responses.
+4. **Resilient Tagging:** Exchange server conflicts are mitigated with automatic retries for HTTP 409/412 responses during tagging and untagging.
+5. **Silent Mode:** Support for `disable_notifications` allows for high-volume backfills or testing without flooding Teams channels.

@@ -23,7 +23,10 @@ The final extraction output. All files in this directory are subsequently upload
 Raw files are moved here after successful extraction for long-term retention. 
 
 ### ⚠️ 4. Failed (Quarantine)
-Files that fail validation or trigger a `ValueError` are moved here for manual investigation.
+Files that fail validation, trigger a `ValueError` (mapping/lookup errors), or cause system exceptions are moved here for manual investigation.
+
+### 🔍 5. Lookups
+Contains local CSV lookup tables used by parsers (e.g., for mapping vendor-specific category codes to internal IDs).
 
 ---
 
@@ -31,7 +34,7 @@ Files that fail validation or trigger a `ValueError` are moved here for manual i
 
 **This directory is transient and can be safely purged.**
 
-Email processing state is managed directly on the Microsoft Exchange server using the **`sales_report_extracted`** category tag. The pipeline is entirely **stateless locally**, operating on a **30-day dynamic rolling window**. This ensures that even if this `data/` directory is wiped, the pipeline will not process the same email twice.
+Email processing state is managed directly on the Microsoft Exchange server using the **`sales_report_extracted`** and **`sales_report_failed`** category tags. The pipeline is entirely **stateless locally**, operating on a **30-day dynamic rolling window**. This ensures that even if this `data/` directory is wiped, the pipeline will not process the same email twice unless the tags are manually or programmatically reset.
 
 ---
 
