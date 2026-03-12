@@ -7,7 +7,7 @@ To help our operations and accounting teams focus on what matters most, we have 
 ### 📬 How the "Assistant" Works in 5 Simple Steps
 
 1.  **Continuous Monitoring:** Every 15 minutes, the Assistant wakes up and checks our shared "Figures" email inbox. It scans a **dynamic 30-day window** to ensure no email is ever missed, regardless of when it was received.
-2.  **Smart Filtering:** The Assistant looks for specific emails from vendors like **Ticketek** or **Malvern Theatres**. It is smart enough to ignore anything it has already processed using a "Done" stamp, ensuring we never have duplicate data in our systems.
+2.  **Smart Filtering:** The Assistant looks for specific emails from vendors like **Ticketek** or **Malvern Theatres**. It is smart enough to ignore anything it has already processed using a "Done" stamp, or anything it previously failed to process with a "Review Required" stamp, ensuring we never have duplicate or broken data in our systems.
 3.  **Opening the Mail:** When it finds a new sales report, it "opens the envelope" by downloading the attachment (like a PDF or Excel spreadsheet).
 4.  **Sorting & Translating:** Depending on who sent the email, the Assistant does one of two things:
     *   **Translation (Extraction):** It reads the complex report, pulls out only the exact sales numbers we need, and creates a clean, standardized spreadsheet.
@@ -30,7 +30,13 @@ If you were to see this on a PowerPoint slide, here is the journey of a single s
 *   **Step 4: THE DELIVERY** 🚚
     *   The file is securely uploaded to our central Sales Database.
 *   **Step 5: THE CONFIRMATION** ✅
-    *   The original email is tagged as "Extracted." If anything goes wrong, the Assistant sends a message to the team on Microsoft Teams immediately.
+    *   The original email is tagged as "Extracted." If a mapping error or system failure occurs, it is tagged as "Failed" and the Assistant sends a message to the team on Microsoft Teams immediately.
+
+---
+
+### 🛠️ Advanced Features for Admins
+*   **Bulk Retry:** If mapping lookups were missing, the team can "reset" failed reports with a single click in the Prefect UI, allowing the Assistant to try again.
+*   **Silent Mode:** For large historical backfills, the Assistant can be set to "Silent Mode" to avoid flooding Teams with notifications.
 
 ---
 
