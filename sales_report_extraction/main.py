@@ -135,8 +135,35 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
         # Actionable Teams Alert
         if isinstance(e, ValueError):
             error_details = str(e)
-            is_mapping = "lookup" in error_details.lower() or "mapping" in error_details.lower() or "code" in error_details.lower()
             
+            # 🚀 1. Detect if it's a mapping error (checks for "lookup", "mapping", "code", or "unmapped")
+            is_mapping = any(keyword in error_details.lower() for keyword in ["lookup", "mapping", "code", "unmapped"])
+            
+            # 🚀 2. LOG TO DATAOPS DATABASE
+            if is_mapping:
+                try:
+                    from src.error_db_client import log_lookup_failure
+                    import re
+                    
+                    # Extract the missing code cleanly from the error string (e.g., Unmapped codes found {'VIP-PKG'})
+                    match = re.search(r"\{([^}]+)\}", error_details)
+                    if match:
+                        missing_code = match.group(1).replace("'", "").strip()
+                    else:
+                        missing_code = error_details[:60] # Fallback if format is weird
+                    
+                    log_lookup_failure(
+                        show_name=rule['metadata'].get('show_name', 'Unknown'),
+                        venue_name=rule['metadata'].get('venue_name', 'Unknown'),
+                        show_id=str(rule['metadata'].get('show_id', 'Unknown')),
+                        venue_id=str(rule['metadata'].get('venue_id', 'Unknown')),
+                        missing_code=missing_code,
+                        msg_id=msg_id
+                    )
+                    logger.info(f"💾 Logged mapping error to DataOps DB: {missing_code}")
+                except Exception as db_err:
+                    logger.error(f"⚠️ Failed to write to DataOps DB: {db_err}")
+
             alert_title = "⚠️ **Action Required: Data Mapping Failed**" if is_mapping else "❌ **Action Required: File Parsing Failed**"
             alert_body = "Please update the local lookup CSV on the server." if is_mapping else "The extraction script rejected this file's formatting."
 
@@ -147,7 +174,7 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
                 "Error Details": error_details
             }
             
-            if not disable_notifications:  # 🚀 NEW: Silent toggle check
+            if not disable_notifications:
                 send_teams_notification(
                     message=f"{alert_title}\n\n{alert_body}", 
                     logger=logger,
