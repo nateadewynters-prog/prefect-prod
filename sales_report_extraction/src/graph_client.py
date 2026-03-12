@@ -114,3 +114,24 @@ class GraphClient:
             resp.raise_for_status()
             
         return False
+
+    def untag_email(self, message_id: str, tag_to_remove: str):
+            """Removes a specific category/tag from an email."""
+            # 1. Fetch current categories
+            url = f"https://graph.microsoft.com/v1.0/users/{self.target_user}/messages/{message_id}?$select=categories"
+            headers = {"Authorization": f"Bearer {self._get_token()}"}
+            
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            current_categories = response.json().get('categories', [])
+            
+            # 2. Remove the target tag if it exists
+            if tag_to_remove in current_categories:
+                current_categories.remove(tag_to_remove)
+                
+                # 3. Patch the email with the new list
+                patch_url = f"https://graph.microsoft.com/v1.0/users/{self.target_user}/messages/{message_id}"
+                patch_response = requests.patch(patch_url, headers=headers, json={"categories": current_categories})
+                patch_response.raise_for_status()
+                return True
+            return False

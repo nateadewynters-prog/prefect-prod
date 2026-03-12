@@ -51,10 +51,10 @@ def nederlandaer_devil_wears_prada_cumulative_extraction_pdf(file_path: str) -> 
                         "VAT": parse_currency(row[5]),
                         "Net": parse_currency(row[9]),
                         "Partner Gross": parse_currency(row[11]),
-                        "Performance/Event Code": "CUMULATIVE" # Fallback for mapping
+                        "Performance/Event Code": "CUMULATIVE"
                     }
                     extracted_rows.append(data)
-                    logger.info(f"📊 Found Venue Data: {data['Tickets']} Tickets | £{data['Gross']:,.2f} Gross")
+                    logger.info(f"📊 Found Venue Data: {data['Tickets']} Tickets | {data['Comps']} Comps | £{data['Gross']:,.2f} Gross")
                     break 
 
         if not extracted_rows:
@@ -62,7 +62,6 @@ def nederlandaer_devil_wears_prada_cumulative_extraction_pdf(file_path: str) -> 
             logger.error(f"❌ {error_msg}")
             raise ValueError(error_msg)
 
-        # 4. Cross-verifying against 'Grand Totals' row
         status = "PASSED"
         message = "Devil Wears Prada PDF parsed and math verified successfully."
         
@@ -77,15 +76,18 @@ def nederlandaer_devil_wears_prada_cumulative_extraction_pdf(file_path: str) -> 
             else:
                 logger.info("✅ VERIFICATION PASSED: Venue totals match Grand Totals perfectly.")
         else:
-            # 🚀 THE HARD FAIL: If there is no Grand Total, crash the task immediately.
             error_msg = "Grand Totals row not found. Cannot verify data integrity."
             logger.error(f"❌ VERIFICATION FAILED: {error_msg}")
             raise ValueError(error_msg)
 
-    # --- DYNAMIC VALIDATION RESULT ---
+    except Exception as e:
+        logger.error(f"❌ CRITICAL ERROR: {str(e)}")
+        raise e
+
     metrics = {
         "Extracted Rows": len(extracted_rows),
         "Total Tickets": extracted_rows[0]["Tickets"],
+        "Total Comps": extracted_rows[0]["Comps"],
         "Total Gross": extracted_rows[0]["Gross"]
     }
 

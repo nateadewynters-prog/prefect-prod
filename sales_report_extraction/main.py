@@ -82,7 +82,7 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
     return queued_sales_reports
 
 @task(name="Process Email Attachment")
-def process_email(queued_sales_report):
+def process_email(queued_sales_report, disable_notifications: bool = False):
     logger = get_run_logger()
     email = queued_sales_report['email_data']
     rule = queued_sales_report['rule']
@@ -100,8 +100,8 @@ def process_email(queued_sales_report):
         
         with open(temp_path, 'wb') as f: 
             f.write(content_bytes)
-            f.flush()               # <-- Force write out of Python buffer
-            os.fsync(f.fileno())    # <-- Force write out of OS buffer
+            f.flush()
+            os.fsync(f.fileno())
 
         # 2. Process File
         df, validation_result, csv_path = engine.process_file(temp_path, rule)
@@ -117,11 +117,12 @@ def process_email(queued_sales_report):
         create_markdown_artifact(key=f"val-{msg_id[:15].lower()}", markdown=md_table, description=r_name)
 
         if validation_result.status == "UNVALIDATED":
-            send_teams_notification(
-                message="⚠️ **Manual Review Required**", 
-                logger=logger,
-                facts={"Rule": r_name, "Message": validation_result.message}
-            )
+            if not disable_notifications:  # 🚀 NEW: Silent toggle check
+                send_teams_notification(
+                    message="⚠️ **Manual Review Required**", 
+                    logger=logger,
+                    facts={"Rule": r_name, "Message": validation_result.message}
+                )
 
         # Tag as processed so it doesn't get picked up again
         graph.tag_email(msg_id, "sales_report_extracted")
@@ -134,14 +135,11 @@ def process_email(queued_sales_report):
         # Actionable Teams Alert
         if isinstance(e, ValueError):
             error_details = str(e)
-            
-            # 🚀 NEW: Smart check to see if the error came from mapping.py or a parser
             is_mapping = "lookup" in error_details.lower() or "mapping" in error_details.lower() or "code" in error_details.lower()
             
             alert_title = "⚠️ **Action Required: Data Mapping Failed**" if is_mapping else "❌ **Action Required: File Parsing Failed**"
             alert_body = "Please update the local lookup CSV on the server." if is_mapping else "The extraction script rejected this file's formatting."
 
-            # 1. Build the Data Table (FactSet)
             error_facts = {
                 "Rule": rule['rule_name'],
                 "Show": rule['metadata'].get('show_name', 'Unknown'),
@@ -149,21 +147,20 @@ def process_email(queued_sales_report):
                 "Error Details": error_details
             }
             
-            # 2. Send the message with the dynamic facts
-            send_teams_notification(
-                message=f"{alert_title}\n\n{alert_body}", 
-                logger=logger,
-                facts=error_facts
-            )
+            if not disable_notifications:  # 🚀 NEW: Silent toggle check
+                send_teams_notification(
+                    message=f"{alert_title}\n\n{alert_body}", 
+                    logger=logger,
+                    facts=error_facts
+                )
         else:
-            # Catch-all for other random errors (like network crashes or graph API timeouts)
-            send_teams_notification(
-                message=f"❌ **System Error: Extraction Failed**\n\nAn unexpected Python exception occurred.", 
-                logger=logger,
-                facts={"Rule": r_name, "Error Type": type(e).__name__, "Details": str(e)}
-            )
+            if not disable_notifications:  # 🚀 NEW: Silent toggle check
+                send_teams_notification(
+                    message=f"❌ **System Error: Extraction Failed**\n\nAn unexpected Python exception occurred.", 
+                    logger=logger,
+                    facts={"Rule": r_name, "Error Type": type(e).__name__, "Details": str(e)}
+                )
         
-        # 🚀 THE FIX: Tag it as explicitly failed
         try:
             graph.tag_email(msg_id, "sales_report_failed") 
         except Exception as tag_err:
@@ -171,31 +168,61 @@ def process_email(queued_sales_report):
             
         return False, None, r_name
 
+@task(name="Reset Failed Emails")
+def reset_failed_emails(days_back: int):
+    logger = get_run_logger()
+    start_date_dt = datetime.now(timezone.utc) - timedelta(days=days_back)
+    
+    logger.info(f"♻️ Bulk Retry Enabled: Searching for 'sales_report_failed' emails to reset...")
+    
+    # Search Graph for emails that explicitly contain our failure tag
+    emails = graph.search_emails('"sales_report_failed"')
+    
+    reset_count = 0
+    for email in emails:
+        existing_tags = email.get('categories', [])
+        email_dt = date_parser.parse(email['receivedDateTime']).astimezone(timezone.utc)
+        
+        # If it has the failed tag AND is within our time window, untag it!
+        if "sales_report_failed" in existing_tags and email_dt >= start_date_dt:
+            try:
+                graph.untag_email(email['id'], "sales_report_failed")
+                reset_count += 1
+            except Exception as e:
+                logger.error(f"⚠️ Failed to untag email {email['id']}: {e}")
+                
+    if reset_count > 0:
+        logger.info(f"✅ Successfully wiped the failed tag from {reset_count} emails. They will now be reprocessed.")
+    else:
+        logger.info("ℹ️ No failed emails found to reset.")
+        
+    return reset_count
+
 @flow(name="Sales Extractor Flow", log_prints=True)
-def sales_extractor_flow(days_back: int = 30, target_rule_name: str | None = None):
-    # Pass parameters down to the fetch task
+def sales_extractor_flow(days_back: int = 30, target_rule_name: str | None = None, retry_failed: bool = False, disable_notifications: bool = False):
+    
+    if retry_failed:
+        reset_failed_emails(days_back)
+        
     queued_sales_reports = fetch_and_route_emails(days_back, target_rule_name)
     successful_runs = []
     failed_runs = []
     
-    # 🚀 NEW: Dictionaries to count up successes and failures by Show/Venue
     success_breakdown = {}
     failed_breakdown = {}
     
     for queued_sales_report in queued_sales_reports:
-        success, rec_date, r_name = process_email(queued_sales_report)
+        # 🚀 NEW: Pass the toggle down to the processing task
+        success, rec_date, r_name = process_email(queued_sales_report, disable_notifications)
         
-        # Extract the Show and Venue for our clean display names
         meta = queued_sales_report['rule']['metadata']
         display_name = f"{meta.get('show_name', 'Unknown')} - {meta.get('venue_name', 'Unknown')}"
         
         if success:
             successful_runs.append((r_name, rec_date))
-            # Tally up the successes
             success_breakdown[display_name] = success_breakdown.get(display_name, 0) + 1
         else:
             failed_runs.append(r_name)
-            # Tally up the failures
             failed_breakdown[display_name] = failed_breakdown.get(display_name, 0) + 1
     
     # Flow Completion Summary Alert
@@ -203,26 +230,24 @@ def sales_extractor_flow(days_back: int = 30, target_rule_name: str | None = Non
         logger = get_run_logger()
         logger.info(f"🏁 Flow Summary: {len(successful_runs)} successful, {len(failed_runs)} failed.")
         
-        # 1. Base Facts
         summary_facts = {
             "Total Queued": len(queued_sales_reports),
             "Successful": len(successful_runs),
             "Failed": len(failed_runs)
         }
         
-        # 2. 🚀 Dynamically inject a new row for each successful Venue!
         for name, count in success_breakdown.items():
             summary_facts[f"✅ {name}"] = f"{count} report(s) extracted"
             
-        # 3. 🚀 Dynamically inject a new row for each failed Venue!
         for name, count in failed_breakdown.items():
             summary_facts[f"❌ {name}"] = f"{count} report(s) failed"
 
-        send_teams_notification(
-            message="📊 **Extraction Flow Complete**", 
-            logger=logger,
-            facts=summary_facts
-        )
+        if not disable_notifications:  # 🚀 NEW: Silent toggle check for the final summary
+            send_teams_notification(
+                message="📊 **Extraction Flow Complete**", 
+                logger=logger,
+                facts=summary_facts
+            )
 
 if __name__ == "__main__":
     sales_extractor_flow.serve(
