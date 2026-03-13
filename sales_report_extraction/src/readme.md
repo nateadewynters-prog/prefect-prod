@@ -36,7 +36,7 @@ This directory contains the application logic, decoupled from the orchestration 
 ## 3. Design Principles
 
 1. **Stateless Logic:** The system relies on Graph tags and a **30-day dynamic rolling window**, ensuring it remains stateless locally.
-2. **Robust Retrieval:** Combines Graph KQL (fuzzy) with secondary Python-side domain validation to maximize reliability.
+2. **Robust Retrieval:** Employs a simplified, subject-only keyword search to bypass KQL query limitations, with sender validation handled purely in Python.
 3. **Data Integrity:** Employs `f.flush()` and `os.fsync()` before SFTP uploads to prevent 0-byte file delivery.
 4. **Resilient Tagging:** Exchange server conflicts are mitigated with automatic retries for HTTP 409/412 responses during tagging and untagging.
 5. **Silent Mode:** Support for `disable_notifications` allows for high-volume backfills or testing without flooding Teams channels.

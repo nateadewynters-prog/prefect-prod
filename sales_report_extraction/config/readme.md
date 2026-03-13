@@ -17,7 +17,7 @@ Each object in the `"rules"` array controls one unique data flow:
 
 ### 📡 Match Criteria
 - **`sender_domain`**: The verified source domain of the email.
-- **`subject_keyword`**: String used for simplified KQL filtering in the Graph API.
+- **`subject_keyword`**: String used for simplified, robust subject-only keyword search in the Graph API.
 - **`attachment_type`**: Strict extension enforcement (e.g., `.pdf`, `.xls`).
 
 ### 🏷️ Metadata Mapping (Medallion)
