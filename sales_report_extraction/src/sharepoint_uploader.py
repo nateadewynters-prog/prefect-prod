@@ -41,6 +41,7 @@ class SharePointUploader:
     def upload_file(self, local_file_path, filename, show_name, venue_name, folder_type):
         """
         Uploads to: Root / {Show} / {Venue} / {Raw|Processed} / {filename}
+        Returns the SharePoint Web URL if successful, or False if it failed.
         """
         try:
             logger = get_run_logger()
@@ -51,10 +52,8 @@ class SharePointUploader:
         clean_show = self._sanitize_name(show_name)
         clean_venue = self._sanitize_name(venue_name)
         
-        # 🚀 Construct the exact Medallion folder path
         target_folder = f"{clean_show}/{clean_venue}/{folder_type}"
         
-        # URL encode to handle spaces
         encoded_folder = urllib.parse.quote(target_folder)
         encoded_file = urllib.parse.quote(filename)
 
@@ -76,7 +75,8 @@ class SharePointUploader:
 
             if response.status_code in (200, 201):
                 logger.info(f"✅ SharePoint upload successful! ({folder_type})")
-                return True
+                # 🚀 RETURN THE ACTUAL LINK SO WE CAN USE IT IN TEAMS
+                return response.json().get("webUrl")
             else:
                 logger.error(f"❌ SharePoint upload failed: {response.text}")
                 send_teams_notification(

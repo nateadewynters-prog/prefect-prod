@@ -31,7 +31,6 @@ graph = GraphClient(
     target_user=os.getenv("FIGURES_INBOX_ADDRESS")
 )
 engine = ProcessingEngine(CONFIG['global_settings'], CONFIG_PATH)
-# 🚀 FIX: Removed global sp_uploader from here to prevent the pickling error!
 
 @task(name="Fetch and Route Emails", retries=2)
 def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
@@ -73,10 +72,9 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
 
 @task(name="Process Email Attachment")
 def process_email(queued_sales_report, disable_notifications: bool = False):
-    # 🚀 FIX: Initialize the uploader INSIDE the task so it doesn't get pickled!
     sp_uploader = SharePointUploader()  
-    
     logger = get_run_logger()
+    
     email = queued_sales_report['email_data']
     rule = queued_sales_report['rule']
     r_name = rule['rule_name']
@@ -100,19 +98,20 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
             os.fsync(f.fileno())
 
         # 2. Upload RAW original attachment to SharePoint
-        sp_uploader.upload_file(temp_path, std_name, show_name, venue_name, "Raw")
+        raw_url = sp_uploader.upload_file(temp_path, std_name, show_name, venue_name, "Raw")
 
         # 3. Process File (Convert to CSV)
         df, validation_result, csv_path = engine.process_file(temp_path, rule)
 
-        # 4. Handle Medallion Exports (Only if it's not a passthrough)
+        # 4. Handle Medallion Exports
+        processed_url = None
         if csv_path and os.path.exists(csv_path) and csv_path != temp_path:
             csv_filename = os.path.basename(csv_path)
             
-            # 🚀 FIX: 1st - Safely store in SharePoint Processed Folder
-            sp_uploader.upload_file(csv_path, csv_filename, show_name, venue_name, "Processed")
+            # Send to SharePoint Processed Folder
+            processed_url = sp_uploader.upload_file(csv_path, csv_filename, show_name, venue_name, "Processed")
 
-            # 🚀 FIX: 2nd - Deliver to SFTP Server
+            # Deliver to SFTP Server
             upload_to_sftp(local_file_path=csv_path, filename=csv_filename)
 
         # 5. Create Artifacts
@@ -120,20 +119,27 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
         for k, v in validation_result.metrics.items(): 
             md_table += f"| {k} | {v} |\n"
             
-        create_markdown_artifact(
-            key=f"val-{msg_id[:15].lower()}",
-            markdown=md_table,
-            description=r_name
-        )
+        create_markdown_artifact(key=f"val-{msg_id[:15].lower()}", markdown=md_table, description=r_name)
 
+        # 🚀 6. BUILD THE EXECUTIVE SUMMARY TEAMS ALERT
+        email_date_str = date_parser.parse(email['receivedDateTime']).strftime('%Y-%m-%d')
+        raw_link_md = f"[Raw Attachment]({raw_url})" if raw_url else "Raw Upload Failed"
+        
+        if processed_url:
+            link_display = f"📁 {raw_link_md}  |  📊 [Processed CSV]({processed_url})"
+        else:
+            link_display = f"📁 {raw_link_md} *(Passthrough Only)*"
+
+        # Send the "Review Required" alert OR the standard "Success" alert
         if validation_result.status == "UNVALIDATED" and not disable_notifications:
             send_teams_notification(
-                message="⚠️ **Manual Review Required**\n\nThe contractual PDF was successfully uploaded, but it requires manual visual validation as there are no internal calculation footers.", 
-                logger=logger,
-                facts={
-                    "Rule": r_name,
-                    "Message": validation_result.message
-                }
+                message=f"⚠️ **Manual Review Required**\n\n**{show_name} - {venue_name} - {email_date_str}**\n\n{link_display}\n\n*The contractual PDF requires manual visual validation as there are no internal calculation footers.*", 
+                logger=logger
+            )
+        elif not disable_notifications:
+            send_teams_notification(
+                message=f"✅ **Extraction Successful**\n\n**{show_name} - {venue_name} - {email_date_str}**\n\n{link_display}", 
+                logger=logger
             )
 
         graph.tag_email(msg_id, "sales_report_extracted")
