@@ -121,14 +121,19 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
             
         create_markdown_artifact(key=f"val-{msg_id[:15].lower()}", markdown=md_table, description=r_name)
 
-        # 🚀 6. BUILD THE EXECUTIVE SUMMARY TEAMS ALERT
+        # 6. BUILD THE EXECUTIVE SUMMARY TEAMS ALERT
+        is_passthrough = rule.get('processing', {}).get('passthrough_only', False)
+        
         email_date_str = date_parser.parse(email['receivedDateTime']).strftime('%Y-%m-%d')
         raw_link_md = f"[Raw Attachment]({raw_url})" if raw_url else "Raw Upload Failed"
         
-        if processed_url:
+        # 🚀 FIX: Force the passthrough label if the JSON rule demands it
+        if is_passthrough:
+            link_display = f"📁 {raw_link_md} *(Straight to SFTP)*"
+        elif processed_url:
             link_display = f"📁 {raw_link_md}  |  📊 [Processed CSV]({processed_url})"
         else:
-            link_display = f"📁 {raw_link_md} *(Passthrough Only)*"
+            link_display = f"📁 {raw_link_md}"
 
         # Send the "Review Required" alert OR the standard "Success" alert
         if validation_result.status == "UNVALIDATED" and not disable_notifications:
