@@ -37,9 +37,9 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
     logger = get_run_logger()
     queued_sales_reports = []
     start_date_dt = datetime.now(timezone.utc) - timedelta(days=days_back)
-    start_date_str = start_date_dt.strftime('%Y-%m-%d')
     
-    logger.info(f"🔎 Scanning for untagged emails received since {start_date_str}")
+    # NEW: Fingerprint tracker for this specific run
+    seen_fingerprints = set()
 
     for rule in CONFIG['rules']:
         if not rule.get('active'): continue
@@ -48,25 +48,41 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
         crit = rule['match_criteria']
         search_query = f'"{crit["subject_keyword"]}"'
 
-        logger.info(f"--- 📡 Searching for Rule: {rule['rule_name']} ---")
         emails = graph.search_emails(search_query)
         skipped = 0
 
         for email in emails:
             email_dt = date_parser.parse(email['receivedDateTime']).astimezone(timezone.utc)
             existing_tags = email.get('categories', [])
+            fingerprint = email.get('internetMessageId')
             
-            if email_dt < start_date_dt or "sales_report_extracted" in existing_tags or "sales_report_failed" in existing_tags or not email.get('hasAttachments'):
+            # 1. Skip if already processed or too old
+            if email_dt < start_date_dt or "sales_report_extracted" in existing_tags or "sales_report_failed" in existing_tags or "sales_report_duplicate" in existing_tags or not email.get('hasAttachments'):
                 skipped += 1
                 continue
 
+            # 2. Verify Sender Domain
             actual_sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
             if crit['sender_domain'].lower() in actual_sender:
+                
+                # 🚀 3. DUPLICATE CHECK
+                if fingerprint and fingerprint in seen_fingerprints:
+                    logger.info(f"👯 Twin detected: '{email['subject']}'. Tagging as duplicate.")
+                    try:
+                        # Use the specific 'duplicate' tag instead of 'extracted'
+                        graph.tag_email(email['id'], "sales_report_duplicate")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to tag duplicate: {e}")
+                    skipped += 1
+                    continue
+                
+                # Mark this fingerprint as seen so the next twin is caught
+                seen_fingerprints.add(fingerprint)
                 queued_sales_reports.append({"email_data": email, "rule": rule})
             else:
                 skipped += 1
                 
-        logger.info(f"📊 Rule '{rule['rule_name']}': Found {len(emails)} total, Skipped {skipped}, Queued Sales Reports {len(emails) - skipped}")
+        logger.info(f"📊 Rule '{rule['rule_name']}': Found {len(emails)}, Queued {len(emails) - skipped}")
 
     return queued_sales_reports
 

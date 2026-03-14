@@ -39,8 +39,13 @@ class GraphClient:
         """Executes a fuzzy search and handles pagination/rate limiting."""
         logger = get_run_logger()
         endpoint = f"{self.base_url}/users/{self.target_user}/messages"
-        # We include 'categories' in the $select so we can skip already processed emails
-        params = {'$search': search_query, '$select': 'id,subject,from,hasAttachments,receivedDateTime,categories', '$top': top}
+        
+        # 🚀 FIX: Added internetMessageId to the $select string to catch duplicates!
+        params = {
+            '$search': search_query, 
+            '$select': 'id,subject,from,hasAttachments,receivedDateTime,categories,internetMessageId', 
+            '$top': top
+        }
         
         all_emails = []
         headers = self.get_headers()
