@@ -2,13 +2,11 @@ import os
 import requests
 import msal
 import urllib.parse
-from prefect import get_run_logger
-from src.notifications import send_teams_notification
+from src.env_setup import get_universal_logger
 
 class SharePointUploader:
-    """
-    Dedicated client for uploading Medallion files to the 'SALES REPORTING' SharePoint Site.
-    """
+    """Dedicated client for uploading Medallion files to the SharePoint Site."""
+    
     def __init__(self):
         self.tenant_id = os.getenv("AZURE_TENANT_ID")
         self.client_id = os.getenv("AZURE_CLIENT_ID")
@@ -32,26 +30,16 @@ class SharePointUploader:
         raise Exception(f"Failed to authenticate: {result.get('error_description')}")
 
     def _sanitize_name(self, name):
-        """Removes illegal SharePoint characters from Show or Venue names."""
         invalid_chars = ['"', '*', ':', '<', '>', '?', '/', '\\', '|']
         for char in invalid_chars:
             name = name.replace(char, '-')
         return name.strip()
 
     def upload_file(self, local_file_path, filename, show_name, venue_name, folder_type):
-        """
-        Uploads to: Root / {Show} / {Venue} / {Raw|Processed} / {filename}
-        Returns the SharePoint Web URL if successful, or False if it failed.
-        """
-        try:
-            logger = get_run_logger()
-        except Exception:
-            import logging
-            logger = logging.getLogger(__name__)
+        logger = get_universal_logger(__name__)
 
         clean_show = self._sanitize_name(show_name)
         clean_venue = self._sanitize_name(venue_name)
-        
         target_folder = f"{clean_show}/{clean_venue}/{folder_type}"
         
         encoded_folder = urllib.parse.quote(target_folder)
@@ -65,7 +53,6 @@ class SharePointUploader:
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/octet-stream"
             }
-
             url = f"{self.base_url}/sites/{self.site_id}/drive/root:/{encoded_folder}/{encoded_file}:/content"
 
             with open(local_file_path, 'rb') as f:
@@ -75,17 +62,13 @@ class SharePointUploader:
 
             if response.status_code in (200, 201):
                 logger.info(f"✅ SharePoint upload successful! ({folder_type})")
-                # 🚀 RETURN THE ACTUAL LINK SO WE CAN USE IT IN TEAMS
                 return response.json().get("webUrl")
             else:
-                logger.error(f"❌ SharePoint upload failed: {response.text}")
-                send_teams_notification(
-                    message="⚠️ **SharePoint Upload Failed**", 
-                    logger=logger,
-                    facts={"File": filename, "Folder": target_folder, "Error": str(response.status_code)}
-                )
-                return False
+                error_msg = f"SharePoint upload failed with status {response.status_code}: {response.text}"
+                logger.error(f"❌ {error_msg}")
+                # 🚀 FIX: Raise an error so main.py knows it actually failed!
+                raise ValueError(error_msg)
 
         except Exception as e:
             logger.error(f"❌ SharePoint connection error: {e}")
-            return False
+            raise

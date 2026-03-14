@@ -38,10 +38,11 @@ The engine uses the `timezone` field to perfectly align the UTC email receipt ti
 
 ---
 
-## 3. Dynamic Backfilling & Retries
+## 3. Dynamic Backfilling & Idempotency
 
-The orchestrator leverages server-side tags for state management:
+The orchestrator leverages server-side tags and client-side fingerprinting for state management:
 1. **Rolling Window:** By default, the system scans for untagged emails received within the last **30 days**.
-2. **Stateless Logic:** Successful runs apply the `"sales_report_extracted"` tag.
-3. **Failure Isolation:** Errors apply the `"sales_report_failed"` tag.
-4. **Custom Runs:** Use `days_back`, `target_rule_name`, and `retry_failed` parameters in the Prefect UI for historical corrections.
+2. **Fingerprint Deduplication:** The unique `internetMessageId` is used to detect duplicate emails (twins) within the window. Duplicates are tagged as `"sales_report_duplicate"` and skipped.
+3. **Stateless Logic:** Successful runs apply the `"sales_report_extracted"` tag.
+4. **Failure Isolation:** Errors apply the `"sales_report_failed"` tag.
+5. **Custom Runs:** Use `days_back`, `target_rule_name`, and `retry_failed` parameters in the Prefect UI for historical corrections.

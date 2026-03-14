@@ -14,8 +14,9 @@ This directory contains the application logic, decoupled from the orchestration 
 ## 2. Component Layout
 
 ### 📡 API & External Clients
-- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading, and **category tagging** for state management. Features `tag_email` and `untag_email` methods with HTTP 409/412 retry logic to handle Exchange server conflicts.
-- **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs or raw passthrough files. It logs file size (KB), utilizes centralized environment variables, and includes error alerting for Teams.
+- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading, and **category tagging** for state management. Features `tag_email` and `untag_email` methods with HTTP 409/412 retry logic to handle Exchange server conflicts. Now includes `internetMessageId` extraction for fingerprint-based deduplication.
+- **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs or raw passthrough files. It logs file size (KB) and utilizes centralized environment variables. Notifications have been removed; exceptions now bubble up to the orchestrator.
+- **`sharepoint_uploader.py`**: Handles file uploads to the Medallion SharePoint site. Notifications have been removed; exceptions bubble up to the orchestrator.
 
 ### 🧠 Core Engine
 - **`file_processor.py`**: The `ProcessingEngine` class. Manages the full file lifecycle:
@@ -23,13 +24,13 @@ This directory contains the application logic, decoupled from the orchestration 
     - **Medallion I/O:** Standardizes filenames and moves files across zones (`inbox` -> `archive`/`processed`/`failed`).
     - **Dynamic Parser Invocation:** Uses `importlib` to route files to specialized parsers.
     - **Passthrough Logic:** Routes raw attachments directly for rules configured with `"passthrough_only": true`.
-    - **Failure Handling:** Moves problematic files to the `failed/` zone.
+    - **Failure Handling:** Moves problematic files to the `failed/` zone. Notifications have been removed; exceptions bubble up.
 
 ### 🧱 Shared Models & Utilities
 - **`models.py`**: Unified Data Contracts (e.g., `ValidationResult`).
 - **`database.py`**: Shared logic for internal databases.
-- **`env_setup.py`**: Centralized environment variable loader.
-- **`notifications.py`**: Microsoft Teams Adaptive Card logic for alerting. Features a `disable_notifications` toggle for silent runs.
+- **`env_setup.py`**: Centralized environment variable loader. Includes **`get_universal_logger`** with an automatic fallback to standard Python logging for local testing.
+- **`notifications.py`**: Microsoft Teams Adaptive Card logic for alerting. Features **Dual-Channel Routing** (Ops vs. Dev) via `TEAMS_WEBHOOK_OPS` and `TEAMS_WEBHOOK_DEV` environment variables. Includes a `disable_notifications` toggle for silent runs.
 
 ---
 

@@ -2,24 +2,32 @@ import os
 import logging
 from dotenv import load_dotenv
 from pathlib import Path
-from src.notifications import send_teams_notification 
 
-ENV_PATH = Path("/opt/prefect/prod/.env") 
+ENV_PATH = Path("/opt/prefect/prod/.env")
 
 def setup_environment():
     """Loads the centralized .env file from the Prefect root."""
-    if ENV_PATH.exists(): 
-        load_dotenv(ENV_PATH) 
-        print(f"✅ Environment variables loaded from {ENV_PATH}") 
+    if ENV_PATH.exists():
+        load_dotenv(ENV_PATH)
+        print(f"✅ Environment variables loaded from {ENV_PATH}")
     else:
-        error_msg = f"⚠️ CRITICAL: .env not found at {ENV_PATH}"
-        print(error_msg) 
-        
-        # 🚀 FIX: Create a standard logger so the notification script doesn't crash
-        fallback_logger = logging.getLogger("EnvSetup")
-        
-        send_teams_notification(
-            message="⚠️ **CRITICAL: Configuration Missing**",
-            logger=fallback_logger,
-            facts={"Expected Path": str(ENV_PATH), "Issue": ".env file not found!"}
-        )
+        print(f"⚠️ CRITICAL: .env not found at {ENV_PATH}")
+
+def get_universal_logger(name=__name__):
+    """
+    KISS Best Practice: 
+    Tries to grab the Prefect logger. If it fails (because you are testing locally),
+    it builds a standard Python terminal logger so your script never crashes.
+    """
+    try:
+        from prefect import get_run_logger
+        return get_run_logger()
+    except Exception:
+        logger = logging.getLogger(name)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+        return logger

@@ -33,7 +33,7 @@ return extracted_rows, validation_result
 
 ### Contract Status Levels
 - `PASSED`: Data is verified and ready for delivery.
-- `FAILED`: Hard schema mismatch (triggers ❌ Teams alert).
-- `UNVALIDATED`: Extraction completed but couldn't be mathematically verified (triggers ⚠️ Teams alert).
+- `FAILED`: Hard schema mismatch (triggers ❌ Teams alert via the orchestrator).
+- `UNVALIDATED`: Extraction completed but couldn't be mathematically verified (triggers ⚠️ Teams alert via the orchestrator).
 
 This contract ensures that even if a parser succeeds in extracting data, it can proactively flag data quality issues before they reach the Sales Database.

@@ -35,18 +35,21 @@ The system is **Stateless Locally**: It tracks processed state directly on the E
 
 ## 3. Configuration & State Management
 
-### 🏷️ Server-Side Idempotency (Graph API Tagging)
-This system uses the Microsoft Graph API to manage state directly on the email server:
-1. **Filtering:** The fetch task specifically filters for emails *without* the `"sales_report_extracted"` or `"sales_report_failed"` category tags.
-2. **Tagging:** Once an email is processed, the orchestrator applies the `"sales_report_extracted"` tag.
-3. **Failure Handling:** If a `ValueError` (mapping issue) or system error occurs, the `"sales_report_failed"` tag is applied to prevent zombie retries and trigger a Teams alert.
-4. **Robustness:** Includes HTTP 409/412 retry logic to handle Exchange server concurrency conflicts.
+### 🏷️ Server-Side Idempotency (Graph API & Fingerprinting)
+This system uses a dual-layer approach to ensure no report is processed twice:
+1. **Category Filtering:** The fetch task filters for emails *without* `"sales_report_extracted"`, `"sales_report_failed"`, or `"sales_report_duplicate"` tags.
+2. **`internetMessageId` Deduplication:** The orchestrator tracks the unique `internetMessageId` (fingerprint) of every email in the 30-day window. If a duplicate is detected, it is immediately tagged as `"sales_report_duplicate"` and skipped.
+3. **Tagging:** Once processed, the `"sales_report_extracted"` tag is applied.
+4. **Robustness:** Includes HTTP 409/412 retry logic to handle Exchange server concurrency conflicts during tagging operations.
 
 ### 🌐 Deterministic Timezone Logic
 To ensure 100% accurate reporting dates, the engine uses venue-specific timezones defined in `config/show_reporting_rules.json`:
 1. It converts the UTC timestamp from the Graph API to the venue's **local timezone** (e.g., `Asia/Singapore`).
 2. It subtracts **1 day** (since reports reflect the previous day's sales).
 3. This ensures the filename and database entry perfectly align with the local business day regardless of when the email was received.
+
+### 🛠️ Universal Logging (Local Testing)
+The system uses `get_universal_logger` (from `src.env_setup`) to ensure scripts run seamlessly in both production and local environments. It automatically detects the Prefect context and falls back to a standard Python `StreamHandler` if running outside of a flow, preventing "MissingContext" crashes.
 
 ### 📈 Parameterized Execution (Prefect UI)
 - **`days_back`**: (Default: 30) Controls the dynamic rolling window for untagged email scans.
@@ -60,15 +63,19 @@ To ensure 100% accurate reporting dates, the engine uses venue-specific timezone
 
 ### 🎯 Granular Task Routing
 The pipeline is decomposed into resilient Prefect `@tasks`:
-- **`fetch_and_route_emails`**: Handles search and routing with 2 retries for transient API blips.
-- **`process_email`**: Encapsulates the full lifecycle of a single file, ensuring that a failure in one vendor report does not crash the entire flow.
-- **`reset_failed_emails`**: Manages the bulk removal of failure tags for reprocessing.
+- **`fetch_and_route_emails`**: Handles search, routing, and fingerprint-based deduplication with 2 retries.
+- **`process_email`**: Encapsulates the full lifecycle of a single file. Utility failures (SFTP, SharePoint) now bubble up to this task, which manages the final tagging and alerting.
+
+### 📤 Dual-Channel Notifications
+Alerting is routed based on the target audience using dedicated `.env` variables:
+- **Ops Channel (`TEAMS_WEBHOOK_OPS`)**: Receives high-level **Batch Summaries** once the flow completes. To keep the channel clean, these summaries are truncated to show the first 10 successful/review items.
+- **Dev Channel (`TEAMS_WEBHOOK_DEV`)**: Receives granular, technical **Error Alerts** (e.g., mapping failures, system exceptions) in real-time.
 
 ### 📤 SFTP Upload Mechanism
-Processed files (CSVs or raw passthroughs) are delivered to the Sales Database via a dedicated SFTP client:
+Processed files are delivered to the Sales Database via a dedicated SFTP client:
 - **Streaming Writes:** Uses `f.flush()` and `os.fsync()` to ensure data integrity before upload.
-- **Paramiko Integration:** Authenticates via centralized environment variables (`SFTP_SALES_DB_HOST`, etc.) and uploads to the server root.
-- **Observability:** Logs exact file sizes (KB) and triggers Teams alerts on delivery failures.
+- **Centralized Errors:** Utility-level Teams notifications have been removed; exceptions now bubble up to the orchestrator for consistent error handling.
+- **Observability:** Logs exact file sizes (KB) and triggers technical alerts in the Dev channel upon failure.
 
 ---
 

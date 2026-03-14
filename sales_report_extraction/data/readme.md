@@ -34,7 +34,7 @@ Contains local CSV lookup tables used by parsers (e.g., for mapping vendor-speci
 
 **This directory is transient and can be safely purged.**
 
-Email processing state is managed directly on the Microsoft Exchange server using the **`sales_report_extracted`** and **`sales_report_failed`** category tags. The pipeline is entirely **stateless locally**, operating on a **30-day dynamic rolling window**. This ensures that even if this `data/` directory is wiped, the pipeline will not process the same email twice unless the tags are manually or programmatically reset.
+Email processing state is managed directly on the Microsoft Exchange server using the **`sales_report_extracted`**, **`sales_report_failed`**, and **`sales_report_duplicate`** category tags. Fingerprint-based deduplication (`internetMessageId`) is also handled by the orchestrator. The pipeline is entirely **stateless locally**, operating on a **30-day dynamic rolling window**. This ensures that even if this `data/` directory is wiped, the pipeline will not process the same email twice unless the tags are manually or programmatically reset.
 
 ---
 

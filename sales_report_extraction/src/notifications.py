@@ -1,26 +1,30 @@
 import os
 import requests
-from prefect import get_run_logger
-from prefect.runtime import flow_run  # 🚀 ADD THIS
+from prefect.runtime import flow_run
 
-def send_teams_notification(message: str, logger, facts: dict = None, button_title: str = None, button_url: str = None):
+def send_teams_notification(message: str, logger, facts: dict = None, button_title: str = None, button_url: str = None, channel: str = "dev"):
     """
     Sends a beautifully formatted Adaptive Card to Microsoft Teams.
-    Supports dynamic FactSets (tables) and custom action buttons.
+    Routes to 'ops' or 'dev' channels based on the target audience.
     """
-    webhook_url = os.getenv("TEAMS_WEBHOOK_URL")
+    # 1. 🚀 NEW: Dual-Channel Routing
+    if channel == "ops":
+        webhook_url = os.getenv("TEAMS_WEBHOOK_OPS")
+    else:
+        webhook_url = os.getenv("TEAMS_WEBHOOK_DEV")
+        
     if not webhook_url:
-        logger.warning("⚠️ TEAMS_WEBHOOK_URL not set. Skipping notification.")
+        logger.warning(f"⚠️ Webhook URL for channel '{channel}' not set in .env. Skipping notification.")
         return
 
-    # 1. Determine the color/theme based on the message content
+    # 2. Determine the color/theme based on the message content
     color = "Default" 
     if any(x in message for x in ["Failed", "❌", "⚠️", "Error", "Action Required"]):
         color = "Attention" # Red
     elif any(x in message for x in ["Complete", "Successful", "🏁", "✅"]):
         color = "Good" # Green
 
-    # 2. Build the Core Text Block
+    # 3. Build the Core Text Block
     body_elements = [
         {
             "type": "TextBlock",
@@ -31,7 +35,7 @@ def send_teams_notification(message: str, logger, facts: dict = None, button_tit
         }
     ]
 
-    # 3. 🚀 THE NEW FEATURE: Inject the FactSet if facts are provided
+    # 4. Inject the FactSet if facts are provided
     if facts:
         fact_list = [{"title": str(key), "value": str(value)} for key, value in facts.items()]
         body_elements.append({
@@ -39,7 +43,7 @@ def send_teams_notification(message: str, logger, facts: dict = None, button_tit
             "facts": fact_list
         })
 
-    # 4. 🚀 THE NEW FEATURE: Dynamic Action Buttons
+    # 5. Dynamic Action Buttons
     ui_url = os.getenv("PREFECT_UI_URL", "http://10.1.50.127:4200")
     
     try:
@@ -64,7 +68,7 @@ def send_teams_notification(message: str, logger, facts: dict = None, button_tit
             "url": button_url
         })
 
-    # 5. Assemble the final Adaptive Card JSON payload
+    # 6. Assemble the final Adaptive Card JSON payload
     payload = {
         "type": "message",
         "attachments": [
@@ -81,10 +85,10 @@ def send_teams_notification(message: str, logger, facts: dict = None, button_tit
         ]
     }
 
-    # 6. Send it to Teams
+    # 7. Send it to Teams
     try:
         resp = requests.post(webhook_url, json=payload, headers={"Content-Type": "application/json"})
         resp.raise_for_status()
-        logger.debug("📢 Teams notification sent successfully.")
+        logger.debug(f"📣 Teams notification sent successfully to '{channel}' channel.")
     except Exception as e:
-        logger.error(f"❌ Failed to send Teams notification: {e}")
+        logger.error(f"❌ Failed to send Teams notification to '{channel}': {e}")
