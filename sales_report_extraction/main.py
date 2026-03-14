@@ -11,7 +11,7 @@ from src.notifications import send_teams_notification
 from src.graph_client import GraphClient
 from src.file_processor import ProcessingEngine
 from src.sftp_client import upload_to_sftp
-from src.sharepoint_uploader import SharePointUploader  # 🚀 NEW: Import the uploader
+from src.sharepoint_uploader import SharePointUploader
 
 # 1. Setup Environment
 setup_environment()
@@ -31,7 +31,7 @@ graph = GraphClient(
     target_user=os.getenv("FIGURES_INBOX_ADDRESS")
 )
 engine = ProcessingEngine(CONFIG['global_settings'], CONFIG_PATH)
-sp_uploader = SharePointUploader()  # 🚀 NEW: Instantiate the uploader
+# 🚀 FIX: Removed global sp_uploader from here to prevent the pickling error!
 
 @task(name="Fetch and Route Emails", retries=2)
 def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
@@ -57,7 +57,6 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
             email_dt = date_parser.parse(email['receivedDateTime']).astimezone(timezone.utc)
             existing_tags = email.get('categories', [])
             
-            # Skip if older than days_back OR if it already has our success/failure tags OR no attachments
             if email_dt < start_date_dt or "sales_report_extracted" in existing_tags or "sales_report_failed" in existing_tags or not email.get('hasAttachments'):
                 skipped += 1
                 continue
@@ -74,6 +73,9 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
 
 @task(name="Process Email Attachment")
 def process_email(queued_sales_report, disable_notifications: bool = False):
+    # 🚀 FIX: Initialize the uploader INSIDE the task so it doesn't get pickled!
+    sp_uploader = SharePointUploader()  
+    
     logger = get_run_logger()
     email = queued_sales_report['email_data']
     rule = queued_sales_report['rule']
@@ -97,21 +99,21 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
             f.flush()
             os.fsync(f.fileno())
 
-        # 🚀 2. Upload RAW original attachment to SharePoint
+        # 2. Upload RAW original attachment to SharePoint
         sp_uploader.upload_file(temp_path, std_name, show_name, venue_name, "Raw")
 
-        # 3. Process File (Convert to CSV/Handle Passthrough)
+        # 3. Process File (Convert to CSV)
         df, validation_result, csv_path = engine.process_file(temp_path, rule)
 
         # 4. Handle Medallion Exports (Only if it's not a passthrough)
         if csv_path and os.path.exists(csv_path) and csv_path != temp_path:
             csv_filename = os.path.basename(csv_path)
             
-            # Send to SFTP
-            upload_to_sftp(local_file_path=csv_path, filename=csv_filename)
-            
-            # 🚀 Send to SharePoint Processed Folder
+            # 🚀 FIX: 1st - Safely store in SharePoint Processed Folder
             sp_uploader.upload_file(csv_path, csv_filename, show_name, venue_name, "Processed")
+
+            # 🚀 FIX: 2nd - Deliver to SFTP Server
+            upload_to_sftp(local_file_path=csv_path, filename=csv_filename)
 
         # 5. Create Artifacts
         md_table = f"## Validation Result: {validation_result.status}\n\n**Message:** {validation_result.message}\n\n| Metric | Value |\n|---|---|\n"
@@ -124,7 +126,6 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
             description=r_name
         )
 
-        # 6. Manual Review Alerting
         if validation_result.status == "UNVALIDATED" and not disable_notifications:
             send_teams_notification(
                 message="⚠️ **Manual Review Required**\n\nThe contractual PDF was successfully uploaded, but it requires manual visual validation as there are no internal calculation footers.", 
@@ -135,7 +136,6 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
                 }
             )
 
-        # Tag as successful in Outlook
         graph.tag_email(msg_id, "sales_report_extracted")
         return True, email['receivedDateTime'], r_name
 
@@ -143,7 +143,6 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
         logger.error(f"❌ Failed: {e}")
         engine.handle_failure(temp_path if 'temp_path' in locals() else "")
         
-        # Determine if it's a mapping error
         if isinstance(e, ValueError):
             error_details = str(e)
             is_mapping = any(keyword in error_details.lower() for keyword in ["lookup", "mapping", "code", "unmapped"])
@@ -152,7 +151,6 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
                 try:
                     from src.error_db_client import log_lookup_failure
                     import re
-                    # Try to extract just the unmapped code
                     match = re.search(r"\{([^}]+)\}", error_details)
                     missing_code = match.group(1).replace("'", "").strip() if match else error_details[:60]
                     
@@ -194,7 +192,6 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
                     }
                 )
         
-        # Tag as failed in Outlook
         try:
             graph.tag_email(msg_id, "sales_report_failed") 
         except Exception:
@@ -204,7 +201,6 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
 
 @task(name="Reset Failed Emails")
 def reset_failed_emails(days_back: int):
-    """Untags emails marked as 'sales_report_failed' so they get picked up in the next scan."""
     logger = get_run_logger()
     start_date_dt = datetime.now(timezone.utc) - timedelta(days=days_back)
     emails = graph.search_emails('"sales_report_failed"')
@@ -252,7 +248,6 @@ def sales_extractor_flow(days_back: int = 30, target_rule_name: str | None = Non
             failed_runs.append(r_name)
             failed_breakdown[display_name] = failed_breakdown.get(display_name, 0) + 1
     
-    # Flow Completion Summary Alert
     if queued_sales_reports:
         logger = get_run_logger()
         logger.info(f"🏁 Flow Summary: {len(successful_runs)} successful, {len(failed_runs)} failed.")
