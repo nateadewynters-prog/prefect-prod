@@ -11,6 +11,7 @@ from src.notifications import send_teams_notification
 from src.graph_client import GraphClient
 from src.file_processor import ProcessingEngine
 from src.sftp_client import upload_to_sftp
+from src.sharepoint_uploader import SharePointUploader  # 🚀 NEW: Import the uploader
 
 # 1. Setup Environment
 setup_environment()
@@ -30,13 +31,12 @@ graph = GraphClient(
     target_user=os.getenv("FIGURES_INBOX_ADDRESS")
 )
 engine = ProcessingEngine(CONFIG['global_settings'], CONFIG_PATH)
+sp_uploader = SharePointUploader()  # 🚀 NEW: Instantiate the uploader
 
 @task(name="Fetch and Route Emails", retries=2)
 def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
     logger = get_run_logger()
     queued_sales_reports = []
-
-    # 🚀 Calculate the dynamic start date based on the parameter
     start_date_dt = datetime.now(timezone.utc) - timedelta(days=days_back)
     start_date_str = start_date_dt.strftime('%Y-%m-%d')
     
@@ -44,34 +44,25 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
 
     for rule in CONFIG['rules']:
         if not rule.get('active'): continue
-        
-        # 🚀 BACKFILL LOGIC: If a specific target rule is provided, skip all others
-        if target_rule and rule['rule_name'] != target_rule:
-            continue
+        if target_rule and rule['rule_name'] != target_rule: continue
 
         crit = rule['match_criteria']
-        
-        # Append KQL received date filter to the Graph API search query
         search_query = f'"{crit["subject_keyword"]}"'
 
         logger.info(f"--- 📡 Searching for Rule: {rule['rule_name']} ---")
         emails = graph.search_emails(search_query)
-        
         skipped = 0
 
         for email in emails:
             email_dt = date_parser.parse(email['receivedDateTime']).astimezone(timezone.utc)
-
-            # Define existing_tags before using it
             existing_tags = email.get('categories', [])
             
+            # Skip if older than days_back OR if it already has our success/failure tags OR no attachments
             if email_dt < start_date_dt or "sales_report_extracted" in existing_tags or "sales_report_failed" in existing_tags or not email.get('hasAttachments'):
                 skipped += 1
                 continue
 
-            # This line must align with the 'if' block above
             actual_sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
-            
             if crit['sender_domain'].lower() in actual_sender:
                 queued_sales_reports.append({"email_data": email, "rule": rule})
             else:
@@ -89,6 +80,9 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
     r_name = rule['rule_name']
     msg_id = email['id']
     expected_ext = rule['match_criteria']['attachment_type'].lower()
+    
+    show_name = rule['metadata'].get('show_name', 'Unknown')
+    venue_name = rule['metadata'].get('venue_name', 'Unknown')
 
     logger.info(f"🚀 Processing Rule: {r_name} | Subject: {email['subject']}")
     
@@ -103,28 +97,45 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
             f.flush()
             os.fsync(f.fileno())
 
-        # 2. Process File
+        # 🚀 2. Upload RAW original attachment to SharePoint
+        sp_uploader.upload_file(temp_path, std_name, show_name, venue_name, "Raw")
+
+        # 3. Process File (Convert to CSV/Handle Passthrough)
         df, validation_result, csv_path = engine.process_file(temp_path, rule)
 
-        # 2.5 Upload to SFTP if processing was successful
-        upload_to_sftp(local_file_path=csv_path, filename=os.path.basename(csv_path))
+        # 4. Handle Medallion Exports (Only if it's not a passthrough)
+        if csv_path and os.path.exists(csv_path) and csv_path != temp_path:
+            csv_filename = os.path.basename(csv_path)
+            
+            # Send to SFTP
+            upload_to_sftp(local_file_path=csv_path, filename=csv_filename)
+            
+            # 🚀 Send to SharePoint Processed Folder
+            sp_uploader.upload_file(csv_path, csv_filename, show_name, venue_name, "Processed")
 
-        # 3. Create Artifacts & Alerts
+        # 5. Create Artifacts
         md_table = f"## Validation Result: {validation_result.status}\n\n**Message:** {validation_result.message}\n\n| Metric | Value |\n|---|---|\n"
         for k, v in validation_result.metrics.items(): 
             md_table += f"| {k} | {v} |\n"
             
-        create_markdown_artifact(key=f"val-{msg_id[:15].lower()}", markdown=md_table, description=r_name)
+        create_markdown_artifact(
+            key=f"val-{msg_id[:15].lower()}",
+            markdown=md_table,
+            description=r_name
+        )
 
-        if validation_result.status == "UNVALIDATED":
-            if not disable_notifications:  # 🚀 NEW: Silent toggle check
-                send_teams_notification(
-                    message="⚠️ **Manual Review Required**", 
-                    logger=logger,
-                    facts={"Rule": r_name, "Message": validation_result.message}
-                )
+        # 6. Manual Review Alerting
+        if validation_result.status == "UNVALIDATED" and not disable_notifications:
+            send_teams_notification(
+                message="⚠️ **Manual Review Required**\n\nThe contractual PDF was successfully uploaded, but it requires manual visual validation as there are no internal calculation footers.", 
+                logger=logger,
+                facts={
+                    "Rule": r_name,
+                    "Message": validation_result.message
+                }
+            )
 
-        # Tag as processed so it doesn't get picked up again
+        # Tag as successful in Outlook
         graph.tag_email(msg_id, "sales_report_extracted")
         return True, email['receivedDateTime'], r_name
 
@@ -132,29 +143,22 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
         logger.error(f"❌ Failed: {e}")
         engine.handle_failure(temp_path if 'temp_path' in locals() else "")
         
-        # Actionable Teams Alert
+        # Determine if it's a mapping error
         if isinstance(e, ValueError):
             error_details = str(e)
-            
-            # 🚀 1. Detect if it's a mapping error (checks for "lookup", "mapping", "code", or "unmapped")
             is_mapping = any(keyword in error_details.lower() for keyword in ["lookup", "mapping", "code", "unmapped"])
             
-            # 🚀 2. LOG TO DATAOPS DATABASE
             if is_mapping:
                 try:
                     from src.error_db_client import log_lookup_failure
                     import re
-                    
-                    # Extract the missing code cleanly from the error string (e.g., Unmapped codes found {'VIP-PKG'})
+                    # Try to extract just the unmapped code
                     match = re.search(r"\{([^}]+)\}", error_details)
-                    if match:
-                        missing_code = match.group(1).replace("'", "").strip()
-                    else:
-                        missing_code = error_details[:60] # Fallback if format is weird
+                    missing_code = match.group(1).replace("'", "").strip() if match else error_details[:60]
                     
                     log_lookup_failure(
-                        show_name=rule['metadata'].get('show_name', 'Unknown'),
-                        venue_name=rule['metadata'].get('venue_name', 'Unknown'),
+                        show_name=show_name,
+                        venue_name=venue_name,
                         show_id=str(rule['metadata'].get('show_id', 'Unknown')),
                         venue_id=str(rule['metadata'].get('venue_id', 'Unknown')),
                         missing_code=missing_code,
@@ -165,81 +169,77 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
                     logger.error(f"⚠️ Failed to write to DataOps DB: {db_err}")
 
             alert_title = "⚠️ **Action Required: Data Mapping Failed**" if is_mapping else "❌ **Action Required: File Parsing Failed**"
-            alert_body = "Please update the local lookup CSV on the server." if is_mapping else "The extraction script rejected this file's formatting."
+            alert_body = "Please map the missing code in the DataOps control center." if is_mapping else "The extraction script rejected this file's formatting."
 
-            error_facts = {
-                "Rule": rule['rule_name'],
-                "Show": rule['metadata'].get('show_name', 'Unknown'),
-                "Venue": rule['metadata'].get('venue_name', 'Unknown'),
-                "Error Details": error_details
-            }
-            
             if not disable_notifications:
                 send_teams_notification(
                     message=f"{alert_title}\n\n{alert_body}", 
                     logger=logger,
-                    facts=error_facts
+                    facts={
+                        "Rule": rule['rule_name'],
+                        "Show": show_name,
+                        "Venue": venue_name,
+                        "Error Details": error_details
+                    }
                 )
         else:
-            if not disable_notifications:  # 🚀 NEW: Silent toggle check
+            if not disable_notifications:
                 send_teams_notification(
-                    message=f"❌ **System Error: Extraction Failed**\n\nAn unexpected Python exception occurred.", 
+                    message=f"❌ **System Error: Extraction Failed**\n\nAn unexpected Python exception occurred during processing.", 
                     logger=logger,
-                    facts={"Rule": r_name, "Error Type": type(e).__name__, "Details": str(e)}
+                    facts={
+                        "Rule": r_name,
+                        "Error Type": type(e).__name__,
+                        "Details": str(e)
+                    }
                 )
         
+        # Tag as failed in Outlook
         try:
             graph.tag_email(msg_id, "sales_report_failed") 
-        except Exception as tag_err:
-            logger.error(f"Failed to tag email after failure: {tag_err}")
+        except Exception:
+            pass
             
         return False, None, r_name
 
 @task(name="Reset Failed Emails")
 def reset_failed_emails(days_back: int):
+    """Untags emails marked as 'sales_report_failed' so they get picked up in the next scan."""
     logger = get_run_logger()
     start_date_dt = datetime.now(timezone.utc) - timedelta(days=days_back)
-    
-    logger.info(f"♻️ Bulk Retry Enabled: Searching for 'sales_report_failed' emails to reset...")
-    
-    # Search Graph for emails that explicitly contain our failure tag
     emails = graph.search_emails('"sales_report_failed"')
-    
     reset_count = 0
+    
     for email in emails:
         existing_tags = email.get('categories', [])
         email_dt = date_parser.parse(email['receivedDateTime']).astimezone(timezone.utc)
-        
-        # If it has the failed tag AND is within our time window, untag it!
         if "sales_report_failed" in existing_tags and email_dt >= start_date_dt:
             try:
                 graph.untag_email(email['id'], "sales_report_failed")
                 reset_count += 1
-            except Exception as e:
-                logger.error(f"⚠️ Failed to untag email {email['id']}: {e}")
-                
-    if reset_count > 0:
-        logger.info(f"✅ Successfully wiped the failed tag from {reset_count} emails. They will now be reprocessed.")
-    else:
-        logger.info("ℹ️ No failed emails found to reset.")
-        
+            except Exception:
+                pass
     return reset_count
 
 @flow(name="Sales Extractor Flow", log_prints=True)
 def sales_extractor_flow(days_back: int = 30, target_rule_name: str | None = None, retry_failed: bool = False, disable_notifications: bool = False):
-    
     if retry_failed:
-        reset_failed_emails(days_back)
-        
+        logger = get_run_logger()
+        logger.info("♻️ Bulk Retry Enabled: Searching for 'sales_report_failed' emails to reset...")
+        reset_count = reset_failed_emails(days_back)
+        if reset_count > 0:
+            logger.info(f"✅ Successfully wiped the failed tag from {reset_count} emails. They will now be reprocessed.")
+        else:
+            logger.info("ℹ️ No failed emails found to reset.")
+
     queued_sales_reports = fetch_and_route_emails(days_back, target_rule_name)
+    
     successful_runs = []
     failed_runs = []
-    
     success_breakdown = {}
     failed_breakdown = {}
     
     for queued_sales_report in queued_sales_reports:
-        # 🚀 NEW: Pass the toggle down to the processing task
         success, rec_date, r_name = process_email(queued_sales_report, disable_notifications)
         
         meta = queued_sales_report['rule']['metadata']
@@ -269,7 +269,7 @@ def sales_extractor_flow(days_back: int = 30, target_rule_name: str | None = Non
         for name, count in failed_breakdown.items():
             summary_facts[f"❌ {name}"] = f"{count} report(s) failed"
 
-        if not disable_notifications:  # 🚀 NEW: Silent toggle check for the final summary
+        if not disable_notifications:
             send_teams_notification(
                 message="📊 **Extraction Flow Complete**", 
                 logger=logger,
@@ -281,6 +281,5 @@ if __name__ == "__main__":
         name="sales-extractor-flow",
         cron="*/15 * * * *",
         tags=["medallion-raw", "production"],
-        description="Automated email extraction. By default, scans a rolling 30-day window. Use 'Custom Run' to perform historical backfill",
-        limit=1
+        description="Automated email extraction. Includes dynamic rule routing, lookup handling, SharePoint uploads, and SFTP delivery."
     )
