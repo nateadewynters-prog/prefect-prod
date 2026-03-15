@@ -95,6 +95,26 @@
       }
     },
     {
+      "rule_name": "BEAUTY_&_THE_BEAST_HULL",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "noreply@reports.spektrix.email",
+        "subject_keyword": "Hull New Theatre - Beauty & The Beast",
+        "attachment_type": ".xls"
+      },
+      "metadata": {
+        "show_name": "Beauty & The Beast",
+        "venue_name": "Hull",
+        "show_id": "298",
+        "venue_id": "42",
+        "document_id": "62",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
       "rule_name": "NEDERLANDER_DEVIL_WEARS_PRADA_DOMINION_CUMULATIVE_PDF",
       "active": true,
       "match_criteria": {
