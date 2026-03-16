@@ -46,7 +46,8 @@
         "show_id": "287",
         "venue_id": "125",
         "document_id": "501",
-        "timezone": "Asia/Singapore"
+        "timezone": "Asia/Singapore",
+        "sales_day_offset_hours": 2
       },
       "processing": {
         "passthrough_only": true
@@ -66,7 +67,8 @@
         "show_id": "287",
         "venue_id": "220",
         "document_id": "504",
-        "timezone": "Asia/Singapore"
+        "timezone": "Asia/Singapore",
+        "sales_day_offset_hours": 2
       },
       "processing": {
         "parser_module": "src.parsers.ticketek_event_settlement_excel_parser",

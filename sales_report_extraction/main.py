@@ -96,8 +96,14 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
     logger.info(f"🚀 Processing Rule: {r_name} | Subject: {email['subject']}")
     
     try:
+        # 🕒 NEW: Sales Day Offset Logic (Adding hours to push late-night emails into tomorrow)
+        offset_hours = rule['metadata'].get('sales_day_offset_hours', 0)
+        raw_dt = date_parser.parse(email['receivedDateTime'])
+        effective_dt = raw_dt + timedelta(hours=offset_hours)
+        effective_dt_str = effective_dt.isoformat()
+        
         content_bytes, _ = graph.download_attachment(msg_id, expected_ext)
-        std_name = engine.generate_filename(rule['metadata'], email['receivedDateTime'], expected_ext)
+        std_name = engine.generate_filename(rule['metadata'], effective_dt_str, expected_ext)
         temp_path = os.path.join(engine.base_dir, engine.dirs['inbox'], std_name)
         
         with open(temp_path, 'wb') as f: 
@@ -120,7 +126,7 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
         create_markdown_artifact(key=f"val-{msg_id[:15].lower()}", markdown=md_table, description=r_name)
 
         is_passthrough = rule.get('processing', {}).get('passthrough_only', False)
-        email_date_str = date_parser.parse(email['receivedDateTime']).strftime('%Y-%m-%d')
+        email_date_str = effective_dt.strftime('%Y-%m-%d')
         raw_link_md = f"[Raw Attachment]({raw_url})" if raw_url else "Raw Upload Failed"
         
         if is_passthrough:
@@ -227,7 +233,6 @@ def sales_extractor_flow(days_back: int = 30, target_rule_name: str | None = Non
         total_processed = len(success_list) + len(review_list)
         logger.info(f"🏁 Flow Summary: {total_processed} successful, {failed_count} failed.")
         
-        # 🚀 UPDATED: Formatted tightly with markdown line-breaks (two spaces + \n) and list separators
         if (success_list or review_list) and not disable_notifications:
             msg_parts = [f"📊 **Batch Extraction Complete ({total_processed} Files)**\n"]
             
