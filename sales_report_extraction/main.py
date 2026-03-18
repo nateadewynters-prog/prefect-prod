@@ -114,18 +114,23 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
         raw_url = sp_uploader.upload_file(temp_path, std_name, show_name, venue_name, "Raw")
         df, validation_result, csv_path = engine.process_file(temp_path, rule)
 
+        is_passthrough = rule.get('processing', {}).get('passthrough_only', False)
         processed_url = None
+        
         if csv_path and os.path.exists(csv_path) and csv_path != temp_path:
             csv_filename = os.path.basename(csv_path)
-            processed_url = sp_uploader.upload_file(csv_path, csv_filename, show_name, venue_name, "Processed")
+            
+            # 🚀 THE FIX: Only push to the 'Processed' SharePoint folder if it was actually parsed
+            if not is_passthrough:
+                processed_url = sp_uploader.upload_file(csv_path, csv_filename, show_name, venue_name, "Processed")
+            
+            # Passthrough files AND parsed CSVs both go to the contractor via SFTP
             upload_to_sftp(local_file_path=csv_path, filename=csv_filename)
 
         md_table = f"## Validation Result: {validation_result.status}\n\n**Message:** {validation_result.message}\n\n| Metric | Value |\n|---|---|\n"
         for k, v in validation_result.metrics.items(): 
             md_table += f"| {k} | {v} |\n"
         create_markdown_artifact(key=f"val-{msg_id[:15].lower()}", markdown=md_table, description=r_name)
-
-        is_passthrough = rule.get('processing', {}).get('passthrough_only', False)
         email_date_str = effective_dt.strftime('%Y-%m-%d')
         raw_link_md = f"[Raw Attachment]({raw_url})" if raw_url else "Raw Upload Failed"
         

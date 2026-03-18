@@ -122,6 +122,27 @@
       }
     },
     {
+      "rule_name": "THE_LITTLE_MERMAID_BELFAST",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "noreply@boxoffice.goh.co.uk",
+        "subject_keyword": "The Little Mermaid - Grand Opera House Belfast",
+        "attachment_type": ".xls"
+      },
+      "metadata": {
+        "show_name": "The Little Mermaid",
+        "venue_name": "Grand Opera House Belfast",
+        "report_type": "Advance",
+        "show_id": "291",
+        "venue_id": "30",
+        "document_id": "81",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
       "rule_name": "NEDERLANDER_DEVIL_WEARS_PRADA_DOMINION_CUMULATIVE_PDF",
       "active": true,
       "match_criteria": {
