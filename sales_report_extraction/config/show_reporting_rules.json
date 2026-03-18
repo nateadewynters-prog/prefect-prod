@@ -21,6 +21,7 @@
       "metadata": {
         "show_name": "The Silence of the Lambs",
         "venue_name": "Malvern Theatres",
+        "report_type": "Advance",
         "show_id": "285",
         "venue_id": "174",
         "document_id": "503",
@@ -43,6 +44,7 @@
       "metadata": {
         "show_name": "Jesus Christ Superstar",
         "venue_name": "Singapore",
+        "report_type": "Advance",
         "show_id": "287",
         "venue_id": "125",
         "document_id": "501",
@@ -64,6 +66,7 @@
       "metadata": {
         "show_name": "Jesus Christ Superstar",
         "venue_name": "Manila",
+        "report_type": "Advance",
         "show_id": "287",
         "venue_id": "220",
         "document_id": "504",
@@ -87,6 +90,7 @@
       "metadata": {
         "show_name": "Goldilocks and the Three Bears",
         "venue_name": "Aberdeen",
+        "report_type": "Advance",
         "show_id": "290",
         "venue_id": "29",
         "document_id": "355",
@@ -107,6 +111,7 @@
       "metadata": {
         "show_name": "Beauty & The Beast",
         "venue_name": "Hull",
+        "report_type": "Advance",
         "show_id": "298",
         "venue_id": "42",
         "document_id": "62",
@@ -127,6 +132,7 @@
       "metadata": {
         "show_name": "Devil Wears Prada",
         "venue_name": "Dominion Theatre",
+        "report_type": "Cumulative",
         "show_id": "180",
         "venue_id": "1",
         "document_id": "505",
