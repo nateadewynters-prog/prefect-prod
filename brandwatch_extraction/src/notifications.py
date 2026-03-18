@@ -8,7 +8,7 @@ def send_teams_notification(message: str, logger=None, facts: dict = None):
     Standardized Adaptive Card notification.
     Supports dynamic FactSets (tables) for easy reading.
     """
-    webhook_url = os.getenv("TEAMS_WEBHOOK_URL")
+    webhook_url = os.getenv("TEAMS_WEBHOOK_DEV")
     ui_url = os.getenv("PREFECT_UI_URL", "http://10.1.50.127:4200")
 
     if not webhook_url:
