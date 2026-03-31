@@ -56,6 +56,28 @@
       }
     },
     {
+      "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR_CHRISTCHURCH",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "no-reply@ticketek.com.au",
+        "subject_keyword": "JCSSalesReports",
+        "attachment_type": ".xlsx"
+      },
+      "metadata": {
+        "show_name": "Jesus Christ Superstar",
+        "venue_name": "Christchurch",
+        "report_type": "Advance",
+        "show_id": "287",
+        "venue_id": "224",
+        "document_id": "22",
+        "timezone": "Asia/Singapore",
+        "sales_day_offset_hours": 2
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
       "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR_MANILA",
       "active": true,
       "match_criteria": {
