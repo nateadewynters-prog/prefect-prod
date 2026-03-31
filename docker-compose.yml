@@ -67,3 +67,23 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+# --- 4. POWER BI REFRESH TOOL (STREAMLIT) ---
+  pbi-refresh-tool:
+    build:
+      context: ./pbi_refresh_tool
+      dockerfile: Dockerfile
+    container_name: streamlit-pbi-tool
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+    volumes:
+      - /opt/prefect/prod/.env:/app/.env:ro
+      - ./pbi_refresh_tool/data:/app/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
