@@ -2,17 +2,20 @@ import os
 import requests as r
 from prefect.runtime import flow_run
 
-# 🚀 THE FIX: Added the facts dictionary parameter
-def send_teams_notification(message: str, logger=None, facts: dict = None):
+def send_teams_notification(message: str, logger=None, facts: dict = None, channel: str = "dev"):
     """
     Standardized Adaptive Card notification.
-    Supports dynamic FactSets (tables) for easy reading.
+    Supports dynamic FactSets (tables) for easy reading and multi-channel routing.
     """
-    webhook_url = os.getenv("TEAMS_WEBHOOK_DEV")
+    if channel == "ops":
+        webhook_url = os.getenv("TEAMS_WEBHOOK_OPS")
+    else:
+        webhook_url = os.getenv("TEAMS_WEBHOOK_DEV")
+        
     ui_url = os.getenv("PREFECT_UI_URL", "http://10.1.50.127:4200")
 
     if not webhook_url:
-        if logger: logger.warning("⚠️ No TEAMS_WEBHOOK_URL found. Skipping.")
+        if logger: logger.warning(f"⚠️ No TEAMS_WEBHOOK_{'OPS' if channel == 'ops' else 'DEV'} found. Skipping.")
         return
 
     try:
@@ -21,7 +24,6 @@ def send_teams_notification(message: str, logger=None, facts: dict = None):
     except Exception:
         run_link = ui_url
 
-    # 1. Build the core message block
     body_elements = [
         {
             "type": "TextBlock",
@@ -32,7 +34,6 @@ def send_teams_notification(message: str, logger=None, facts: dict = None):
         }
     ]
 
-    # 2. 🚀 THE NEW FEATURE: Inject the FactSet if facts are provided
     if facts:
         fact_list = [{"title": str(key), "value": str(value)} for key, value in facts.items()]
         body_elements.append({
@@ -65,6 +66,6 @@ def send_teams_notification(message: str, logger=None, facts: dict = None):
     try:
         response = r.post(webhook_url, json=payload)
         response.raise_for_status()
-        if logger: logger.info("✅ Teams Notification Sent.")
+        if logger: logger.info(f"✅ Teams Notification Sent to '{channel}' channel.")
     except Exception as e:
-        if logger: logger.error(f"❌ Teams Webhook Failed: {e}")
+        if logger: logger.error(f"❌ Teams Webhook Failed for '{channel}': {e}")

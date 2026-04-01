@@ -29,7 +29,8 @@ def get_db_connection(retries=5, delay=10):
                 send_teams_notification(
                     message="🚨 **Database Connection Error**", 
                     logger=logger,
-                    facts={"Server": os.getenv('SQL_SERVER'), "Database": os.getenv('SQL_ORGANICSOCIAL_DATABASE'), "Error": str(e)}
+                    facts={"Server": os.getenv('SQL_SERVER'), "Database": os.getenv('SQL_ORGANICSOCIAL_DATABASE'), "Error": str(e)},
+                    channel="dev"
                 )
                 raise e
 
@@ -41,13 +42,11 @@ def insert_raw_json(endpoint_tag, raw_data):
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
-            # 🚀 THE FIX: Restored your exact table name and columns!
             query = """
                 INSERT INTO dbo.stg_bw_raw_json (SourceEndpoint, RawData) 
                 VALUES (?, ?)
             """
             
-            # Dump dict to string for the JSON/NVARCHAR column
             json_payload = json.dumps(raw_data)
             
             cursor.execute(query, (endpoint_tag, json_payload))
@@ -56,12 +55,12 @@ def insert_raw_json(endpoint_tag, raw_data):
             logger.info(f"💾 Successfully staged {endpoint_tag} data to SQL.")
             
     except Exception as e:
-        # Catch specific database errors (like the invalid object name we just saw)
         error_msg = f"SQL Insertion Failed for {endpoint_tag}: {str(e)}"
         logger.error(f"❌ {error_msg}")
         send_teams_notification(
             message="🚨 **Brandwatch Database Error**", 
             logger=logger,
-            facts={"Endpoint Tag": endpoint_tag, "Target Table": "dbo.stg_bw_raw_json", "Error": str(e)}
+            facts={"Endpoint Tag": endpoint_tag, "Target Table": "dbo.stg_bw_raw_json", "Error": str(e)},
+            channel="dev"
         )
         raise

@@ -13,7 +13,7 @@ setup_environment()
 from src.api_client import BrandwatchClient
 from src.database import insert_raw_json
 from src.constants import CONTENT_METRICS, CHANNEL_METRICS
-from src.notifications import send_teams_notification # 🚀 THE FIX: Import your standardized module
+from src.notifications import send_teams_notification
 
 # 3. DYNAMICALLY LOAD API KEYS
 API_KEYS = [
@@ -26,7 +26,8 @@ if not API_KEYS:
     send_teams_notification(
         message="🚨 **Brandwatch Config Error**", 
         logger=None,
-        facts={"Issue": "Missing API Keys", "Action Required": "Check /opt/prefect/prod/.env"}
+        facts={"Issue": "Missing API Keys", "Action Required": "Check /opt/prefect/prod/.env"},
+        channel="dev"
     ) 
     raise ValueError(error_msg)
 
@@ -108,11 +109,9 @@ def sync_settled_data(target_dt, ch_uuids):
     
     if csv_url:
         logger.info("📑 Streaming Engage Comments to Database...")
-        # 🚀 THE FIX: stream=True prevents loading the whole file into RAM
         with requests.get(csv_url, stream=True) as res:
             res.raise_for_status()
             
-            # Use iter_lines() to read the stream chunk by chunk
             lines = (line.decode('utf-8') for line in res.iter_lines() if line)
             reader = csv.DictReader(lines)
             
@@ -121,9 +120,9 @@ def sync_settled_data(target_dt, ch_uuids):
                 batch.append(row)
                 if len(batch) >= 500:
                     stage_data('ENGAGE_EXPORTS', batch)
-                    batch = [] # Clear memory
+                    batch = [] 
                     
-            if batch: # Catch the remainder
+            if batch: 
                 stage_data('ENGAGE_EXPORTS', batch)
 
 
@@ -132,22 +131,18 @@ def brandwatch_flow():
     logger = get_run_logger()
     logger.info("🚀 Starting Brandwatch Modular ELT Pipeline")
 
-    # --- Time Windows ---
     today = datetime.now(timezone.utc)
     target_date = today - timedelta(days=2)  
     long_start = today - timedelta(days=82)  
     content_end = today - timedelta(days=2)
 
-    # 🚀 THE FIX: Wrap execution in a try/except block to catch terminal failures
     try:
-        # --- Execute Tasks ---
         ch_uuids = sync_channels()
         sync_post_metrics(long_start, content_end)
         sync_settled_data(target_date, ch_uuids)
 
         logger.info("✅ Brandwatch Pipeline Finished Successfully.")
         
-        # 🚀 NEW: The Data Engineer's Dream Success Alert
         send_teams_notification(
             message="✅ **Brandwatch Extraction Complete**",
             logger=logger,
@@ -156,7 +151,8 @@ def brandwatch_flow():
                 "Channels Synced": len(ch_uuids),
                 "Settled Data Date": target_date.strftime('%Y-%m-%d'),
                 "Destination": "dbo.stg_bw_raw_json"
-            }
+            },
+            channel="ops"
         )
         
     except Exception as e:
@@ -164,7 +160,8 @@ def brandwatch_flow():
         send_teams_notification(
             message="❌ **Brandwatch Pipeline Failed**", 
             logger=logger,
-            facts={"Status": "Terminal Failure", "Error": str(e)}
+            facts={"Status": "Terminal Failure", "Error": str(e)},
+            channel="dev"
         )
         raise
 

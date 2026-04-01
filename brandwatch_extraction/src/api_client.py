@@ -11,7 +11,6 @@ class BrandwatchClient:
         self.api_keys = api_keys
 
     def _get_key(self):
-        # Rotate keys to manage rate limits
         key = self.api_keys.pop(0)
         self.api_keys.append(key)
         return key
@@ -24,7 +23,6 @@ class BrandwatchClient:
             params['apikey'] = self._get_key()
             try:
                 res = requests.request(method, f"{BASE_URL}{endpoint}", params=params, json=json_data, timeout=30)
-                # Handle standard transient gateway/server errors gracefully
                 if res.status_code in [500, 502, 503, 504]:
                     time.sleep(20)
                     continue
@@ -32,14 +30,14 @@ class BrandwatchClient:
                 return res.json()
                 
             except Exception as e:
-                # If we've exhausted all our retries, fire the Teams alert and crash
                 if attempt == retries - 1: 
                     error_msg = f"API Call Failed after {retries} attempts to {endpoint}: {e}"
                     logger.error(f"❌ {error_msg}")
                     send_teams_notification(
                         message="🚨 **Brandwatch API Error**", 
                         logger=logger,
-                        facts={"Endpoint": endpoint, "Attempts": retries, "Error": str(e)}
+                        facts={"Endpoint": endpoint, "Attempts": retries, "Error": str(e)},
+                        channel="dev"
                     )
                     raise e
 
@@ -47,7 +45,7 @@ class BrandwatchClient:
         logger = get_run_logger()
         logger.info(f"Polling {tag} request {req_id}...")
         
-        max_attempts = 90  # 90 attempts * 20 seconds = 30 minute timeout limit
+        max_attempts = 90  
         attempts = 0
         
         while attempts < max_attempts:
@@ -65,7 +63,8 @@ class BrandwatchClient:
                 send_teams_notification(
                     message="🚨 **Brandwatch Async Job Failed**", 
                     logger=logger,
-                    facts={"Tag": tag, "Request ID": req_id, "Backend Status": "FAILED"}
+                    facts={"Tag": tag, "Request ID": req_id, "Backend Status": "FAILED"},
+                    channel="dev"
                 )
                 raise Exception(error_msg)
 
@@ -77,6 +76,7 @@ class BrandwatchClient:
         send_teams_notification(
             message="🚨 **Brandwatch API Timeout**", 
             logger=logger,
-            facts={"Tag": tag, "Request ID": req_id, "Duration": "> 30 Minutes"}
+            facts={"Tag": tag, "Request ID": req_id, "Duration": "> 30 Minutes"},
+            channel="dev"
         )
         raise TimeoutError(timeout_msg)
