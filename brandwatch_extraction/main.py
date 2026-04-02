@@ -102,8 +102,8 @@ def sync_settled_data(target_dt, ch_uuids):
     eng_req = client.call('POST', '/engage/v2/exports', json_data={
         'startDate': target_dt.strftime('%Y-%m-%dT00:00:00.000Z'),
         'endDate': target_dt.strftime('%Y-%m-%dT23:59:59.999Z'),
-        'networks': ['facebook', 'instagram', 'twitter'],
-        'types': ['comment']
+        'networks': ['facebook', 'instagram', 'youtube', 'whatsapp', 'twitter', 'tiktok', 'linkedin', 'googlemybusiness'], # Updated
+        'types': ['comment', 'reply', 'dm'] # Updated
     })
     csv_url = client.poll_insight(eng_req['uuid'], 'ENGAGE_EXPORTS', prefix='/engage/v2/exports')
     
