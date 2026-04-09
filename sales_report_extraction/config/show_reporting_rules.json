@@ -11,26 +11,68 @@
   },
   "rules": [
     {
-      "rule_name": "MALVERN_SILENCE_OF_THE_LAMBS",
+      "rule_name": "BEAUTY_&_THE_BEAST_HULL",
       "active": true,
       "match_criteria": {
-        "sender_domain": "figures@malvern-theatres.co.uk",
-        "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs",
-        "attachment_type": ".pdf"
+        "sender_domain": "noreply@reports.spektrix.email",
+        "subject_keyword": "Hull New Theatre - Beauty & The Beast",
+        "attachment_type": ".xls"
       },
       "metadata": {
-        "show_name": "The Silence of the Lambs",
-        "venue_name": "Malvern Theatres",
+        "show_name": "Beauty & The Beast",
+        "venue_name": "Hull",
         "report_type": "Advance",
-        "show_id": "285",
-        "venue_id": "174",
-        "document_id": "503",
+        "show_id": "298",
+        "venue_id": "42",
+        "document_id": "62",
         "timezone": "Europe/London"
       },
       "processing": {
-        "parser_module": "src.parsers.malvern_theatre_contractual_report_pdf_parser",
-        "parser_function": "extract_contractual_report",
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "NEDERLANDER_DEVIL_WEARS_PRADA_DOMINION_CUMULATIVE_PDF",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "primarytix@nederlander.co.uk",
+        "subject_keyword": "TDWP Cumulative Sales",
+        "attachment_type": ".pdf"
+      },
+      "metadata": {
+        "show_name": "Devil Wears Prada",
+        "venue_name": "Dominion Theatre",
+        "report_type": "Cumulative",
+        "show_id": "180",
+        "venue_id": "1",
+        "document_id": "505",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "parser_module": "src.parsers.nederlandaer_devil_wears_prada_cumulative_extraction_pdf",
+        "parser_function": "nederlandaer_devil_wears_prada_cumulative_extraction_pdf",
         "needs_lookup": false
+      }
+    },
+    {
+      "rule_name": "GOLDILOCKS_AND_THE_THREE_BEARS_ABERDEEN",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "aberdeenperformingarts.com",
+        "subject_keyword": "Goldilocks and the 3 Bears Sales Report - Aberdeen",
+        "attachment_type": ".xls"
+      },
+      "metadata": {
+        "show_name": "Goldilocks and the Three Bears",
+        "venue_name": "Aberdeen",
+        "report_type": "Advance",
+        "show_id": "290",
+        "venue_id": "29",
+        "document_id": "355",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
       }
     },
     {
@@ -102,20 +144,20 @@
       }
     },
     {
-      "rule_name": "GOLDILOCKS_AND_THE_THREE_BEARS_ABERDEEN",
+      "rule_name": "ROCKY_HORROR_EASTBOURNE",
       "active": true,
       "match_criteria": {
-        "sender_domain": "aberdeenperformingarts.com",
-        "subject_keyword": "Goldilocks and the 3 Bears Sales Report - Aberdeen",
-        "attachment_type": ".xls"
+        "sender_domain": "ticketingoperations@trafalgar.global",
+        "subject_keyword": "Eastbourne Theatres - Rocky Horror Show",
+        "attachment_type": ".csv"
       },
       "metadata": {
-        "show_name": "Goldilocks and the Three Bears",
-        "venue_name": "Aberdeen",
+        "show_name": "Rocky Horror 2026",
+        "venue_name": "Eastbourne",
         "report_type": "Advance",
-        "show_id": "290",
-        "venue_id": "29",
-        "document_id": "355",
+        "show_id": "272",
+        "venue_id": "36",
+        "document_id": "435",
         "timezone": "Europe/London"
       },
       "processing": {
@@ -123,24 +165,68 @@
       }
     },
     {
-      "rule_name": "BEAUTY_&_THE_BEAST_HULL",
+      "rule_name": "ROCKY_HORROR_CARDIFF",
       "active": true,
       "match_criteria": {
-        "sender_domain": "noreply@reports.spektrix.email",
-        "subject_keyword": "Hull New Theatre - Beauty & The Beast",
-        "attachment_type": ".xls"
+        "sender_domain": "ticketingoperations@trafalgar.global",
+        "subject_keyword": "New Theatre, Cardiff - The Rocky Horror",
+        "attachment_type": ".csv"
       },
       "metadata": {
-        "show_name": "Beauty & The Beast",
-        "venue_name": "Hull",
+        "show_name": "Rocky Horror 2026",
+        "venue_name": "Cardiff",
         "report_type": "Advance",
-        "show_id": "298",
-        "venue_id": "42",
-        "document_id": "62",
+        "show_id": "272",
+        "venue_id": "65",
+        "document_id": "435",
         "timezone": "Europe/London"
       },
       "processing": {
         "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "SILENCE_OF_THE_LAMBS_BOURNEMOUTH",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "reports@tessituranetwork.com",
+        "subject_keyword": "SotL 2026 Tour BOURNEMOUTH",
+        "attachment_type": ".xlsx"
+      },
+      "metadata": {
+        "show_name": "SotL 2026 Tour BOURNEMOUTH",
+        "venue_name": "Bournemouth",
+        "report_type": "Advance",
+        "show_id": "285",
+        "venue_id": "51",
+        "document_id": "341",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "MALVERN_SILENCE_OF_THE_LAMBS",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "figures@malvern-theatres.co.uk",
+        "subject_keyword": "Malvern Theatres Figures The Silence of the Lambs",
+        "attachment_type": ".pdf"
+      },
+      "metadata": {
+        "show_name": "The Silence of the Lambs",
+        "venue_name": "Malvern Theatres",
+        "report_type": "Advance",
+        "show_id": "285",
+        "venue_id": "174",
+        "document_id": "503",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "parser_module": "src.parsers.malvern_theatre_contractual_report_pdf_parser",
+        "parser_function": "extract_contractual_report",
+        "needs_lookup": false
       }
     },
     {
@@ -165,26 +251,24 @@
       }
     },
     {
-      "rule_name": "NEDERLANDER_DEVIL_WEARS_PRADA_DOMINION_CUMULATIVE_PDF",
+      "rule_name": "WAITRESS_BIRMINGHAM_TOUR_2026",
       "active": true,
       "match_criteria": {
-        "sender_domain": "primarytix@nederlander.co.uk",
-        "subject_keyword": "TDWP Cumulative Sales",
-        "attachment_type": ".pdf"
+        "sender_domain": "SQLMail@birminghamhippodrome.com",
+        "subject_keyword": "Waitress 2026 Tour BIRMINGHAM",
+        "attachment_type": ".xlsx"
       },
       "metadata": {
-        "show_name": "Devil Wears Prada",
-        "venue_name": "Dominion Theatre",
-        "report_type": "Cumulative",
-        "show_id": "180",
-        "venue_id": "1",
-        "document_id": "505",
+        "show_name": "Waitress 2026",
+        "venue_name": "Birmingham",
+        "report_type": "Advance",
+        "show_id": "280",
+        "venue_id": "31",
+        "document_id": "58",
         "timezone": "Europe/London"
       },
       "processing": {
-        "parser_module": "src.parsers.nederlandaer_devil_wears_prada_cumulative_extraction_pdf",
-        "parser_function": "nederlandaer_devil_wears_prada_cumulative_extraction_pdf",
-        "needs_lookup": false
+        "passthrough_only": true
       }
     }
   ]
