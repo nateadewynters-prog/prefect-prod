@@ -4,3 +4,4 @@ httpx
 pandas
 python-dotenv
 pyodbc
+PyMuPDF
