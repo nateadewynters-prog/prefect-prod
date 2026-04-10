@@ -270,6 +270,27 @@
       "processing": {
         "passthrough_only": true
       }
+    },
+    {
+      "rule_name": "MOULIN_ROUGE_MIDNIGHT_ADVANCE",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "reports@info.atgtickets.com",
+        "subject_keyword": "MR Midnight Advance",
+        "attachment_type": ".csv"
+      },
+      "metadata": {
+        "show_name": "Moulin Rouge",
+        "venue_name": "Picadilly Theatre",
+        "report_type": "Advance",
+        "show_id": "45",
+        "venue_id": "12",
+        "document_id": "226",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
     }
   ]
 }
