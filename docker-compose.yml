@@ -87,26 +87,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-# --- 5. POWER BI OUTBOUND REPORTING ---
-  pbi-sales-reporting:
-    build:
-      context: ./power_bi_sales_reporting_automation
-      dockerfile: Dockerfile.pbi_reporting
-    container_name: prefect-pbi-reporting
-    restart: unless-stopped
-    environment:
-      - PREFECT_API_URL=http://prefect-server:4200/api
-      - PYTHONPATH=/opt/prefect/prod/code/power_bi_sales_reporting_automation
-    volumes:
-      - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
-      # 🚀 Mount the config folder so you can add new shows without rebuilding the container!
-      - ./power_bi_sales_reporting_automation/config:/opt/prefect/prod/code/power_bi_sales_reporting_automation/config
-    depends_on:
-      - prefect-server
-    command: python main.py
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
