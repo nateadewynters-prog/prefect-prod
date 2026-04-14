@@ -12,41 +12,32 @@ services:
     volumes:
       - /opt/prefect/prod/prefect_db_data:/root/.prefect
     command: prefect server start --host 0.0.0.0
-    # Added Log Rotation
     logging:
       driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      options: { max-size: "10m", max-file: "3" }
 
-# --- 2. SALES REPORT EXTRACTION WORKER ---
+  # --- 2. SALES REPORT EXTRACTION (BACKGROUND WORKER) ---
   sales-report-extraction:
     build:
-      context: ./sales_report_extraction  # <-- 1. Context updated to new folder name
-      dockerfile: Dockerfile.sales        # <-- Matches the renamed Dockerfile
+      context: ./sales_report_extraction
+      dockerfile: Dockerfile.sales
     container_name: prefect-sales-extraction
     restart: unless-stopped
     environment:
       - PREFECT_API_URL=http://prefect-server:4200/api
-      - PYTHONPATH=/opt/prefect/prod/code/sales_report_extraction  # <-- Pointing to the new root so 'from src.x' works
+      - PYTHONPATH=/opt/prefect/prod/code/sales_report_extraction
     volumes:
       - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
-      # 2. Updated volume mount for the new config location
       - ./sales_report_extraction/config:/opt/prefect/prod/code/sales_report_extraction/config
-      # 3. Updated volume mount for Medallion data
       - /opt/data/outlook_automation/data:/opt/prefect/prod/code/sales_report_extraction/data 
     depends_on:
       - prefect-server
-    # 4. The new, much cleaner startup command!
     command: python main.py
-    # Added Log Rotation
     logging:
       driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      options: { max-size: "10m", max-file: "3" }
 
-# --- 3. BRANDWATCH EXTRACTION SERVICE ---
+  # --- 3. BRANDWATCH EXTRACTION (BACKGROUND WORKER) ---
   brandwatch-extraction:
     build:
       context: ./brandwatch_extraction
@@ -57,33 +48,66 @@ services:
       - PREFECT_API_URL=http://prefect-server:4200/api
       - PYTHONPATH=/opt/prefect/prod/code/brandwatch_extraction
     volumes:
-      # 🚀 THE FIX: Removed /config and /data volumes. This is a purely stateless API-to-DB container!
       - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
     depends_on:
       - prefect-server
-    command: python main.py # 🚀 THE FIX: Tell it to run the script!
+    command: python main.py
     logging:
       driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      options: { max-size: "10m", max-file: "3" }
 
-# --- 4. POWER BI REFRESH TOOL (STREAMLIT) ---
-  pbi-refresh-tool:
-    build:
-      context: ./pbi_refresh_tool
-      dockerfile: Dockerfile
-    container_name: streamlit-pbi-tool
-    restart: unless-stopped
+  # --- 5. POWER BI DISPATCHER (UI TOOL) ---
+  powerbi-sales-report-dispatcher:
+    build: ./powerbi_sales_report_dispatcher
+    container_name: powerbi-sales-report-dispatcher
     ports:
-      - "8501:8501"
-    environment:
-      - PREFECT_API_URL=http://prefect-server:4200/api
+      - "8002:8002"
     volumes:
       - /opt/prefect/prod/.env:/app/.env:ro
-      - ./pbi_refresh_tool/data:/app/data
+    restart: unless-stopped
     logging:
       driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      options: { max-size: "10m", max-file: "3" }
+
+  # --- 6. DOCID TOOL (UI TOOL) ---
+  docid-tool:
+    build: ./docid_tool 
+    container_name: docid-tool
+    ports:
+      - "8003:8002" # Maps the host's 8003 to the container's internal 8002
+    volumes:
+      - /opt/prefect/prod/.env:/app/.env:ro
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
+  # --- 7. HOMEPAGE (LIGHTWEIGHT HUB) ---
+  homepage:
+    build: ./homepage
+    container_name: homepage
+    restart: unless-stopped
+    ports:
+      - "80:80" # Standard HTTP port
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
+  # --- 8. PORTAINER (CONTAINER MANAGEMENT) ---
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "9443:9443"
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
+# --- VOLUMES ---
+volumes:
+  portainer_data:

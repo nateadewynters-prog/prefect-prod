@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocID Tool - BISCUIT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator_semanticui.min.css" rel="stylesheet">
+    
+    <style>
+        /* Clean up Tabulator styling to match our Tailwind aesthetic */
+        .tabulator { border-radius: 0.5rem; border: 1px solid #e5e7eb; background-color: white; font-size: 0.875rem; }
+        .tabulator-col-title { font-weight: 700 !important; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
+        .tabulator-row { border-bottom: 1px solid #f3f4f6 !important; }
+        .tabulator-row:nth-child(even) { background-color: #f9fafb !important; }
+        .tabulator-row:hover { background-color: #eff6ff !important; } /* Blue hover effect */
+        
+        /* Search Bar Styling */
+        #searchInput { width: 300px; border-radius: 0.5rem; border: 1px solid #d1d5db; padding: 0.5rem 1rem; }
+        #searchInput:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); }
+    </style>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+    <div class="max-w-6xl mx-auto">
+        <button onclick="window.location.href = window.location.protocol + '//' + window.location.hostname;" class="text-blue-600 hover:underline mb-4 inline-block font-semibold bg-transparent border-0 cursor-pointer">
+            ← Back to Homepage
+        </button>
+        
+        <div class="bg-white rounded-lg shadow-lg p-8">
+            <div class="flex justify-between items-end border-b pb-4 mb-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">DocID Tool</h1>
+                    <p class="text-gray-500 text-sm mt-1">Reference table for Shows, Theatres, and Document IDs.</p>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <input type="text" id="searchInput" placeholder="🔍 Search all records...">
+                    
+                    <button onclick="forceRefresh()" id="refreshBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors flex items-center text-sm border border-gray-300 shadow-sm whitespace-nowrap">
+                        <span id="refreshIcon" class="mr-2">🔄</span> Resync
+                    </button>
+                </div>
+            </div>
+
+            <div id="docid-table" class="w-full"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
+    <script>
+        let table;
+
+        document.addEventListener("DOMContentLoaded", function() {
+            table = new Tabulator("#docid-table", {
+                ajaxURL: "/api/docids", // Fetch data from our Flask cache
+                height: "550px",        // Enables ultra-fast Virtual DOM scrolling
+                layout: "fitColumns",   // Forces columns to perfectly fit the container width
+                pagination: "local",    // Paginates the data client-side
+                paginationSize: 50,     // 50 rows per page
+                
+                // We must map the array-of-arrays from Python into an array-of-objects for Tabulator
+                ajaxResponse: function(url, params, response){
+                    return response.map(row => ({
+                        showName: row[0],
+                        theatreName: row[1],
+                        docName: row[2],
+                        showId: row[3],
+                        theatreId: row[4],
+                        docId: row[5]
+                    }));
+                },
+                
+                columns: [
+                    { title: "Show Name", field: "showName", widthGrow: 2 },
+                    { title: "Theatre Name", field: "theatreName", widthGrow: 2 },
+                    { title: "Document Name", field: "docName", widthGrow: 2 },
+                    // hozAlign forces perfect alignment of the headers AND the data
+                    { title: "Show ID", field: "showId", hozAlign: "right", cssClass: "font-mono font-bold" },
+                    { title: "Theatre ID", field: "theatreId", hozAlign: "right", cssClass: "font-mono font-bold" },
+                    { title: "DocType ID", field: "docId", hozAlign: "right", cssClass: "font-mono font-bold" }
+                ]
+            });
+            
+            // --- Custom Debounced Search Implementation ---
+            // This prevents lag by waiting 500ms after the user stops typing before searching ~400k rows
+            let searchTimeout;
+            document.getElementById("searchInput").addEventListener("input", function(e) {
+                clearTimeout(searchTimeout);
+                
+                searchTimeout = setTimeout(function() {
+                    const term = e.target.value.toLowerCase();
+                    if(term === "") {
+                        table.clearFilter();
+                    } else {
+                        // Custom filter function to search across all columns
+                        table.setFilter(function(data) {
+                            return String(data.showName).toLowerCase().includes(term) ||
+                                   String(data.theatreName).toLowerCase().includes(term) ||
+                                   String(data.docName).toLowerCase().includes(term) ||
+                                   String(data.showId).includes(term) ||
+                                   String(data.theatreId).includes(term) ||
+                                   String(data.docId).includes(term);
+                        });
+                    }
+                }, 500); // 500ms delay
+            });
+        });
+
+        async function forceRefresh() {
+            const btn = document.getElementById('refreshBtn');
+            const icon = document.getElementById('refreshIcon');
+            const searchInput = document.getElementById('searchInput');
+            
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+            icon.classList.add('animate-spin');
+
+            try {
+                const response = await fetch('/api/docids/refresh', { method: 'POST' });
+                if (response.ok) {
+                    // Clear search and reload data from the fresh Python cache
+                    searchInput.value = "";
+                    table.clearFilter();
+                    table.setData();
+                } else {
+                    alert("Failed to refresh database.");
+                }
+            } catch (err) {
+                alert("Network error occurred.");
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+                icon.classList.remove('animate-spin');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power BI Report Dispatcher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&display=swap');
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .log-entry { border-left: 2px solid #3b82f6; padding-left: 10px; margin-bottom: 4px; animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+    </style>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+    <div class="max-w-4xl mx-auto">
+        <button onclick="window.location.href = window.location.protocol + '//' + window.location.hostname;" class="text-blue-600 hover:underline mb-4 inline-block font-semibold bg-transparent border-0 cursor-pointer">
+            ← Back to Homepage
+        </button>
+        
+        <div class="bg-white rounded-lg shadow p-8 mb-6">
+            <div class="flex justify-between items-center border-b pb-4 mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">Power BI Report Dispatcher</h1>
+                <div id="status-indicator" class="hidden flex items-center text-blue-600 font-bold">
+                    <span class="animate-ping mr-2">●</span> PROCESSING
+                </div>
+            </div>
+
+            <button onclick="runReport('ALL')" id="btn-ALL" class="tool-btn w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-4 rounded-xl mb-8 shadow-lg transition-all disabled:opacity-50">
+                🚀 RUN ALL REPORTS BATCH
+            </button>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {% for show in shows %}
+                <div class="border border-gray-200 rounded-xl p-5 flex flex-col justify-between bg-gray-50 hover:bg-white transition-all shadow-sm">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">{{ show.show_name }}</h2>
+                        <p class="text-xs text-gray-500 font-mono mt-1 mb-4">
+                            Show ID: <span class="font-bold">{{ show.show_id }}</span> | 
+                            Database: <span class="font-bold">{{ show.db_type }}</span>
+                        </p>
+                    </div>
+                    
+                    <div class="flex flex-col gap-2 mt-4">
+                        <a href="{{ show.dashboard_url }}" target="_blank" class="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2.5 px-4 rounded-lg text-center transition-colors">
+                            📊 View Dashboard
+                        </a>
+                        <button onclick="runReport('{{ show.id }}')" id="btn-{{ show.id }}" class="tool-btn bg-gray-800 hover:bg-black text-white font-bold py-2.5 px-4 rounded-lg transition-colors w-full disabled:opacity-50">
+                            Run Single Report
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div id="status-box" class="hidden bg-gray-900 rounded-lg shadow-2xl p-6 border-t-4 border-blue-500">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-blue-400 font-mono font-bold uppercase tracking-widest text-sm">System Terminal</h3>
+                <button onclick="clearLogs()" class="text-gray-500 text-xs hover:text-white font-mono">CLEAR_CONSOLE</button>
+            </div>
+            <div id="log-list" class="space-y-1 font-mono text-xs md:text-sm text-gray-300 h-64 overflow-y-auto bg-black p-4 rounded-md border border-gray-800"></div>
+        </div>
+    </div>
+
+    <script>
+        function clearLogs() { document.getElementById('log-list').innerHTML = ''; }
+
+        function runReport(id) {
+            const allButtons = document.querySelectorAll('.tool-btn');
+            const indicator = document.getElementById('status-indicator');
+            const logList = document.getElementById('log-list');
+            
+            allButtons.forEach(btn => btn.disabled = true);
+            indicator.classList.remove('hidden');
+            document.getElementById('status-box').classList.remove('hidden');
+
+            const eventSource = new EventSource(`/stream/${id}`);
+
+            eventSource.onmessage = function(event) {
+                if (event.data === "[DONE]") {
+                    eventSource.close();
+                    allButtons.forEach(btn => btn.disabled = false);
+                    indicator.classList.add('hidden');
+                    return;
+                }
+
+                const data = JSON.parse(event.data);
+                const li = document.createElement('div');
+                const time = new Date().toLocaleTimeString();
+                
+                li.className = `log-entry ${data.type === 'success' ? 'text-green-400 border-green-500' : 'text-gray-300'}`;
+                li.innerHTML = `<span class="text-gray-600">[${time}]</span> ${data.msg}`;
+                
+                logList.appendChild(li);
+                logList.scrollTop = logList.scrollHeight;
+            };
+
+            eventSource.onerror = function() {
+                eventSource.close();
+                allButtons.forEach(btn => btn.disabled = false);
+                indicator.classList.add('hidden');
+            };
+        }
+    </script>
+</body>
+</html>

@@ -29,21 +29,25 @@ This server hosts automated data pipelines orchestrated by **Prefect 3.0**. The 
 ├── readme.md                     <-- Master System Documentation (This File)
 ├── docker-compose.yml            <-- Orchestration configuration
 ├── .env                          <-- Centralized Secrets & API Keys
+├── homepage/
+│   ├── Dockerfile                <-- Nginx Build Context
+│   └── index.html                <-- Service Routing Hub
+├── docid_tool/
+│   ├── Dockerfile                <-- Flask + SQL Build Context
+│   ├── app.py                    <-- Cached SQL Table Engine
+│   └── templates/                # 🎨 Frontend (Tabulator.js)
+├── powerbi_sales_report_dispatcher/
+│   ├── Dockerfile                <-- Flask + MSAL Build Context
+│   ├── app.py                    <-- PBI/Graph Dispatch Logic
+│   └── templates/                # 🎨 Frontend (SSE Terminal)
 ├── sales_report_extraction/           
 │   ├── readme.md                 <-- Email Extraction Project Documentation
 │   ├── Dockerfile.sales          <-- Isolated Build Context
-│   ├── requirements.txt          <-- Local Python Dependencies
-│   ├── main.py                   <-- Main Prefect Entrypoint
 │   └── ...
 └── brandwatch_extraction/           
     ├── readme.md                 <-- Social Extraction Project Documentation
     ├── Dockerfile.brandwatch     <-- Isolated Build Context
-    ├── requirements.txt          <-- Local Python Dependencies
-    ├── main.py                   <-- Main Prefect Entrypoint
-    └── src/                      # 🛠️ Application Source
-        ├── api_client.py         # API Clients (Brandwatch/Falcon.io)
-        ├── database.py           # Shared internal utilities (DB)
-        └── env_setup.py          # Shared internal utilities (Env)
+    └── ...
 ```
 
 ---
@@ -56,21 +60,25 @@ All environment variables, database credentials, and API keys are stored in:
 /opt/prefect/prod/.env
 ```
 
-⚠️ **Never hardcode credentials inside scripts.** All services load configuration via localized `src/env_setup.py` utilities.
+⚠️ **Never hardcode credentials inside scripts.** All services load configuration via localized environment loaders.
 
 ---
 
 ## 3. Docker Compose Orchestration
 
-All flows run continuously or on defined schedules using **Docker Compose**. 
+All flows and UI tools run continuously using **Docker Compose**. 
 
 ### Active Services
 
-| Service Name                   | Directory                       | Target Script / Command            |
-|--------------------------------|---------------------------------|-----------------------------------|
-| `prefect-server`               | `/opt/prefect/prod/code/`       | `prefect server start`            |
-| `sales-report-extraction`      | `.../sales_report_extraction`   | `python main.py`                  |
-| `brandwatch-extraction`        | `.../brandwatch_extraction`     | `python main.py`                  |
+| Service Name                   | Port (Ext) | Directory                       | Function                          |
+|--------------------------------|------------|---------------------------------|-----------------------------------|
+| `homepage`                     | `80`       | `/homepage`                     | Lightweight Service Hub (Nginx)   |
+| `docid-tool`                   | `8003`     | `/docid_tool`                   | SQL DocID Reference (Flask)       |
+| `powerbi-dispatcher`           | `8002`     | `/powerbi_sales_report_dispatcher` | PBI Refresher & Emailer (Flask)  |
+| `prefect-server`               | `4200`     | `/`                             | Prefect 3.0 Orchestration Brain   |
+| `portainer`                    | `9000`     | `n/a`                           | Container Management GUI          |
+| `sales-report-extraction`      | `n/a`      | `/sales_report_extraction`      | Background Email ETL (Prefect)    |
+| `brandwatch-extraction`        | `n/a`      | `/brandwatch_extraction`        | Background Social ETL (Prefect)   |
 
 ---
 
@@ -82,8 +90,9 @@ Rebuild and restart services after updating scripts, `.env`, or configurations:
 
 ```bash
 # Restart a specific service
-docker-compose up -d --build sales-report-extraction
-docker-compose up -d --build brandwatch-extraction
+docker-compose up -d --build powerbi-sales-report-dispatcher
+docker-compose up -d --build docid-tool
+docker-compose up -d --build homepage
 
 # Restart all services
 docker-compose up -d --build
@@ -91,11 +100,22 @@ docker-compose up -d --build
 
 ### Dashboard Access
 
-Prefect UI: `http://dew-insights01:4200`
+- **Central Hub:** `http://dew-insights01/` (Port 80)
+- **Prefect UI:** `http://dew-insights01:4200`
+- **Portainer:** `http://dew-insights01:9000`
 
 ---
 
 ## 5. Project-Specific Documentation
+
+🔍 **DocID Reference Tool**  
+`.../docid_tool/README.md`
+
+📊 **Power BI Dispatcher**  
+`.../powerbi_sales_report_dispatcher/README.md`
+
+🏠 **Service Homepage**  
+`.../homepage/README.md`
 
 📧 **Outlook Extraction (Sales Reports)**  
 `.../sales_report_extraction/readme.md`

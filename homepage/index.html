@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homepage</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        function gotoService(port) {
+            window.location.href = window.location.protocol + '//' + window.location.hostname + ':' + port;
+        }
+    </script>
+</head>
+<body class="bg-gray-100 p-8 font-sans min-h-screen">
+    <div class="max-w-5xl mx-auto">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-extrabold text-gray-900 mb-2">Homepage</h1>
+            <p class="text-gray-500 text-lg">Ubuntu Machine Portal</p>
+        </header>
+
+        <section class="mb-12">
+            <div class="flex items-center mb-6">
+                <div class="h-px flex-1 bg-gray-200"></div>
+                <h2 class="px-4 text-sm font-bold text-gray-400 uppercase tracking-widest">Reporting & Data Tools</h2>
+                <div class="h-px flex-1 bg-gray-200"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <div onclick="gotoService('8003')" class="group block bg-white border-2 border-transparent rounded-2xl p-8 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
+                    <div class="flex items-center space-x-6">
+                        <div class="text-5xl transition-transform group-hover:scale-110">🔍</div>
+                        <div class="text-left">
+                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-blue-700">DocID Tool</h3>
+                            <p class="text-sm text-gray-500 mt-1">Manage and look up configurations for Show, Theatre, and Document IDs.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div onclick="gotoService('8002')" class="group block bg-white border-2 border-transparent rounded-2xl p-8 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
+                    <div class="flex items-center space-x-6">
+                        <div class="text-5xl transition-transform group-hover:scale-110">📊</div>
+                        <div class="text-left">
+                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-blue-700">Sales Dispatcher</h3>
+                            <p class="text-sm text-gray-500 mt-1">Automated Power BI dataset refreshes and PDF report distribution.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section>
+            <div class="flex items-center mb-6">
+                <div class="h-px flex-1 bg-gray-200"></div>
+                <h2 class="px-4 text-sm font-bold text-gray-400 uppercase tracking-widest">System Management</h2>
+                <div class="h-px flex-1 bg-gray-200"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <div onclick="gotoService('4200')" class="group block bg-white border-2 border-transparent rounded-2xl p-8 hover:border-purple-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
+                    <div class="flex items-center space-x-6">
+                        <div class="text-5xl transition-transform group-hover:scale-110">🧠</div>
+                        <div class="text-left">
+                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-purple-700">Prefect Server</h3>
+                            <p class="text-sm text-gray-500 mt-1">Monitor background data extraction flows and orchestration health.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div onclick="gotoService('9000')" class="group block bg-white border-2 border-transparent rounded-2xl p-8 hover:border-emerald-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
+                    <div class="flex items-center space-x-6">
+                        <div class="text-5xl transition-transform group-hover:scale-110">🐳</div>
+                        <div class="text-left">
+                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-emerald-700">Portainer</h3>
+                            <p class="text-sm text-gray-500 mt-1">Direct access to container management, status, and environment logs.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <footer class="mt-16 pt-8 border-t border-gray-200 text-center text-xs text-gray-400">
+            Internal Operations Tools &bull; Dewynters &bull; 2026
+        </footer>
+    </div>
+</body>
+</html>
