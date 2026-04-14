@@ -1,7 +1,0 @@
-streamlit
-msal
-httpx
-pandas
-python-dotenv
-pyodbc
-PyMuPDF
