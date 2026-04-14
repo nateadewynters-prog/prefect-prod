@@ -1,4 +1,4 @@
 requests
 pyodbc
 python-dotenv
-prefect
+prefect==3.6.25
