@@ -12,3 +12,4 @@ BrandwatchOutputs/
 # Ignore Python Cache
 __pycache__/
 *.pyc
+node_modules/
