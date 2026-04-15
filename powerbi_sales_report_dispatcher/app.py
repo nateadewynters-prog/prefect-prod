@@ -81,14 +81,35 @@ def fetch_sql_metrics(show_id):
 def build_email_html(config, m):
     w_g, w_t, w_atp, a_g, a_t, a_atp, res_g, c_g, c_t, c_atp = m['main']
     wk_gp, wk_cap = m['weekly']
-    perf_section = ""
+    
+    def is_val(val):
+        return val is not None and str(val).lower() != 'none'
+
+    summary_items = []
+    if is_val(w_g) and is_val(w_t):
+        summary_items.append(f"&emsp;&bull; Yesterday’s wrap was <strong>£{w_g}</strong> and <strong>{w_t}</strong> tickets with an ATP of <strong>£{w_atp}</strong>.")
+    if is_val(c_g) and is_val(c_t):
+        summary_items.append(f"&emsp;&bull; Cumulative sales are currently at <strong>£{c_g}</strong> and <strong>{c_t}</strong> tickets with an ATP of <strong>£{c_atp}</strong>.")
+    if is_val(a_g) and is_val(a_t):
+        summary_items.append(f"&emsp;&bull; The advance is currently at <strong>£{a_g}</strong> and <strong>{a_t}</strong> tickets with an ATP of <strong>£{a_atp}</strong> (incl. comps).")
+    if is_val(res_g):
+        summary_items.append(f"&emsp;&bull; The reserve gross is currently <strong>£{res_g}</strong>.")
+
     if m.get('no_of_perfs', 0) > 0 and 'perf_detail' in m:
         m_gp, m_cap, m_gr, e_gp, e_cap, e_gr = m['perf_detail']
-        perf_section = '<p style="margin:0;">&emsp;&bull; Yesterday’s performances:</p>'
-        if m_gp is not None:
-            perf_section += f'\n                <p style="margin:0;">&emsp;&emsp;Matinee - {m_gp}% GP (£{m_gr}k) and {m_cap}% capacity.</p>'
-        if e_gp is not None:
-            perf_section += f'\n                <p style="margin:0;">&emsp;&emsp;Evening - {e_gp}% GP (£{e_gr}k) and {e_cap}% capacity.</p>'
+        perf_sub_items = []
+        if is_val(m_gp):
+            perf_sub_items.append(f"&emsp;&emsp;Matinee - {m_gp}% GP (£{m_gr}k) and {m_cap}% capacity.")
+        if is_val(e_gp):
+            perf_sub_items.append(f"&emsp;&emsp;Evening - {e_gp}% GP (£{e_gr}k) and {e_cap}% capacity.")
+        if perf_sub_items:
+            summary_items.append("&emsp;&bull; Yesterday’s performances:")
+            summary_items.extend(perf_sub_items)
+
+    if is_val(wk_gp) and is_val(wk_cap):
+        summary_items.append(f"&emsp;&bull; This week’s performances average <strong>{wk_gp}% GP</strong> and <strong>{wk_cap}% capacity</strong>.")
+
+    summary_html_block = "".join([f'<p style="margin:0;">{item}</p>' for item in summary_items])
 
     return f"""
     <html>
@@ -97,13 +118,8 @@ def build_email_html(config, m):
             <p>Dear all,</p>
             <p>Please find attached your report for <strong>{config['show_name']}</strong><br>
             To view this on the Power BI Dashboard click <a href="{config['dashboard_url']}" style="color: #0078D4; text-decoration: none;">here</a>.</p>
-            <p style="margin:0;">In summary:</p>
-            <p style="margin:0;">&emsp;&bull; Yesterday’s wrap was <strong>£{w_g}</strong> and <strong>{w_t}</strong> tickets with an ATP of <strong>£{w_atp}</strong>.</p>
-            <p style="margin:0;">&emsp;&bull; Cumulative sales are currently at <strong>£{c_g}</strong> and <strong>{c_t}</strong> tickets with an ATP of <strong>£{c_atp}</strong>.</p>
-            <p style="margin:0;">&emsp;&bull; The advance is currently at <strong>£{a_g}</strong> and <strong>{a_t}</strong> tickets with an ATP of <strong>£{a_atp}</strong> (incl. comps).</p>
-            <p style="margin:0;">&emsp;&bull; The reserve gross is currently <strong>£{res_g}</strong>.</p>
-            {perf_section}
-            <p style="margin:0;">&emsp;&bull; This week’s performances average <strong>{wk_gp}% GP</strong> and <strong>{wk_cap}% capacity</strong>.</p>
+            <p style="margin-bottom: 4px;">In summary:</p>
+            {summary_html_block}
             <br>
             <img src="cid:preview_image_001" style="width: 100%; max-width: 800px; border: 1px solid #EEEEEE; display: block;">
             <br>
@@ -149,8 +165,38 @@ def send_graph_email(config, html_body, pdf_content, png_bytes, graph_token):
 # --- ROUTES ---
 @app.route('/')
 def dispatcher():
-    """Serves the Dispatcher UI directly at the root of this microservice."""
     return render_template('dispatcher.html', shows=SHOWS_CONFIG)
+
+@app.route('/preview/<show_id>')
+def preview_email(show_id):
+    config = next((s for s in SHOWS_CONFIG if s["id"] == show_id), None)
+    if not config:
+        return "Show not found", 404
+    try:
+        metrics = fetch_sql_metrics(config['show_id'])
+        return build_email_html(config, metrics)
+    except Exception as e:
+        return f"Error fetching preview data: {str(e)}", 500
+
+@app.route('/query/<show_id>')
+def query_database(show_id):
+    config = next((s for s in SHOWS_CONFIG if s["id"] == show_id), None)
+    if not config: return {"error": "Show not found"}, 404
+    try:
+        m = fetch_sql_metrics(config['show_id'])
+        res = [
+            {"Metric": "Wrap", "Value": f"£{m['main'][0]}"},
+            {"Metric": "Tickets Sold", "Value": m['main'][1]},
+            {"Metric": "ATP", "Value": f"£{m['main'][2]}"},
+            {"Metric": "Advance £", "Value": f"£{m['main'][3]}"},
+            {"Metric": "Advance Tix", "Value": m['main'][4]},
+            {"Metric": "Reserve £", "Value": f"£{m['main'][6]}"},
+            {"Metric": "Cumul Gross £", "Value": f"£{m['main'][7]}"},
+            {"Metric": "Weekly GP %", "Value": f"{m['weekly'][0]}%"},
+            {"Metric": "Weekly Cap %", "Value": f"{m['weekly'][1]}%"}
+        ]
+        return {"show": config['show_name'], "data": res}
+    except Exception as e: return {"error": str(e)}, 500
 
 @app.route('/stream/<show_id>')
 def stream_logs(show_id):
@@ -164,10 +210,10 @@ def stream_logs(show_id):
             return
 
         yield msg(f"🚀 Starting pipeline for {config['show_name']}...")
-        
         yield msg("🔑 Requesting Azure AD Tokens...")
         pbi_token = engine.get_token(["https://analysis.windows.net/powerbi/api/.default"])
         graph_token = engine.get_token(["https://graph.microsoft.com/.default"])
+        
         if not pbi_token or not graph_token:
             yield msg("❌ Auth Failed. Check Azure AD Credentials.", "error")
             return
@@ -198,7 +244,7 @@ def stream_logs(show_id):
         yield msg("🗄️ Fetching Sales Metrics from SQL...")
         try:
             metrics = fetch_sql_metrics(config['show_id'])
-            yield msg(f"📊 SQL Data Fetched. Found {metrics.get('no_of_perfs', 0)} performances.")
+            yield msg(f"📊 SQL Data Fetched.")
         except Exception as e:
             yield msg(f"❌ SQL Error: {str(e)}", "error")
             return
@@ -235,15 +281,15 @@ def stream_logs(show_id):
             png_bytes = pix.tobytes("png")
             doc.close()
         except Exception as e:
-            yield msg(f"❌ PyMuPDF Rendering Error: {str(e)}", "error")
+            yield msg(f"❌ Rendering Error: {str(e)}", "error")
             return
 
-        yield msg("📧 Constructing and Sending Email via MS Graph...")
+        yield msg("📧 Dispatching Email via MS Graph...")
         try:
             send_graph_email(config, build_email_html(config, metrics), pdf_bytes, png_bytes, graph_token)
-            yield msg(f"✅ SUCCESS: {config['show_name']} report completely processed & sent.", "success")
+            yield msg(f"✅ SUCCESS: {config['show_name']} report sent.", "success")
         except Exception as e:
-            yield msg(f"❌ Graph API Email Error: {str(e)}", "error")
+            yield msg(f"❌ Graph API Error: {str(e)}", "error")
             return
         
         yield "data: [DONE]\n\n"

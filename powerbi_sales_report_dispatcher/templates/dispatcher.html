@@ -44,6 +44,15 @@
                         <a href="{{ show.dashboard_url }}" target="_blank" class="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2.5 px-4 rounded-lg text-center transition-colors">
                             📊 View Dashboard
                         </a>
+                        
+                        <button onclick="previewEmail('{{ show.id }}')" class="w-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold py-2.5 px-4 rounded-lg text-center transition-colors">
+                            📧 View Email Body
+                        </button>
+
+                        <button onclick="openQueryModal('{{ show.id }}')" class="w-full bg-green-100 hover:bg-green-200 text-green-700 font-bold py-2.5 px-4 rounded-lg text-center transition-colors">
+                            🔍 Query Database
+                        </button>
+
                         <button onclick="runReport('{{ show.id }}')" id="btn-{{ show.id }}" class="tool-btn bg-gray-800 hover:bg-black text-white font-bold py-2.5 px-4 rounded-lg transition-colors w-full disabled:opacity-50">
                             Run Single Report
                         </button>
@@ -62,8 +71,65 @@
         </div>
     </div>
 
+    <div id="queryModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="p-6 border-b flex justify-between items-center">
+                <h3 id="modalTitle" class="text-xl font-bold text-gray-800">SQL Raw Data</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
+            <div class="p-6 max-h-[450px] overflow-y-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b text-gray-500 text-xs uppercase tracking-wider">
+                            <th class="py-2">Metric</th>
+                            <th class="py-2">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalBody" class="font-mono text-sm text-gray-700">
+                        </tbody>
+                </table>
+            </div>
+            <div class="p-4 bg-gray-50 text-right">
+                <button onclick="closeModal()" class="bg-gray-800 hover:bg-black text-white px-6 py-2 rounded-lg font-bold transition-colors">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function clearLogs() { document.getElementById('log-list').innerHTML = ''; }
+
+        function previewEmail(id) {
+            const width = 900;
+            const height = 700;
+            const left = (window.innerWidth / 2) - (width / 2);
+            const top = (window.innerHeight / 2) - (height / 2);
+            window.open(`/preview/${id}`, 'EmailPreview', `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`);
+        }
+
+        function openQueryModal(id) {
+            const body = document.getElementById('modalBody');
+            const title = document.getElementById('modalTitle');
+            document.getElementById('queryModal').classList.remove('hidden');
+            body.innerHTML = '<tr><td colspan="2" class="py-8 text-center animate-pulse text-blue-500 font-bold">Querying TicketingDS...</td></tr>';
+            
+            fetch(`/query/${id}`)
+                .then(r => r.json())
+                .then(res => {
+                    if (res.error) throw new Error(res.error);
+                    title.innerText = `${res.show} - Raw SQL Output`;
+                    body.innerHTML = res.data.map(r => `
+                        <tr class="border-b hover:bg-gray-50 transition-colors">
+                            <td class="py-3 text-gray-500 font-semibold">${r.Metric}</td>
+                            <td class="py-3 font-bold ${r.Value.includes('None') ? 'text-red-500':'text-blue-600'}">${r.Value}</td>
+                        </tr>
+                    `).join('');
+                })
+                .catch(err => {
+                    body.innerHTML = `<tr><td colspan="2" class="py-8 text-center text-red-500 font-bold font-mono">ERROR: ${err.message}</td></tr>`;
+                });
+        }
+
+        function closeModal() { document.getElementById('queryModal').classList.add('hidden'); }
 
         function runReport(id) {
             const allButtons = document.querySelectorAll('.tool-btn');
