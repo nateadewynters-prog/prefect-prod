@@ -44,13 +44,13 @@
                         <a href="{{ show.dashboard_url }}" target="_blank" class="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2.5 px-4 rounded-lg text-center transition-colors">
                             📊 View Dashboard
                         </a>
-                        
-                        <button onclick="previewEmail('{{ show.id }}')" class="w-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold py-2.5 px-4 rounded-lg text-center transition-colors">
-                            📧 View Email Body
-                        </button>
 
                         <button onclick="openQueryModal('{{ show.id }}')" class="w-full bg-green-100 hover:bg-green-200 text-green-700 font-bold py-2.5 px-4 rounded-lg text-center transition-colors">
                             🔍 Query Database
+                        </button>
+                        
+                        <button onclick="previewEmail('{{ show.id }}')" class="w-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold py-2.5 px-4 rounded-lg text-center transition-colors">
+                            📧 View Email Body
                         </button>
 
                         <button onclick="runReport('{{ show.id }}')" id="btn-{{ show.id }}" class="tool-btn bg-gray-800 hover:bg-black text-white font-bold py-2.5 px-4 rounded-lg transition-colors w-full disabled:opacity-50">
