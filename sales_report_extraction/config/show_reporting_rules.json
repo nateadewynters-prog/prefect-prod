@@ -291,6 +291,27 @@
       "processing": {
         "passthrough_only": true
       }
+    },
+    {
+      "rule_name": "MY_NEIGHBOUR_TOTORO_GILLIAN_LYNNE_THEATRE",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "noreply@lwtheatres.co.uk",
+        "subject_keyword": "My Neighbour Totoro - All Perf by Perf Advance – CSV",
+        "attachment_type": ".csv"
+      },
+      "metadata": {
+        "show_name": "My Neighbour Totoro",
+        "venue_name": "Gillian Lynne Theatre",
+        "report_type": "Advance",
+        "show_id": "222",
+        "venue_id": "80",
+        "document_id": "452",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
     }
   ]
 }
