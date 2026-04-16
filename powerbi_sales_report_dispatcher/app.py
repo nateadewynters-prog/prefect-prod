@@ -19,7 +19,7 @@ SHOWS_CONFIG = [
         "pbi_report_id": "24784969-474d-4c16-bd45-88a71b8167dd",
         "pbi_dataset_id": "3388428f-e0b7-4d23-b65d-21f77c8d111b", 
         "dashboard_url": "https://app.powerbi.com/groups/b5687f95-8331-4389-88bc-10680652c6f7/reports/24784969-474d-4c16-bd45-88a71b8167dd",
-        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters"]
+        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters.com"]
     },
     {
         "id": "2", "show_name": "Beetlejuice", "show_id": 281, "db_type": "Legacy",
@@ -27,7 +27,7 @@ SHOWS_CONFIG = [
         "pbi_report_id": "5d44f020-82c0-46da-938a-b90c6906b079",
         "pbi_dataset_id": "fee1f648-be9b-4d16-b458-df868dee474d",
         "dashboard_url": "https://app.powerbi.com/groups/9fe3b075-b754-4763-983e-655771e0b7c4/reports/5d44f020-82c0-46da-938a-b90c6906b079/0920519f35b44a81ba38",
-        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters"]
+        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters.com"]
     },
     {
         "id": "3", "show_name": "Mamma Mia!", "show_id": 8, "db_type": "Legacy",
@@ -35,7 +35,7 @@ SHOWS_CONFIG = [
         "pbi_report_id": "00a4bb1a-0691-417e-a94b-f9d09965bf45",
         "pbi_dataset_id": "445be91a-db44-4716-952c-69825afa9270",
         "dashboard_url": "https://app.powerbi.com/groups/4900e0ac-9477-4fc1-a82c-6ddc35546023/reports/00a4bb1a-0691-417e-a94b-f9d09965bf45/80a435e098a8b67d5307",
-        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters"]
+        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters.com"]
     },
     {
         "id": "4", "show_name": "Moulin Rouge!", "show_id": 45, "db_type": "Legacy",
@@ -43,7 +43,7 @@ SHOWS_CONFIG = [
         "pbi_report_id": "a389ea5b-949f-4bb7-b4f2-97571dee86b3",
         "pbi_dataset_id": "ee878be9-5355-412d-ba52-d4c4c2661cf0",
         "dashboard_url": "https://app.powerbi.com/groups/d8e48a79-0972-4f4e-a6da-891f284f7953/reports/a389ea5b-949f-4bb7-b4f2-97571dee86b3/80a435e098a8b67d5307",
-        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters"]
+        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters.com"]
     }
 ]
 
