@@ -144,6 +144,30 @@
       }
     },
     {
+      "rule_name": "GMG_JESUS_CHRIST_SUPERSTAR_HONGKONG_ZIP",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "gmg-productions.com",
+        "subject_keyword": "Daily Ticket Report for GMG PRODUCTIONS",
+        "attachment_type": ".zip"
+      },
+      "metadata": {
+        "show_name": "Jesus Christ Superstar",
+        "venue_name": "Hong Kong",
+        "report_type": "Advance",
+        "show_id": "287",
+        "venue_id": "125",
+        "document_id": "509",
+        "timezone": "Asia/Singapore",
+        "sales_day_offset_hours": 1
+      },
+      "processing": {
+        "parser_module": "src.parsers.gmg_hk_jesus_christ_superstar_xlsx_parser",
+        "parser_function": "extract_gmg_jcs_data",
+        "needs_lookup": false
+      }
+    },
+    {
       "rule_name": "ROCKY_HORROR_EASTBOURNE",
       "active": true,
       "match_criteria": {
@@ -307,6 +331,27 @@
         "show_id": "222",
         "venue_id": "80",
         "document_id": "452",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "MOULIN_ROUGE_PLYMOUTH_ADVANCE",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "tessitura.reports@theatreroyal.com",
+        "subject_keyword": "Moulin Rouge Plymouth | Daily Net Sales",
+        "attachment_type": ".xlsx"
+      },
+      "metadata": {
+        "show_name": "Moulin Rouge",
+        "venue_name": "Plymouth Theatre Royal",
+        "report_type": "Advance",
+        "show_id": "229",
+        "venue_id": "39",
+        "document_id": "105",
         "timezone": "Europe/London"
       },
       "processing": {
