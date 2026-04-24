@@ -294,48 +294,6 @@
       "processing": {
         "passthrough_only": true
       }
-    },
-    {
-      "rule_name": "MOULIN_ROUGE_MIDNIGHT_ADVANCE",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "reports@info.atgtickets.com",
-        "subject_keyword": "MR Midnight Advance",
-        "attachment_type": ".csv"
-      },
-      "metadata": {
-        "show_name": "Moulin Rouge",
-        "venue_name": "Picadilly Theatre",
-        "report_type": "Advance",
-        "show_id": "45",
-        "venue_id": "12",
-        "document_id": "226",
-        "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
-      }
-    },
-    {
-      "rule_name": "MOULIN_ROUGE_PLYMOUTH_ADVANCE",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "tessitura.reports@theatreroyal.com",
-        "subject_keyword": "Moulin Rouge Plymouth | Daily Net Sales",
-        "attachment_type": ".xlsx"
-      },
-      "metadata": {
-        "show_name": "Moulin Rouge",
-        "venue_name": "Plymouth Theatre Royal",
-        "report_type": "Advance",
-        "show_id": "229",
-        "venue_id": "39",
-        "document_id": "105",
-        "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
-      }
     }
   ]
 }
