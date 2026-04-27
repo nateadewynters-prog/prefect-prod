@@ -168,48 +168,6 @@
       }
     },
     {
-      "rule_name": "ROCKY_HORROR_EASTBOURNE",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "ticketingoperations@trafalgar.global",
-        "subject_keyword": "Eastbourne Theatres - Rocky Horror Show",
-        "attachment_type": ".csv"
-      },
-      "metadata": {
-        "show_name": "Rocky Horror Show",
-        "venue_name": "Eastbourne",
-        "report_type": "Advance",
-        "show_id": "272",
-        "venue_id": "36",
-        "document_id": "435",
-        "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
-      }
-    },
-    {
-      "rule_name": "ROCKY_HORROR_CARDIFF",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "ticketingoperations@trafalgar.global",
-        "subject_keyword": "New Theatre, Cardiff - The Rocky Horror",
-        "attachment_type": ".csv"
-      },
-      "metadata": {
-        "show_name": "Rocky Horror 2026",
-        "venue_name": "Cardiff",
-        "report_type": "Advance",
-        "show_id": "272",
-        "venue_id": "65",
-        "document_id": "435",
-        "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
-      }
-    },
-    {
       "rule_name": "SILENCE_OF_THE_LAMBS_BOURNEMOUTH",
       "active": true,
       "match_criteria": {
