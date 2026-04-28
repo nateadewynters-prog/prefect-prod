@@ -1,4 +1,4 @@
-# 🤖 Your New Digital Mailroom Assistant: Automated Sales Report Extraction
+# 🤖 Your New Digital Mailroom Assistant - Automated Sales Report Extraction
 
 To help our operations and accounting teams focus on what matters most, we have deployed a "Highly Efficient Digital Mailroom Assistant." Think of this system as a tireless, 24/7 worker who handles the tedious task of collecting and sorting sales reports from our various partners.
 
