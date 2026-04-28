@@ -1,25 +1,42 @@
-name: Server Deployment Sync
+name: Internal Tools Deployment
 
+# Trigger on pushes to the main branch (including your Admin merges/pushes)
 on:
   push:
     branches: [ main ]
 
+# Ensure only one deployment runs at a time to prevent file locking
+concurrency:
+  group: production_deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
+    # This must match the label you gave your runner during Step 1
     runs-on: self-hosted 
 
     steps:
+      # Step 1: Prepare the runner's workspace (Standard GitHub utility)
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # Step 2: Force the server's production folder to match GitHub
+      # We use 'reset --hard' to overwrite any local permission/file conflicts
       - name: Sync Local Filesystem
         run: |
           cd /opt/prefect/prod/code/
-          git fetch origin main
-          git reset --hard origin main # Force-syncs the server to match GitHub exactly
+          git config --local core.fileMode false
+          git fetch --all
+          git clean -fd
+          git reset --hard origin/main
 
+      # Step 3: Rebuild and Restart Docker Containers
+      # This rebuilds only the services with code changes
       - name: Refresh Docker Services
         run: |
           cd /opt/prefect/prod/code/
+          # No sudo needed if natea is in the docker group
           docker compose up -d --build --remove-orphans
+          
+          # Housekeeping: Delete old image layers to save disk space
           docker image prune -f
