@@ -20,14 +20,11 @@
         <div class="bg-white rounded-lg shadow p-8 mb-6">
             <div class="flex justify-between items-center border-b pb-4 mb-6">
                 <h1 class="text-3xl font-bold text-gray-800">Power BI Report Dispatcher</h1>
-                <div id="status-indicator" class="hidden flex items-center text-blue-600 font-bold">
-                    <span class="animate-ping mr-2">●</span> PROCESSING
+                <div id="status-indicator" class="hidden flex items-center text-blue-600 font-bold px-4 py-2 bg-blue-50 rounded-lg">
+                    <span class="animate-ping mr-3 inline-flex h-3 w-3 rounded-full bg-blue-500 opacity-75"></span> 
+                    SYSTEM BUSY: DISPATCHING
                 </div>
             </div>
-
-            <button onclick="runReport('ALL')" id="btn-ALL" class="tool-btn w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-4 rounded-xl mb-8 shadow-lg transition-all disabled:opacity-50">
-                🚀 RUN ALL REPORTS BATCH
-            </button>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {% for show in shows %}
@@ -41,19 +38,19 @@
                     </div>
                     
                     <div class="flex flex-col gap-2 mt-4">
-                        <a href="{{ show.dashboard_url }}" target="_blank" class="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2.5 px-4 rounded-lg text-center transition-colors">
+                        <a href="{{ show.dashboard_url }}" target="_blank" class="dashboard-link w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2.5 px-4 rounded-lg text-center transition-all">
                             📊 View Dashboard
                         </a>
 
-                        <button onclick="openQueryModal('{{ show.id }}')" class="w-full bg-green-100 hover:bg-green-200 text-green-700 font-bold py-2.5 px-4 rounded-lg text-center transition-colors">
+                        <button onclick="openQueryModal('{{ show.id }}')" class="secondary-btn w-full bg-green-100 hover:bg-green-200 text-green-700 font-bold py-2.5 px-4 rounded-lg text-center transition-all">
                             🔍 Query Database
                         </button>
                         
-                        <button onclick="previewEmail('{{ show.id }}')" class="w-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold py-2.5 px-4 rounded-lg text-center transition-colors">
+                        <button onclick="previewEmail('{{ show.id }}')" class="secondary-btn w-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold py-2.5 px-4 rounded-lg text-center transition-all">
                             📧 View Email Body
                         </button>
 
-                        <button onclick="runReport('{{ show.id }}')" id="btn-{{ show.id }}" class="tool-btn bg-gray-800 hover:bg-black text-white font-bold py-2.5 px-4 rounded-lg transition-colors w-full disabled:opacity-50">
+                        <button onclick="runReport('{{ show.id }}')" id="btn-{{ show.id }}" class="tool-btn bg-gray-800 hover:bg-black text-white font-bold py-2.5 px-4 rounded-lg transition-all w-full disabled:opacity-50">
                             Dispatch Report
                         </button>
                     </div>
@@ -96,11 +93,15 @@
     </div>
 
     <script>
-        function clearLogs() { document.getElementById('log-list').innerHTML = ''; }
+        let lastLogCount = 0;
+
+        function clearLogs() { 
+            document.getElementById('log-list').innerHTML = '<div class="text-gray-500">Console cleared locally. Real-time events will appear here...</div>';
+            lastLogCount = -1; 
+        }
 
         function previewEmail(id) {
-            const width = 900;
-            const height = 700;
+            const width = 900, height = 700;
             const left = (window.innerWidth / 2) - (width / 2);
             const top = (window.innerHeight / 2) - (height / 2);
             window.open(`/preview/${id}`, 'EmailPreview', `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`);
@@ -131,41 +132,101 @@
 
         function closeModal() { document.getElementById('queryModal').classList.add('hidden'); }
 
+        function pollSharedState() {
+            fetch('/api/state')
+                .then(r => r.json())
+                .then(data => {
+                    const isSystemBusy = data.locks.length > 0;
+
+                    // 1. Lock/Unlock Dispatch Buttons
+                    document.querySelectorAll('.tool-btn').forEach(btn => {
+                        const id = btn.id.replace('btn-', '');
+                        if (isSystemBusy) {
+                            btn.disabled = true;
+                            if (data.locks.includes(id)) {
+                                btn.innerText = "⏳ DISPATCHING...";
+                                btn.classList.add('animate-pulse', 'bg-yellow-600', 'hover:bg-yellow-600');
+                                btn.classList.remove('bg-gray-800', 'hover:bg-black', 'opacity-50');
+                            } else {
+                                btn.innerText = "Waiting...";
+                                btn.classList.add('opacity-50', 'bg-gray-800', 'cursor-not-allowed');
+                                btn.classList.remove('animate-pulse', 'bg-yellow-600', 'hover:bg-yellow-600');
+                            }
+                        } else {
+                            btn.disabled = false;
+                            btn.innerText = "Dispatch Report";
+                            btn.classList.remove('animate-pulse', 'bg-yellow-600', 'hover:bg-yellow-600', 'opacity-50', 'cursor-not-allowed');
+                            btn.classList.add('bg-gray-800', 'hover:bg-black');
+                        }
+                    });
+
+                    // 2. Lock/Unlock Secondary Buttons (Query & Email Preview)
+                    document.querySelectorAll('.secondary-btn').forEach(btn => {
+                        if (isSystemBusy) {
+                            btn.disabled = true;
+                            btn.classList.add('opacity-50', 'cursor-not-allowed');
+                        } else {
+                            btn.disabled = false;
+                            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        }
+                    });
+
+                    // 3. Lock/Unlock Dashboard Links
+                    document.querySelectorAll('.dashboard-link').forEach(link => {
+                        if (isSystemBusy) {
+                            link.classList.add('opacity-50', 'pointer-events-none');
+                        } else {
+                            link.classList.remove('opacity-50', 'pointer-events-none');
+                        }
+                    });
+
+                    // Manage visibility of the status elements
+                    if (isSystemBusy || data.logs.length > 0) {
+                        document.getElementById('status-box').classList.remove('hidden');
+                        if (isSystemBusy) {
+                            document.getElementById('status-indicator').classList.remove('hidden');
+                        } else {
+                            document.getElementById('status-indicator').classList.add('hidden');
+                        }
+                    }
+
+                    // Update the terminal output
+                    if (data.logs.length !== lastLogCount && lastLogCount !== -1) {
+                        const logList = document.getElementById('log-list');
+                        logList.innerHTML = data.logs.map(l => {
+                            let colorClass = 'text-gray-300';
+                            if (l.type === 'success') colorClass = 'text-green-400 border-green-500';
+                            if (l.type === 'error') colorClass = 'text-red-400 border-red-500 font-bold';
+                            if (l.type === 'separator') colorClass = 'text-blue-400 border-blue-500 font-bold mt-4 mb-2'; 
+                            
+                            const timeStr = l.timestamp.split(' ')[1]; 
+                            return `<div class="log-entry ${colorClass}"><span class="text-gray-600">[${timeStr}]</span> ${l.msg}</div>`;
+                        }).join('');
+                        
+                        logList.scrollTop = logList.scrollHeight; 
+                        lastLogCount = data.logs.length;
+                    } else if (lastLogCount === -1) {
+                        lastLogCount = data.logs.length; 
+                    }
+                })
+                .catch(err => console.error("Polling error:", err));
+        }
+
+        pollSharedState();
+        setInterval(pollSharedState, 2000);
+
         function runReport(id) {
-            const allButtons = document.querySelectorAll('.tool-btn');
-            const indicator = document.getElementById('status-indicator');
-            const logList = document.getElementById('log-list');
-            
-            allButtons.forEach(btn => btn.disabled = true);
-            indicator.classList.remove('hidden');
-            document.getElementById('status-box').classList.remove('hidden');
-
             const eventSource = new EventSource(`/stream/${id}`);
-
             eventSource.onmessage = function(event) {
                 if (event.data === "[DONE]") {
                     eventSource.close();
-                    allButtons.forEach(btn => btn.disabled = false);
-                    indicator.classList.add('hidden');
-                    return;
                 }
-
-                const data = JSON.parse(event.data);
-                const li = document.createElement('div');
-                const time = new Date().toLocaleTimeString();
-                
-                li.className = `log-entry ${data.type === 'success' ? 'text-green-400 border-green-500' : 'text-gray-300'}`;
-                li.innerHTML = `<span class="text-gray-600">[${time}]</span> ${data.msg}`;
-                
-                logList.appendChild(li);
-                logList.scrollTop = logList.scrollHeight;
             };
-
             eventSource.onerror = function() {
                 eventSource.close();
-                allButtons.forEach(btn => btn.disabled = false);
-                indicator.classList.add('hidden');
             };
+            // Force an immediate UI update so the button locks instantly
+            setTimeout(pollSharedState, 300);
         }
     </script>
 </body>

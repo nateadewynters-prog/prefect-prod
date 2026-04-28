@@ -1,6 +1,6 @@
-import os, time, requests, msal, pyodbc, base64, fitz, json
+import os, time, requests, msal, pyodbc, base64, fitz, json, sqlite3
 from datetime import datetime, timedelta
-from flask import Flask, render_template, Response, stream_with_context
+from flask import Flask, render_template, Response, stream_with_context, jsonify
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,7 +19,7 @@ SHOWS_CONFIG = [
         "pbi_report_id": "24784969-474d-4c16-bd45-88a71b8167dd",
         "pbi_dataset_id": "3388428f-e0b7-4d23-b65d-21f77c8d111b", 
         "dashboard_url": "https://app.powerbi.com/groups/b5687f95-8331-4389-88bc-10680652c6f7/reports/24784969-474d-4c16-bd45-88a71b8167dd",
-        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters.com"]
+        "recipients": ["figures@dewynters.com", "a.trott@dewynters.com", "c.dobson@dewynters.com"]
     },
     {
         "id": "2", "show_name": "Beetlejuice", "show_id": 281, "db_type": "Legacy",
@@ -27,7 +27,7 @@ SHOWS_CONFIG = [
         "pbi_report_id": "5d44f020-82c0-46da-938a-b90c6906b079",
         "pbi_dataset_id": "fee1f648-be9b-4d16-b458-df868dee474d",
         "dashboard_url": "https://app.powerbi.com/groups/9fe3b075-b754-4763-983e-655771e0b7c4/reports/5d44f020-82c0-46da-938a-b90c6906b079/0920519f35b44a81ba38",
-        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters.com"]
+        "recipients": ["figures@dewynters.com", "a.trott@dewynters.com", "c.dobson@dewynters.com"]
     },
     {
         "id": "3", "show_name": "Mamma Mia!", "show_id": 8, "db_type": "Legacy",
@@ -35,7 +35,7 @@ SHOWS_CONFIG = [
         "pbi_report_id": "00a4bb1a-0691-417e-a94b-f9d09965bf45",
         "pbi_dataset_id": "445be91a-db44-4716-952c-69825afa9270",
         "dashboard_url": "https://app.powerbi.com/groups/4900e0ac-9477-4fc1-a82c-6ddc35546023/reports/00a4bb1a-0691-417e-a94b-f9d09965bf45/80a435e098a8b67d5307",
-        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters.com"]
+        "recipients": ["figures@dewynters.com", "a.trott@dewynters.com", "c.dobson@dewynters.com"]
     },
     {
         "id": "4", "show_name": "Moulin Rouge!", "show_id": 45, "db_type": "Legacy",
@@ -43,9 +43,35 @@ SHOWS_CONFIG = [
         "pbi_report_id": "a389ea5b-949f-4bb7-b4f2-97571dee86b3",
         "pbi_dataset_id": "ee878be9-5355-412d-ba52-d4c4c2661cf0",
         "dashboard_url": "https://app.powerbi.com/groups/d8e48a79-0972-4f4e-a6da-891f284f7953/reports/a389ea5b-949f-4bb7-b4f2-97571dee86b3/80a435e098a8b67d5307",
-        "recipients": ["figures@dewynters.com", "a.trott@dweynters.com", "c.dobson@dewynters.com"]
+        "recipients": ["figures@dewynters.com", "a.trott@dewynters.com", "c.dobson@dewynters.com"]
     }
 ]
+
+# --- SHARED STATE DATABASE (LOCKS & LOGS) ---
+def get_db_conn():
+    conn = sqlite3.connect('dispatcher_state.db', check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    with get_db_conn() as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS locks (show_id TEXT PRIMARY KEY, is_locked INTEGER)")
+        conn.execute("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, msg TEXT, type TEXT, timestamp DATETIME DEFAULT (datetime('now', 'localtime')))")
+        conn.execute("UPDATE locks SET is_locked = 0") # Reset locks on startup
+init_db()
+
+def set_lock(show_id, locked):
+    with get_db_conn() as conn:
+        conn.execute("INSERT INTO locks (show_id, is_locked) VALUES (?, ?) ON CONFLICT(show_id) DO UPDATE SET is_locked = ?", (show_id, int(locked), int(locked)))
+
+def is_any_locked():
+    with get_db_conn() as conn:
+        row = conn.execute("SELECT COUNT(*) as active_locks FROM locks WHERE is_locked = 1").fetchone()
+        return row['active_locks'] > 0
+
+def db_log(msg, msg_type="info"):
+    with get_db_conn() as conn:
+        conn.execute("INSERT INTO logs (msg, type) VALUES (?, ?)", (msg, msg_type))
 
 # --- HELPERS ---
 class LiveReportingEngine:
@@ -167,6 +193,14 @@ def send_graph_email(config, html_body, pdf_content, png_bytes, graph_token):
 def dispatcher():
     return render_template('dispatcher.html', shows=SHOWS_CONFIG)
 
+@app.route('/api/state')
+def get_state():
+    with get_db_conn() as conn:
+        locks = [row['show_id'] for row in conn.execute("SELECT show_id FROM locks WHERE is_locked = 1").fetchall()]
+        thirty_mins_ago = (datetime.now() - timedelta(minutes=30)).strftime('%Y-%m-%d %H:%M:%S')
+        logs = [dict(row) for row in conn.execute("SELECT msg, type, timestamp FROM logs WHERE timestamp >= ? ORDER BY timestamp ASC", (thirty_mins_ago,)).fetchall()]
+    return jsonify({"locks": locks, "logs": logs})
+
 @app.route('/preview/<show_id>')
 def preview_email(show_id):
     config = next((s for s in SHOWS_CONFIG if s["id"] == show_id), None)
@@ -200,99 +234,128 @@ def query_database(show_id):
 
 @app.route('/stream/<show_id>')
 def stream_logs(show_id):
+    # Enforce Global System Lock: If *any* show is running, reject the request.
+    if is_any_locked():
+        def reject():
+            yield f'data: {json.dumps({"msg": "❌ System busy: Another report is currently being processed. Please wait until it completes.", "type": "error"})}\n\n'
+            yield "data: [DONE]\n\n"
+        return Response(stream_with_context(reject()), mimetype='text/event-stream')
+
+    set_lock(show_id, True)
+
     def generate():
-        def msg(text, msg_type="info"): return f'data: {json.dumps({"msg": text, "type": msg_type})}\n\n'
+        def msg(text, msg_type="info"): 
+            db_log(text, msg_type) 
+            return f'data: {json.dumps({"msg": text, "type": msg_type})}\n\n'
             
-        engine = LiveReportingEngine()
-        config = next((s for s in SHOWS_CONFIG if s["id"] == show_id), None)
-        if not config:
-            yield msg("❌ Error: Show not found", "error")
-            return
-
-        yield msg(f"🚀 Starting pipeline for {config['show_name']}...")
-        yield msg("🔑 Requesting Azure AD Tokens...")
-        pbi_token = engine.get_token(["https://analysis.windows.net/powerbi/api/.default"])
-        graph_token = engine.get_token(["https://graph.microsoft.com/.default"])
-        
-        if not pbi_token or not graph_token:
-            yield msg("❌ Auth Failed. Check Azure AD Credentials.", "error")
-            return
-
-        pbi_headers = {"Authorization": f"Bearer {pbi_token}", "Content-Type": "application/json"}
-
-        yield msg("🔄 Triggering Power BI Dataset Refresh...")
         try:
-            refresh_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/datasets/{config['pbi_dataset_id']}/refreshes"
-            requests.post(refresh_url, headers=pbi_headers, json={}).raise_for_status()
+            config = next((s for s in SHOWS_CONFIG if s["id"] == show_id), None)
+            if not config:
+                yield msg("❌ Error: Show not found", "error")
+                return
+
+            yield msg(f"========== NEW DISPATCH: {config['show_name'].upper()} ==========", "separator")
+            yield msg(f"🚀 Starting pipeline for {config['show_name']}...")
             
-            status_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/datasets/{config['pbi_dataset_id']}/refreshes?$top=1"
-            while True:
-                poll_resp = requests.get(status_url, headers=pbi_headers).json()
-                status = poll_resp.get('value', [{}])[0].get('status', 'Unknown')
-                yield msg(f"⏳ Refresh Status: {status}...")
-                if status == "Completed":
-                    yield msg("✅ Dataset Refresh Completed.", "success")
-                    break
-                elif status == "Failed":
-                    yield msg("❌ Power BI Refresh Failed.", "error")
-                    return
-                time.sleep(5)
-        except Exception as e:
-            yield msg(f"❌ Refresh API Error: {str(e)}", "error")
-            return
-
-        yield msg("🗄️ Fetching Sales Metrics from SQL...")
-        try:
-            metrics = fetch_sql_metrics(config['show_id'])
-            yield msg(f"📊 SQL Data Fetched.")
-        except Exception as e:
-            yield msg(f"❌ SQL Error: {str(e)}", "error")
-            return
-
-        yield msg("📄 Triggering Power BI PDF Export...")
-        try:
-            export_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/reports/{config['pbi_report_id']}/ExportTo"
-            resp = requests.post(export_url, headers=pbi_headers, json={"format": "PDF"})
-            resp.raise_for_status()
-            export_id = resp.json().get("id")
+            engine = LiveReportingEngine()
+            yield msg("🔑 Requesting Azure AD Tokens...")
+            pbi_token = engine.get_token(["https://analysis.windows.net/powerbi/api/.default"])
+            graph_token = engine.get_token(["https://graph.microsoft.com/.default"])
             
-            poll_export_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/reports/{config['pbi_report_id']}/exports/{export_id}"
-            while True:
-                poll = requests.get(poll_export_url, headers=pbi_headers).json()
-                status = poll.get("status")
-                yield msg(f"⏳ Export Status: {status}...")
-                if status == "Succeeded":
-                    break
-                elif status == "Failed":
-                    yield msg("❌ Power BI Export Failed.", "error")
-                    return
-                time.sleep(5)
+            if not pbi_token or not graph_token:
+                yield msg("❌ Auth Failed. Check Azure AD Credentials.", "error")
+                return
+
+            pbi_headers = {"Authorization": f"Bearer {pbi_token}", "Content-Type": "application/json"}
+
+            yield msg("🔄 Triggering Power BI Dataset Refresh...")
+            try:
+                refresh_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/datasets/{config['pbi_dataset_id']}/refreshes"
+                requests.post(refresh_url, headers=pbi_headers, json={}).raise_for_status()
                 
-            yield msg("📥 Downloading PDF File...")
-            pdf_bytes = requests.get(f"{poll_export_url}/file", headers=pbi_headers).content
-        except Exception as e:
-            yield msg(f"❌ Export API Error: {str(e)}", "error")
-            return
-            
-        yield msg("🖼️ Rendering PNG Preview from PDF...")
-        try:
-            doc = fitz.open("pdf", pdf_bytes)
-            pix = doc.load_page(0).get_pixmap(dpi=150)
-            png_bytes = pix.tobytes("png")
-            doc.close()
-        except Exception as e:
-            yield msg(f"❌ Rendering Error: {str(e)}", "error")
-            return
+                status_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/datasets/{config['pbi_dataset_id']}/refreshes?$top=1"
+                while True:
+                    poll_req = requests.get(status_url, headers=pbi_headers)
+                    poll_req.raise_for_status() 
+                    status = poll_req.json().get('value', [{}])[0].get('status', 'Unknown')
+                    
+                    yield msg(f"⏳ Refresh Status: {status}...")
+                    if status == "Completed":
+                        yield msg("✅ Dataset Refresh Completed.", "success")
+                        break
+                    elif status == "Failed":
+                        yield msg("❌ Power BI Refresh Failed.", "error")
+                        return
+                    time.sleep(5)
+            except requests.exceptions.HTTPError as e:
+                yield msg(f"❌ API Error: {e.response.status_code} - {e.response.text}", "error")
+                return
+            except Exception as e:
+                yield msg(f"❌ Refresh API Error: {str(e)}", "error")
+                return
 
-        yield msg("📧 Dispatching Email via MS Graph...")
-        try:
-            send_graph_email(config, build_email_html(config, metrics), pdf_bytes, png_bytes, graph_token)
-            yield msg(f"✅ SUCCESS: {config['show_name']} report sent.", "success")
-        except Exception as e:
-            yield msg(f"❌ Graph API Error: {str(e)}", "error")
-            return
-        
-        yield "data: [DONE]\n\n"
+            yield msg("🗄️ Fetching Sales Metrics from SQL...")
+            try:
+                metrics = fetch_sql_metrics(config['show_id'])
+                yield msg(f"📊 SQL Data Fetched.")
+            except Exception as e:
+                yield msg(f"❌ SQL Error: {str(e)}", "error")
+                return
+
+            yield msg("📄 Triggering Power BI PDF Export...")
+            try:
+                export_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/reports/{config['pbi_report_id']}/ExportTo"
+                resp = requests.post(export_url, headers=pbi_headers, json={"format": "PDF"})
+                resp.raise_for_status()
+                export_id = resp.json().get("id")
+                
+                poll_export_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/reports/{config['pbi_report_id']}/exports/{export_id}"
+                while True:
+                    poll_req = requests.get(poll_export_url, headers=pbi_headers)
+                    poll_req.raise_for_status()
+                    status = poll_req.json().get("status")
+                    
+                    yield msg(f"⏳ Export Status: {status}...")
+                    if status == "Succeeded":
+                        break
+                    elif status == "Failed":
+                        yield msg("❌ Power BI Export Failed.", "error")
+                        return
+                    time.sleep(5)
+                    
+                yield msg("📥 Downloading PDF File...")
+                pdf_bytes = requests.get(f"{poll_export_url}/file", headers=pbi_headers).content
+            except Exception as e:
+                yield msg(f"❌ Export API Error: {str(e)}", "error")
+                return
+                
+            yield msg("🖼️ Rendering PNG Preview from PDF...")
+            try:
+                doc = fitz.open("pdf", pdf_bytes)
+                pix = doc.load_page(0).get_pixmap(dpi=150)
+                png_bytes = pix.tobytes("png")
+                doc.close()
+            except Exception as e:
+                yield msg(f"❌ Rendering Error: {str(e)}", "error")
+                return
+
+            yield msg("📧 Dispatching Email via MS Graph...")
+            try:
+                send_graph_email(config, build_email_html(config, metrics), pdf_bytes, png_bytes, graph_token)
+                yield msg(f"✅ SUCCESS: {config['show_name']} report sent.", "success")
+                
+                # New line to log the email addresses it was sent to
+                email_list = ", ".join(config['recipients'])
+                yield msg(f"Sent to email addresses: {email_list}", "info")
+                
+            except Exception as e:
+                yield msg(f"❌ Graph API Error: {str(e)}", "error")
+                return
+            
+            yield "data: [DONE]\n\n"
+            
+        finally:
+            set_lock(show_id, False)
 
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
