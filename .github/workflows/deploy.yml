@@ -1,0 +1,25 @@
+name: Server Deployment Sync
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted 
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Sync Local Filesystem
+        run: |
+          cd /opt/prefect/prod/code/
+          git fetch origin main
+          git reset --hard origin main # Force-syncs the server to match GitHub exactly
+
+      - name: Refresh Docker Services
+        run: |
+          cd /opt/prefect/prod/code/
+          docker compose up -d --build --remove-orphans
+          docker image prune -f

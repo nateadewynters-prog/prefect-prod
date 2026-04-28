@@ -122,3 +122,27 @@ docker-compose up -d --build
 
 📊 **Brandwatch Social Performance**  
 `.../brandwatch_extraction/readme.md`
+
+---
+
+## 6. CI/CD & Automated Deployment
+
+**Infrastructure:** The server uses a GitHub Self-Hosted Runner.  
+**Runner Location:** The runner service is installed in the home directory at `/home/natea/actions-runner/`.  
+**Deployment Strategy:** The pipeline is triggered automatically on every push or merge to the `main` branch.  
+
+**Execution Logic:**
+1. The runner navigates to `/opt/prefect/prod/code/`.
+2. It executes `git fetch` and `git reset --hard origin main` to ensure the local filesystem perfectly matches the repository.
+3. It runs `docker compose up -d --build --remove-orphans` to rebuild only the modified services.
+4. It executes `docker image prune -f` to maintain disk health on the 4GB RAM VM.
+
+---
+
+## 7. Team Governance & Workflow
+
+**Branch Protection:** Direct pushes to the `main` branch are disabled.  
+**Pull Requests:** All changes must be submitted via a Pull Request (PR) from a feature branch.  
+**Approvals:** At least one peer approval is required from another developer before a PR can be merged into `main`.  
+**Admin Privileges:** Repository administrators (Lead Dev) retain the ability to bypass approvals for emergency hotfixes.
+
