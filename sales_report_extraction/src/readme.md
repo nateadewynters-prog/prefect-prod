@@ -14,10 +14,9 @@ This directory contains the application logic, decoupled from the orchestration 
 ## 2. Component Layout
 
 ### 📡 API & External Clients
-- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading, and **category tagging** for state management. Now fetches `internetMessageId` for server-side deduplication and `body` for link-based extraction.
-- **`link_downloader.py`**: Handles HTML body parsing, Sophos redirect bypass, and AWS S3 pre-signed URL "Target URL" hijacking. Validates download success based on file size thresholds (>10KB).
-- **`sftp_client.py`**: A `paramiko`-based client for delivering processed files. Employs **Atomic Rename logic** (uploading as `.tmp` and then renaming) to safely trigger automated DBA ingestion.
-- **`sharepoint_uploader.py`**: Handles file uploads to the Medallion SharePoint site. Returns the `webUrl` of the uploaded file and raises `ValueError` on status failures to ensure orchestrator visibility.
+- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading, and **category tagging** for state management. Features `tag_email` and `untag_email` methods with HTTP 409/412 retry logic to handle Exchange server conflicts. Now includes `internetMessageId` extraction for fingerprint-based deduplication.
+- **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs or raw passthrough files. It logs file size (KB) and utilizes centralized environment variables. Notifications have been removed; exceptions now bubble up to the orchestrator.
+- **`sharepoint_uploader.py`**: Handles file uploads to the Medallion SharePoint site. Notifications have been removed; exceptions bubble up to the orchestrator.
 
 ### 🧠 Core Engine
 - **`file_processor.py`**: The `ProcessingEngine` class. Manages the full file lifecycle:

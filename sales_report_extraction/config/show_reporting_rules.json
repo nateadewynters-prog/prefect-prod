@@ -252,28 +252,6 @@
       "processing": {
         "passthrough_only": true
       }
-    },
-    {
-      "rule_name": "BODYGUARD_GAIS_THEATRE_DOWNLOAD_FROM_LINK_2025",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "ticketmaster.com",
-        "subject_keyword": "Daily Report: Sales Comparison - The Bodyguard",
-        "attachment_type": ".xlsx",
-        "extraction_method": "link"
-      },
-      "metadata": {
-        "show_name": "The Bodyguard 2025",
-        "venue_name": "Dublin Bord Gais Energy Theatre",
-        "report_type": "Advance",
-        "show_id": "233",
-        "venue_id": "41",
-        "document_id": "71",
-        "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
-      }
     }
   ]
 }

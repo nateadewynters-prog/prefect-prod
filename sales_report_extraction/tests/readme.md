@@ -14,10 +14,10 @@ This suite verifies client authentication, file processing logic, server-side ta
 ## 2. Key Test Areas
 
 - **Graph API Tagging:** `test_categorization.py` verifies the ability to search for, apply, and remove category tags (`sales_report_extracted`, `sales_report_failed`, `sales_report_duplicate`), ensuring idempotency and retry capability.
-- **File Processing:** `test_file_processor.py` tests both standard extraction, deterministic timezone logic, and the `"passthrough_only"` logic.
+- **File Processing:** `test_file_processor.py` tests both standard extraction and the `"passthrough_only"` logic.
 - **Dynamic Orchestration:** `test_main.py` validates the 30-day rolling window calculation, `internetMessageId` deduplication, and ensures UI parameters like `days_back`, `target_rule_name`, `retry_failed`, and `disable_notifications` are correctly handled.
-- **SharePoint Integration:** Dedicated tests for SharePoint connectivity (`test_sales_reporting_sharepoint_connection.py`), folder structure/tree validation (`test_sales_reporting_sharepoint_tree.py`), and file upload logic (`test_sharepoint_upload.py`).
-- **SFTP & Failure Resilience:** `test_sftp_client.py` ensures that files are correctly handled and uploaded using atomic renames. `test_process_email_handles_lookup_failure_and_tags_failed` verifies that mapping errors result in the `"sales_report_failed"` tag.
+- **Failure Resilience:** Specifically, `test_process_email_handles_lookup_failure_and_tags_failed` verifies that mapping errors (e.g., missing lookups) result in the `"sales_report_failed"` tag. Teams alerts are now managed by the orchestrator.
+- **SFTP Integration:** `test_sftp_client.py` ensures that files are correctly handled and uploaded. Internal Teams notifications have been removed in favor of bubbling exceptions.
 
 ---
 

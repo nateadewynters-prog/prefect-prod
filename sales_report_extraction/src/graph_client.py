@@ -43,7 +43,7 @@ class GraphClient:
         # 🚀 FIX: Added internetMessageId to the $select string to catch duplicates!
         params = {
             '$search': search_query, 
-            '$select': 'id,subject,from,hasAttachments,receivedDateTime,categories,internetMessageId,body', 
+            '$select': 'id,subject,from,hasAttachments,receivedDateTime,categories,internetMessageId', 
             '$top': top
         }
         

@@ -18,7 +18,6 @@ The following parsers are currently implemented and active:
 - **`malvern_theatre_contractual_report_pdf_parser.py`**: Extracts contractual data from Malvern Theatre PDF reports.
 - **`nederlandaer_devil_wears_prada_cumulative_extraction_pdf.py`**: Specialized cumulative extractor for "The Devil Wears Prada" reports from Nederlandaer.
 - **`ticketek_event_settlement_excel_parser.py`**: Robust Excel parser for Ticketek settlement reports, supporting complex lookups.
-- **`gmg_hk_jesus_christ_superstar_xlsx_parser.py`**: Specialized XLSX parser for GMG Hong Kong reports.
 
 ---
 
@@ -31,15 +30,6 @@ return extracted_rows, validation_result
 
 - `extracted_rows`: A List of Dictionaries or a Pandas DataFrame.
 - `validation_result`: A `ValidationResult` object (defined in `src.models`).
-
-### ValidationResult Data Contract
-```python
-@dataclass
-class ValidationResult:
-    status: str  # Strictly "PASSED", "FAILED", or "UNVALIDATED"
-    message: str
-    metrics: Dict[str, Any]
-```
 
 ### Contract Status Levels
 - `PASSED`: Data is verified and ready for delivery.
