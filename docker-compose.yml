@@ -12,17 +12,11 @@ services:
     volumes:
       - /opt/prefect/prod/prefect_db_data:/root/.prefect
     command: prefect server start --host 0.0.0.0
-    # HEALTHCHECK: Tells Docker when the API is actually responding
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     logging:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
-  # --- 2. SALES REPORT EXTRACTION ---
+  # --- 2. SALES REPORT EXTRACTION (BACKGROUND WORKER) ---
   sales-report-extraction:
     build:
       context: ./sales_report_extraction
@@ -37,14 +31,13 @@ services:
       - ./sales_report_extraction/config:/opt/prefect/prod/code/sales_report_extraction/config
       - /opt/data/outlook_automation/data:/opt/prefect/prod/code/sales_report_extraction/data 
     depends_on:
-      prefect-server:
-        condition: service_healthy # Wait for healthcheck to pass
+      - prefect-server
     command: python main.py
     logging:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
-  # --- 3. BRANDWATCH EXTRACTION ---
+  # --- 3. BRANDWATCH EXTRACTION (BACKGROUND WORKER) ---
   brandwatch-extraction:
     build:
       context: ./brandwatch_extraction
@@ -57,14 +50,13 @@ services:
     volumes:
       - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
     depends_on:
-      prefect-server:
-        condition: service_healthy # Wait for healthcheck to pass
+      - prefect-server
     command: python main.py
     logging:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
-  # --- UI TOOLS & MANAGEMENT (Start independently) ---
+  # --- 5. POWER BI DISPATCHER (UI TOOL) ---
   powerbi-sales-report-dispatcher:
     build: ./powerbi_sales_report_dispatcher
     container_name: powerbi-sales-report-dispatcher
@@ -73,23 +65,35 @@ services:
     volumes:
       - /opt/prefect/prod/.env:/app/.env:ro
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
 
+  # --- 6. DOCID TOOL (UI TOOL) ---
   docid-tool:
     build: ./docid_tool 
     container_name: docid-tool
     ports:
-      - "8003:8002"
+      - "8003:8002" # Maps the host's 8003 to the container's internal 8002
     volumes:
       - /opt/prefect/prod/.env:/app/.env:ro
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
 
+  # --- 7. HOMEPAGE (LIGHTWEIGHT HUB) ---
   homepage:
     build: ./homepage
     container_name: homepage
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "80:80" # Standard HTTP port
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
 
+  # --- 8. PORTAINER (CONTAINER MANAGEMENT) ---
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
@@ -100,6 +104,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
 
+# --- VOLUMES ---
 volumes:
   portainer_data:
