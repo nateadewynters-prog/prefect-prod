@@ -9,14 +9,25 @@ services:
     environment:
       - PREFECT_API_URL=http://10.1.50.127:4200/api
       - PREFECT_UI_API_URL=http://10.1.50.127:4200/api
+      - PREFECT_SERVER_API_HOST=0.0.0.0
     volumes:
       - /opt/prefect/prod/prefect_db_data:/root/.prefect
     command: prefect server start --host 0.0.0.0
+    # HEALTHCHECK: Tells Docker when the API is actually responding
+    command: prefect server start
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      # Native Python check (no curl/wget needed)
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:4200/api/health\").read()' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s # Docker ignores failures for the first 40 seconds
     logging:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
-  # --- 2. SALES REPORT EXTRACTION (BACKGROUND WORKER) ---
+  # --- 2. SALES REPORT EXTRACTION ---
   sales-report-extraction:
     build:
       context: ./sales_report_extraction
@@ -31,13 +42,15 @@ services:
       - ./sales_report_extraction/config:/opt/prefect/prod/code/sales_report_extraction/config
       - /opt/data/outlook_automation/data:/opt/prefect/prod/code/sales_report_extraction/data 
     depends_on:
-      - prefect-server
+      prefect-server:
+        condition: service_healthy # Wait for healthcheck to pass
+        condition: service_healthy
     command: python main.py
     logging:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
-  # --- 3. BRANDWATCH EXTRACTION (BACKGROUND WORKER) ---
+  # --- 3. BRANDWATCH EXTRACTION ---
   brandwatch-extraction:
     build:
       context: ./brandwatch_extraction
@@ -50,13 +63,16 @@ services:
     volumes:
       - /opt/prefect/prod/.env:/opt/prefect/prod/.env:ro
     depends_on:
-      - prefect-server
+      prefect-server:
+        condition: service_healthy # Wait for healthcheck to pass
+        condition: service_healthy
     command: python main.py
     logging:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
-  # --- 5. POWER BI DISPATCHER (UI TOOL) ---
+  # --- UI TOOLS & MANAGEMENT (Start independently) ---
+  # --- 5. POWER BI DISPATCHER ---
   powerbi-sales-report-dispatcher:
     build: ./powerbi_sales_report_dispatcher
     container_name: powerbi-sales-report-dispatcher
@@ -69,12 +85,12 @@ services:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
-  # --- 6. DOCID TOOL (UI TOOL) ---
+  # --- 6. DOCID TOOL ---
   docid-tool:
     build: ./docid_tool 
     container_name: docid-tool
     ports:
-      - "8003:8002" # Maps the host's 8003 to the container's internal 8002
+      - "8003:8002"
     volumes:
       - /opt/prefect/prod/.env:/app/.env:ro
     restart: unless-stopped
@@ -82,18 +98,18 @@ services:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
-  # --- 7. HOMEPAGE (LIGHTWEIGHT HUB) ---
+  # --- 7. HOMEPAGE ---
   homepage:
     build: ./homepage
     container_name: homepage
     restart: unless-stopped
     ports:
-      - "80:80" # Standard HTTP port
+      - "80:80"
     logging:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
-  # --- 8. PORTAINER (CONTAINER MANAGEMENT) ---
+  # --- 8. PORTAINER ---
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
@@ -108,6 +124,5 @@ services:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
-# --- VOLUMES ---
 volumes:
   portainer_data:
