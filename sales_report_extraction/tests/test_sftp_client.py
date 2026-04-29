@@ -41,6 +41,13 @@ def test_upload_to_sftp_success(
     mock_transport.assert_called_once_with(("fake-server.internal", 22))
     mock_sftp_session.put.assert_called_once_with(
         local_test_path,
+        f"/{test_filename}.tmp"  # <-- Added .tmp extension
+    )
+    
+    # Assert the atomic rename happens after the upload
+    mock_sftp_session.rename.assert_called_once_with(
+        f"/{test_filename}.tmp",
         f"/{test_filename}"
     )
+    
     mock_sftp_session.close.assert_called_once()
