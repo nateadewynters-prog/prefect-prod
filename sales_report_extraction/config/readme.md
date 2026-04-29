@@ -19,6 +19,7 @@ Each object in the `"rules"` array controls one unique data flow:
 - **`sender_domain`**: The verified source domain of the email.
 - **`subject_keyword`**: String used for simplified, robust subject-only keyword search in the Graph API.
 - **`attachment_type`**: Strict extension enforcement (e.g., `.pdf`, `.xls`).
+- **`extraction_method`**: (Optional) Set to `"link"` to trigger HTML body parsing instead of looking for attachments.
 
 ### 🏷️ Metadata Mapping (Medallion)
 - **`show_name`**, **`venue_name`**: Used for standard filename generation.

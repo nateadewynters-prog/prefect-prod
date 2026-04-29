@@ -10,6 +10,10 @@
 
 This service automates financial data extraction from emails using the Microsoft Graph API. It employs a **Medallion Architecture** to separate raw data, processing logic, and final curated outputs.
 
+The system supports two extraction modes:
+1. **Attachment-Based:** Standard polling for emails with `.pdf`, `.xls`, or `.xlsx` attachments.
+2. **Link-Based:** Scans email HTML bodies for download links, bypasses security redirects (Sophos), hijacks direct AWS S3 "Target URLs", and downloads binary streams directly into the pipeline.
+
 The system is **Stateless Locally**: It tracks processed state directly on the Exchange server using Microsoft Graph categories, ensuring high idempotency and allowing for container-based deployment without local volume persistence.
 
 ---
@@ -25,9 +29,10 @@ The system is **Stateless Locally**: It tracks processed state directly on the E
 ├── config/                   # ⚙️ CONFIG: JSON routing rules (Timezones, Parsers)
 ├── data/                     # 💾 STORAGE: Medallion data (Inbox, Processed, Archive)
 └── src/                      # 🛠️ APPLICATION: Core logic
-    ├── graph_client.py       # MS Graph API (Searching, Downloading, Tagging)
+    ├── graph_client.py       # MS Graph API (Searching, Body Extraction, Tagging)
+    ├── link_downloader.py    # 🔗 Link Extraction (Sophos Bypass, AWS S3 Hijacking)
     ├── file_processor.py     # Processing Engine (Timezone logic, Medallion flow)
-    ├── sftp_client.py        # SFTP delivery (Paramiko-based)
+    ├── sftp_client.py        # SFTP delivery (Atomic Rename logic)
     └── ...
 ```
 
@@ -41,6 +46,11 @@ This system uses a dual-layer approach to ensure no report is processed twice:
 2. **`internetMessageId` Deduplication:** The orchestrator tracks the unique `internetMessageId` (fingerprint) of every email in the 30-day window. If a duplicate is detected, it is immediately tagged as `"sales_report_duplicate"` and skipped.
 3. **Tagging:** Once processed, the `"sales_report_extracted"` tag is applied.
 4. **Robustness:** Includes HTTP 409/412 retry logic to handle Exchange server concurrency conflicts during tagging operations.
+
+### 🔗 Extraction Methods
+Rules in `config/show_reporting_rules.json` can now toggle the extraction strategy:
+- **Default:** If `extraction_method` is omitted, the system looks for attachments.
+- **`"extraction_method": "link"`**: Triggers the `link_downloader` to parse the email body, follow redirects, and pull the file from external portals (e.g., Ticketmaster/Sophos).
 
 ### 🌐 Deterministic Timezone Logic
 To ensure 100% accurate reporting dates, the engine uses venue-specific timezones defined in `config/show_reporting_rules.json`:

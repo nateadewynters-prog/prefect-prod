@@ -14,7 +14,7 @@ This directory provides the storage layer for the pipeline. It follows the **Med
 ## 2. Medallion Zones
 
 ### 📥 1. Inbox (Landing Zone)
-Temporary landing zone for raw attachments downloaded from the Graph API. Files are standardized using **deterministic timezone logic** (converting UTC to local venue time) before processing.
+Temporary landing zone for raw files downloaded from the Graph API (either via attachments or direct link extraction). Files are standardized using **deterministic timezone logic** (converting UTC to local venue time) before processing.
 
 ### ✅ 2. Processed (Curated CSVs & Raw Passthrough)
 The final extraction output. All files in this directory are subsequently uploaded to the Sales Database via **SFTP delivery**.

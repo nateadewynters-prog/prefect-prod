@@ -12,6 +12,7 @@ from src.graph_client import GraphClient
 from src.file_processor import ProcessingEngine
 from src.sftp_client import upload_to_sftp
 from src.sharepoint_uploader import SharePointUploader
+from src.link_downloader import download_from_email_body
 
 # 1. Setup Environment
 setup_environment()
@@ -55,7 +56,13 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
             existing_tags = email.get('categories', [])
             fingerprint = email.get('internetMessageId')
             
-            if email_dt < start_date_dt or "sales_report_extracted" in existing_tags or "sales_report_failed" in existing_tags or "sales_report_duplicate" in existing_tags or not email.get('hasAttachments'):
+            # --- 🚀 NEW ROUTING LOGIC ---
+            extraction_method = crit.get('extraction_method', 'attachment')
+            has_attachment = email.get('hasAttachments', False)
+            
+            is_invalid_attachment = (extraction_method == 'attachment' and not has_attachment)
+            
+            if email_dt < start_date_dt or "sales_report_extracted" in existing_tags or "sales_report_failed" in existing_tags or "sales_report_duplicate" in existing_tags or is_invalid_attachment:
                 skipped += 1
                 continue
 
@@ -102,14 +109,24 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
         effective_dt = raw_dt + timedelta(hours=offset_hours)
         effective_dt_str = effective_dt.isoformat()
         
-        content_bytes, _ = graph.download_attachment(msg_id, expected_ext)
+        # 🚀 NEW: Dynamic Extraction Routing
         std_name = engine.generate_filename(rule['metadata'], effective_dt_str, expected_ext)
         temp_path = os.path.join(engine.base_dir, engine.dirs['inbox'], std_name)
-        
-        with open(temp_path, 'wb') as f: 
-            f.write(content_bytes)
-            f.flush()
-            os.fsync(f.fileno())
+        extraction_method = rule['match_criteria'].get('extraction_method', 'attachment')
+
+        if extraction_method == 'link':
+            logger.info("🔗 Extraction Method: HTML Link")
+            html_body = email.get('body', {}).get('content', '')
+            success = download_from_email_body(html_body, temp_path)
+            if not success:
+                raise ValueError("Failed to resolve and download file from email link.")
+        else:
+            logger.info("📎 Extraction Method: Standard Attachment")
+            content_bytes, _ = graph.download_attachment(msg_id, expected_ext)
+            with open(temp_path, 'wb') as f: 
+                f.write(content_bytes)
+                f.flush()
+                os.fsync(f.fileno())
 
         raw_url = sp_uploader.upload_file(temp_path, std_name, show_name, venue_name, "Raw")
         df, validation_result, csv_path = engine.process_file(temp_path, rule)
