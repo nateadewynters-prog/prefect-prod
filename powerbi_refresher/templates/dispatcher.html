@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power BI Dataset Refresher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&display=swap');
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .log-entry { border-left: 2px solid #3b82f6; padding-left: 10px; margin-bottom: 4px; animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+        /* Smooth transition for floating terminal */
+        #status-box { transition: transform 0.3s ease-in-out, opacity 0.3s; }
+    </style>
+</head>
+<body class="bg-gray-100 p-6 font-sans relative pb-24">
+    <div class="max-w-6xl mx-auto">
+        <button onclick="window.location.href = window.location.protocol + '//' + window.location.hostname;" class="text-blue-600 hover:underline mb-4 inline-block font-semibold bg-transparent border-0 cursor-pointer">
+            ← Back to Homepage
+        </button>
+        
+        <div class="bg-white rounded-lg shadow p-8 mb-6">
+            <div class="flex justify-between items-center border-b pb-4 mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">Power BI Dataset Refresher</h1>
+                <div id="status-indicator" class="hidden flex items-center text-blue-600 font-bold px-4 py-2 bg-blue-50 rounded-lg">
+                    <span class="animate-ping mr-3 inline-flex h-3 w-3 rounded-full bg-blue-500 opacity-75"></span> 
+                    SYSTEM BUSY
+                </div>
+            </div>
+
+            <div class="mb-6 relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span class="text-gray-500 text-xl">🔍</span>
+                </div>
+                <input type="text" id="searchInput" placeholder="Search by Report Name or Workspace..." class="w-full pl-10 p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 font-semibold transition-all">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="reportsGrid">
+                {% for report in reports %}
+                <div class="report-card border border-gray-200 rounded-xl p-5 flex flex-col justify-between bg-gray-50 hover:bg-white transition-all shadow-sm">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800 report-title">{{ report.report_name }}</h2>
+                        <p class="text-xs text-gray-500 font-mono mt-1 mb-4 report-workspace">
+                            Workspace: <span class="font-bold">{{ report.workspace_name }}</span><br>
+                            Dataset ID: <span class="font-bold text-gray-400">{{ report.dataset_id or 'None Linked' }}</span>
+                        </p>
+                    </div>
+                    
+                    <div class="flex flex-col gap-2 mt-4">
+                        <a href="{{ report.dashboard_url }}" target="_blank" class="dashboard-link w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 px-4 rounded-lg text-center transition-all">
+                            📊 View Dashboard
+                        </a>
+
+                        {% if report.dataset_id %}
+                        <button onclick="runRefresh('{{ report.id }}')" id="btn-{{ report.id }}" data-dataset="{{ report.dataset_id }}" class="tool-btn bg-gray-800 hover:bg-black text-white font-bold py-2 px-4 rounded-lg transition-all w-full disabled:opacity-50 truncate">
+                            🔄 Refresh Dataset
+                        </button>
+                        {% else %}
+                        <button disabled class="bg-gray-200 text-gray-400 font-bold py-2 px-4 rounded-lg cursor-not-allowed w-full">
+                            🚫 No Dataset
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div id="noResults" class="hidden text-center py-12 text-gray-500 font-semibold">
+                No reports found matching your search.
+            </div>
+        </div>
+    </div>
+
+    <div id="status-box" class="hidden fixed bottom-6 right-6 w-96 max-w-[90vw] bg-gray-900 rounded-xl shadow-2xl border border-gray-700 z-50 flex flex-col overflow-hidden">
+        <div class="bg-gray-800 px-4 py-3 border-b border-gray-700 flex justify-between items-center cursor-pointer hover:bg-gray-700 transition-colors" onclick="toggleTerminal()">
+            <div class="flex items-center space-x-2">
+                <span id="terminal-pulse" class="h-2 w-2 bg-blue-500 rounded-full inline-block"></span>
+                <h3 class="text-blue-400 font-mono font-bold uppercase tracking-widest text-xs">Live Terminal</h3>
+            </div>
+            <div class="flex space-x-4 text-gray-400">
+                <button onclick="clearLogs(); event.stopPropagation();" class="hover:text-white text-xs font-mono font-bold">CLEAR</button>
+                <button id="toggle-icon" class="hover:text-white text-xs font-mono font-bold">▼</button>
+            </div>
+        </div>
+        <div id="log-list" class="space-y-1 font-mono text-xs text-gray-300 h-64 overflow-y-auto bg-black p-4"></div>
+    </div>
+
+    <script>
+        // --- SEARCH FUNCTIONALITY ---
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const searchTerms = e.target.value.toLowerCase().split(' ').filter(term => term.trim() !== '');
+            const cards = document.querySelectorAll('.report-card');
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const textToSearch = (card.querySelector('.report-title').innerText + " " + card.querySelector('.report-workspace').innerText).toLowerCase();
+                const isMatch = searchTerms.every(term => textToSearch.includes(term));
+                
+                if (isMatch || searchTerms.length === 0) {
+                    card.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            document.getElementById('noResults').style.display = visibleCount === 0 ? 'block' : 'none';
+        });
+
+        // --- TERMINAL TOGGLE ---
+        let isTerminalMinimized = false;
+        function toggleTerminal() {
+            isTerminalMinimized = !isTerminalMinimized;
+            const logList = document.getElementById('log-list');
+            const icon = document.getElementById('toggle-icon');
+            if (isTerminalMinimized) {
+                logList.style.display = 'none';
+                icon.innerText = '▲';
+            } else {
+                logList.style.display = 'block';
+                icon.innerText = '▼';
+                logList.scrollTop = logList.scrollHeight; // Auto-scroll to bottom when opened
+            }
+        }
+
+        // --- POLLING & REFRESH LOGIC ---
+        let lastLogCount = 0;
+
+        function clearLogs() { 
+            document.getElementById('log-list').innerHTML = '<div class="text-gray-500 italic">Console cleared locally...</div>';
+            lastLogCount = -1; 
+        }
+
+        function pollSharedState() {
+            fetch('/api/state')
+                .then(r => r.json())
+                .then(data => {
+                    const isSystemBusy = data.locks.length > 0;
+                    
+                    // Grab the absolute latest log to display inline on the button
+                    let latestLogText = "⏳ REFRESHING...";
+                    if (data.logs.length > 0) {
+                        latestLogText = data.logs[data.logs.length - 1].msg;
+                    }
+
+                    document.querySelectorAll('.tool-btn').forEach(btn => {
+                        const datasetId = btn.getAttribute('data-dataset');
+                        if (isSystemBusy) {
+                            btn.disabled = true;
+                            if (data.locks.includes(datasetId)) {
+                                // INLINE STATUS: Show the latest log right on the card button!
+                                btn.innerText = latestLogText;
+                                btn.className = "tool-btn w-full font-bold py-2 px-4 rounded-lg transition-all animate-pulse bg-yellow-600 hover:bg-yellow-600 text-white truncate";
+                            } else {
+                                btn.innerText = "Waiting in queue...";
+                                btn.className = "tool-btn w-full font-bold py-2 px-4 rounded-lg transition-all opacity-50 bg-gray-800 cursor-not-allowed text-white truncate";
+                            }
+                        } else {
+                            btn.disabled = false;
+                            btn.innerText = "🔄 Refresh Dataset";
+                            btn.className = "tool-btn bg-gray-800 hover:bg-black text-white font-bold py-2 px-4 rounded-lg transition-all w-full disabled:opacity-50 truncate";
+                        }
+                    });
+
+                    document.querySelectorAll('.dashboard-link').forEach(link => {
+                        link.classList.toggle('opacity-50', isSystemBusy);
+                        link.classList.toggle('pointer-events-none', isSystemBusy);
+                    });
+
+                    // Manage Floating Terminal Visibility
+                    if (isSystemBusy || data.logs.length > 0) {
+                        document.getElementById('status-box').classList.remove('hidden');
+                        document.getElementById('status-indicator').classList.toggle('hidden', !isSystemBusy);
+                        
+                        // Toggle pulsing light on terminal
+                        const pulse = document.getElementById('terminal-pulse');
+                        isSystemBusy ? pulse.classList.add('animate-pulse', 'bg-yellow-400') : pulse.classList.remove('animate-pulse', 'bg-yellow-400');
+                        if(!isSystemBusy) pulse.classList.add('bg-blue-500');
+                    }
+
+                    if (data.logs.length !== lastLogCount && lastLogCount !== -1) {
+                        const logList = document.getElementById('log-list');
+                        logList.innerHTML = data.logs.map(l => {
+                            let colorClass = 'text-gray-300';
+                            if (l.type === 'success') colorClass = 'text-green-400 border-green-500';
+                            if (l.type === 'error') colorClass = 'text-red-400 border-red-500 font-bold';
+                            if (l.type === 'separator') colorClass = 'text-blue-400 border-blue-500 font-bold mt-4 mb-2'; 
+                            
+                            const timeStr = l.timestamp.split(' ')[1]; 
+                            return `<div class="log-entry ${colorClass}"><span class="text-gray-600">[${timeStr}]</span> ${l.msg}</div>`;
+                        }).join('');
+                        
+                        if (!isTerminalMinimized) logList.scrollTop = logList.scrollHeight; 
+                        lastLogCount = data.logs.length;
+                    } else if (lastLogCount === -1) {
+                        lastLogCount = data.logs.length; 
+                    }
+                })
+                .catch(err => console.error("Polling error:", err));
+        }
+
+        pollSharedState();
+        setInterval(pollSharedState, 2000);
+
+        function runRefresh(id) {
+            const eventSource = new EventSource(`/stream/${id}`);
+            eventSource.onmessage = function(event) { if (event.data === "[DONE]") eventSource.close(); };
+            eventSource.onerror = function() { eventSource.close(); };
+            
+            // Auto-open terminal if it was minimized
+            if (isTerminalMinimized) toggleTerminal();
+            
+            setTimeout(pollSharedState, 300);
+        }
+    </script>
+</body>
+</html>

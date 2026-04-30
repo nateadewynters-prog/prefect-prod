@@ -108,6 +108,19 @@ services:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
+  # --- 9. POWER BI REFRESHER (NEW UI TOOL) ---
+  powerbi-refresher:
+    build: ./powerbi_refresher
+    container_name: powerbi-refresher
+    ports:
+      - "8004:8004"
+    volumes:
+      - /opt/prefect/prod/.env:/app/.env:ro
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
 # --- VOLUMES ---
 volumes:
   portainer_data:

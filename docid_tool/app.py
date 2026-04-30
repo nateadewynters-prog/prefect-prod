@@ -14,16 +14,17 @@ DOCID_CACHE = {
 CACHE_LOCK = threading.Lock()
 
 def update_docid_cache():
-    """Fetches fresh data from SQL, removes duplicates, and updates the global memory cache."""
+    """Fetches data from SQL and keeps only unique (ShowId, TheatreId, DocTypeId) combinations."""
     try:
         conn_str = f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={os.getenv('SQL_SERVER')};DATABASE=TicketingDS;UID={os.getenv('SQL_USERNAME')};PWD={os.getenv('SQL_PASSWORD')};TrustServerCertificate=yes;"
         with pyodbc.connect(conn_str, timeout=10) as conn:
             cursor = conn.cursor()
+            # The query remains the same to get all necessary display and ID columns
             cursor.execute("SELECT ShowName, TheatreName, DocumentName, ShowId, TheatreId, DocumentTypeId FROM [dbo].[DocumentsAndVenues] ORDER BY ShowName")
             rows = cursor.fetchall()
             
             fresh_data = []
-            seen_combos = set() # This acts like Pandas drop_duplicates
+            seen_combos = set() # Track unique combinations of IDs
             
             for r in rows:
                 # Safely parse the IDs
@@ -31,16 +32,16 @@ def update_docid_cache():
                 theatre_id = int(r[4]) if r[4] else 0
                 doc_type_id = int(r[5]) if r[5] else 0
                 
-                # Create a unique tuple for this combination
+                # Create a unique key for this record
                 combo = (show_id, theatre_id, doc_type_id)
                 
-                # Only add to our data list if we haven't seen this exact combination before
+                # Only add if we haven't seen this specific ID set yet
                 if combo not in seen_combos:
                     seen_combos.add(combo)
                     fresh_data.append([
-                        r[0] if r[0] else "N/A",
-                        r[1] if r[1] else "N/A",
-                        r[2] if r[2] else "N/A",
+                        r[0] if r[0] else "N/A", # ShowName
+                        r[1] if r[1] else "N/A", # TheatreName
+                        r[2] if r[2] else "N/A", # DocumentName[cite: 1]
                         show_id,
                         theatre_id,
                         doc_type_id

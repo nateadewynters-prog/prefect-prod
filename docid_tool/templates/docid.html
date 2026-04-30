@@ -1,23 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DocID Tool - BISCUIT</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <link href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator_semanticui.min.css" rel="stylesheet">
     
     <style>
-        /* Clean up Tabulator styling to match our Tailwind aesthetic */
         .tabulator { border-radius: 0.5rem; border: 1px solid #e5e7eb; background-color: white; font-size: 0.875rem; }
         .tabulator-col-title { font-weight: 700 !important; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
         .tabulator-row { border-bottom: 1px solid #f3f4f6 !important; }
         .tabulator-row:nth-child(even) { background-color: #f9fafb !important; }
-        .tabulator-row:hover { background-color: #eff6ff !important; } /* Blue hover effect */
+        .tabulator-row:hover { background-color: #eff6ff !important; }
         
-        /* Search Bar Styling */
+        .filter-select { 
+            border-radius: 0.5rem; 
+            border: 1px solid #d1d5db; 
+            padding: 0.5rem; 
+            font-size: 0.875rem; 
+            background-color: white;
+            min-width: 150px;
+        }
         #searchInput { width: 300px; border-radius: 0.5rem; border: 1px solid #d1d5db; padding: 0.5rem 1rem; }
-        #searchInput:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); }
+        #searchInput:focus, .filter-select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); }
     </style>
 </head>
 <body class="bg-gray-100 p-6 font-sans">
@@ -27,18 +34,33 @@
         </button>
         
         <div class="bg-white rounded-lg shadow-lg p-8">
-            <div class="flex justify-between items-end border-b pb-4 mb-6">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-800">DocID Tool</h1>
-                    <p class="text-gray-500 text-sm mt-1">Reference table for Shows, Theatres, and Document IDs.</p>
-                </div>
-                
-                <div class="flex items-center gap-4">
-                    <input type="text" id="searchInput" placeholder="🔍 Search all records...">
+            <div class="border-b pb-4 mb-6">
+                <div class="flex justify-between items-end">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-800">DocID Tool</h1>
+                        <p class="text-gray-500 text-sm mt-1">Reference table for Shows, Theatres, and Document IDs.</p>
+                    </div>
                     
                     <button onclick="forceRefresh()" id="refreshBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors flex items-center text-sm border border-gray-300 shadow-sm whitespace-nowrap">
                         <span id="refreshIcon" class="mr-2">🔄</span> Resync
                     </button>
+                </div>
+
+                <!-- Filter Row -->
+                <div class="flex flex-wrap items-center gap-4 mt-6">
+                    <input type="text" id="searchInput" placeholder="🔍 Search (e.g. Show, Theatre)...">
+                    
+                    <select id="showFilter" class="filter-select">
+                        <option value="">All Shows</option>
+                    </select>
+
+                    <select id="theatreFilter" class="filter-select">
+                        <option value="">All Theatres</option>
+                    </select>
+
+                    <select id="docTypeFilter" class="filter-select">
+                        <option value="">All Doc Types</option>
+                    </select>
                 </div>
             </div>
 
@@ -52,64 +74,98 @@
 
         document.addEventListener("DOMContentLoaded", function() {
             table = new Tabulator("#docid-table", {
-                ajaxURL: "/api/docids", // Fetch data from our Flask cache
-                height: "550px",        // Enables ultra-fast Virtual DOM scrolling
-                layout: "fitColumns",   // Forces columns to perfectly fit the container width
-                pagination: "local",    // Paginates the data client-side
-                paginationSize: 50,     // 50 rows per page
+                ajaxURL: "/api/docids",
+                height: "550px",
+                layout: "fitColumns",
+                pagination: "local",
+                paginationSize: 50,
                 
-                // We must map the array-of-arrays from Python into an array-of-objects for Tabulator
                 ajaxResponse: function(url, params, response){
-                    return response.map(row => ({
-                        showName: row[0],
-                        theatreName: row[1],
-                        docName: row[2],
+                    // Map the response and populate dropdowns while we're at it
+                    const mappedData = response.map(row => ({
+                        showName: row[0] || "N/A",
+                        theatreName: row[1] || "N/A",
+                        docName: row[2] || "N/A",
                         showId: row[3],
                         theatreId: row[4],
                         docId: row[5]
                     }));
+                    
+                    populateDropdowns(mappedData);
+                    return mappedData;
                 },
                 
                 columns: [
                     { title: "Show Name", field: "showName", widthGrow: 2 },
                     { title: "Theatre Name", field: "theatreName", widthGrow: 2 },
                     { title: "Document Name", field: "docName", widthGrow: 2 },
-                    // hozAlign forces perfect alignment of the headers AND the data
                     { title: "Show ID", field: "showId", hozAlign: "right", cssClass: "font-mono font-bold" },
                     { title: "Theatre ID", field: "theatreId", hozAlign: "right", cssClass: "font-mono font-bold" },
                     { title: "DocType ID", field: "docId", hozAlign: "right", cssClass: "font-mono font-bold" }
                 ]
             });
-            
-            // --- Custom Debounced Search Implementation ---
-            // This prevents lag by waiting 500ms after the user stops typing before searching ~400k rows
+
+            // Master Filter Logic
+            function updateFilters() {
+                const searchValue = document.getElementById("searchInput").value.toLowerCase();
+                const showValue = document.getElementById("showFilter").value;
+                const theatreValue = document.getElementById("theatreFilter").value;
+                const docValue = document.getElementById("docTypeFilter").value;
+
+                // Split keywords by comma
+                const keywords = searchValue.split(',').map(k => k.trim()).filter(k => k !== "");
+
+                table.setFilter(function(data) {
+                    // 1. Dropdown Matches
+                    const matchShow = !showValue || data.showName === showValue;
+                    const matchTheatre = !theatreValue || data.theatreName === theatreValue;
+                    const matchDoc = !docValue || data.docName === docValue;
+
+                    // 2. Multi-Keyword Search Match
+                    const rowContent = `${data.showName} ${data.theatreName} ${data.docName} ${data.showId} ${data.theatreId} ${data.docId}`.toLowerCase();
+                    const matchKeywords = keywords.every(kw => rowContent.includes(kw));
+
+                    return matchShow && matchTheatre && matchDoc && matchKeywords;
+                });
+            }
+
+            // Event Listeners
             let searchTimeout;
-            document.getElementById("searchInput").addEventListener("input", function(e) {
+            document.getElementById("searchInput").addEventListener("input", function() {
                 clearTimeout(searchTimeout);
-                
-                searchTimeout = setTimeout(function() {
-                    const term = e.target.value.toLowerCase();
-                    if(term === "") {
-                        table.clearFilter();
-                    } else {
-                        // Custom filter function to search across all columns
-                        table.setFilter(function(data) {
-                            return String(data.showName).toLowerCase().includes(term) ||
-                                   String(data.theatreName).toLowerCase().includes(term) ||
-                                   String(data.docName).toLowerCase().includes(term) ||
-                                   String(data.showId).includes(term) ||
-                                   String(data.theatreId).includes(term) ||
-                                   String(data.docId).includes(term);
-                        });
-                    }
-                }, 500); // 500ms delay
+                searchTimeout = setTimeout(updateFilters, 300);
             });
+
+            document.getElementById("showFilter").addEventListener("change", updateFilters);
+            document.getElementById("theatreFilter").addEventListener("change", updateFilters);
+            document.getElementById("docTypeFilter").addEventListener("change", updateFilters);
         });
+
+        function populateDropdowns(data) {
+            const getUnique = (field) => [...new Set(data.map(item => item[field]))].sort();
+            
+            fillSelect("showFilter", getUnique("showName"));
+            fillSelect("theatreFilter", getUnique("theatreName"));
+            fillSelect("docTypeFilter", getUnique("docName"));
+        }
+
+        function fillSelect(id, values) {
+            const select = document.getElementById(id);
+            // Clear existing except "All"
+            select.innerHTML = `<option value="">All ${id.replace('Filter', 's')}</option>`;
+            values.forEach(val => {
+                if(val && val !== "N/A") {
+                    const opt = document.createElement("option");
+                    opt.value = val;
+                    opt.textContent = val;
+                    select.appendChild(opt);
+                }
+            });
+        }
 
         async function forceRefresh() {
             const btn = document.getElementById('refreshBtn');
             const icon = document.getElementById('refreshIcon');
-            const searchInput = document.getElementById('searchInput');
             
             btn.disabled = true;
             btn.classList.add('opacity-50');
@@ -118,8 +174,11 @@
             try {
                 const response = await fetch('/api/docids/refresh', { method: 'POST' });
                 if (response.ok) {
-                    // Clear search and reload data from the fresh Python cache
-                    searchInput.value = "";
+                    // Reset all filters and reload
+                    document.getElementById('searchInput').value = "";
+                    document.getElementById('showFilter').value = "";
+                    document.getElementById('theatreFilter').value = "";
+                    document.getElementById('docTypeFilter').value = "";
                     table.clearFilter();
                     table.setData();
                 } else {

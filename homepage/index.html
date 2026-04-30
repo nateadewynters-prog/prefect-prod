@@ -12,7 +12,7 @@
     </script>
 </head>
 <body class="bg-gray-100 p-8 font-sans min-h-screen">
-    <div class="max-w-5xl mx-auto">
+    <div class="max-w-6xl mx-auto">
         <header class="text-center mb-12">
             <h1 class="text-4xl font-extrabold text-gray-900 mb-2">Homepage</h1>
             <p class="text-gray-500 text-lg">Ubuntu Machine Portal</p>
@@ -24,24 +24,34 @@
                 <h2 class="px-4 text-sm font-bold text-gray-400 uppercase tracking-widest">Reporting & Data Tools</h2>
                 <div class="h-px flex-1 bg-gray-200"></div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 
-                <div onclick="gotoService('8003')" class="group block bg-white border-2 border-transparent rounded-2xl p-8 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
-                    <div class="flex items-center space-x-6">
+                <div onclick="gotoService('8003')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
+                    <div class="flex flex-col items-center text-center space-y-4">
                         <div class="text-5xl transition-transform group-hover:scale-110">🔍</div>
-                        <div class="text-left">
+                        <div>
                             <h3 class="text-xl font-bold text-gray-800 group-hover:text-blue-700">DocID Tool</h3>
-                            <p class="text-sm text-gray-500 mt-1">Manage and look up configurations for Show, Theatre, and Document IDs.</p>
+                            <p class="text-sm text-gray-500 mt-2">Manage and look up configurations for Show, Theatre, and Document IDs.</p>
                         </div>
                     </div>
                 </div>
 
-                <div onclick="gotoService('8002')" class="group block bg-white border-2 border-transparent rounded-2xl p-8 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
-                    <div class="flex items-center space-x-6">
+                <div onclick="gotoService('8002')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
+                    <div class="flex flex-col items-center text-center space-y-4">
                         <div class="text-5xl transition-transform group-hover:scale-110">📊</div>
-                        <div class="text-left">
+                        <div>
                             <h3 class="text-xl font-bold text-gray-800 group-hover:text-blue-700">Sales Dispatcher</h3>
-                            <p class="text-sm text-gray-500 mt-1">Automated Power BI dataset refreshes and PDF report distribution.</p>
+                            <p class="text-sm text-gray-500 mt-2">Automated Power BI dataset refreshes and PDF report distribution.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div onclick="gotoService('8004')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-yellow-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
+                    <div class="flex flex-col items-center text-center space-y-4">
+                        <div class="text-5xl transition-transform group-hover:scale-110">🔄</div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-yellow-600">Power BI Refresher</h3>
+                            <p class="text-sm text-gray-500 mt-2">On-demand dataset refreshes and direct links to all Power BI Dashboards.</p>
                         </div>
                     </div>
                 </div>
@@ -55,9 +65,9 @@
                 <h2 class="px-4 text-sm font-bold text-gray-400 uppercase tracking-widest">System Management</h2>
                 <div class="h-px flex-1 bg-gray-200"></div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
                 
-                <div onclick="gotoService('4200')" class="group block bg-white border-2 border-transparent rounded-2xl p-8 hover:border-purple-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
+                <div onclick="gotoService('4200')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-purple-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
                     <div class="flex items-center space-x-6">
                         <div class="text-5xl transition-transform group-hover:scale-110">🧠</div>
                         <div class="text-left">
@@ -67,7 +77,7 @@
                     </div>
                 </div>
 
-                <div onclick="gotoService('9000')" class="group block bg-white border-2 border-transparent rounded-2xl p-8 hover:border-emerald-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
+                <div onclick="gotoService('9000')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-emerald-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
                     <div class="flex items-center space-x-6">
                         <div class="text-5xl transition-transform group-hover:scale-110">🐳</div>
                         <div class="text-left">
