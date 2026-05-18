@@ -16,7 +16,7 @@ CACHE_LOCK = threading.Lock()
 def update_docid_cache():
     """Fetches data from SQL and keeps only unique (ShowId, TheatreId, DocTypeId) combinations."""
     try:
-        conn_str = f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={os.getenv('SQL_SERVER')};DATABASE=TicketingDS;UID={os.getenv('SQL_USERNAME')};PWD={os.getenv('SQL_PASSWORD')};TrustServerCertificate=yes;"
+        conn_str = f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={os.getenv('SQL_SERVER')};DATABASE=TicketingDS;UID={os.getenv('SQL_USERNAME_BILOGIN')};PWD={os.getenv('SQL_PASSWORD_BILOGIN')};TrustServerCertificate=yes;"
         with pyodbc.connect(conn_str, timeout=10) as conn:
             cursor = conn.cursor()
             # The query remains the same to get all necessary display and ID columns

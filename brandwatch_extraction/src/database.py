@@ -12,7 +12,7 @@ def get_db_connection(retries=5, delay=10):
         f"Driver={{ODBC Driver 18 for SQL Server}};"
         f"Server=tcp:{os.getenv('SQL_SERVER')},1433;"
         f"Database={os.getenv('SQL_ORGANICSOCIAL_DATABASE')};"
-        f"Uid={os.getenv('SQL_USERNAME')};Pwd={os.getenv('SQL_PASSWORD')};"
+        f"Uid={os.getenv('SQL_USERNAME_INSIGHTLOGIN')};Pwd={os.getenv('SQL_PASSWORD_INSIGHTLOGIN')};"
         f"Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
     )
     

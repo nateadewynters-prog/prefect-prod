@@ -8,8 +8,8 @@ def get_db_connection():
 
     server = os.getenv('SQL_SERVER')
     database = os.getenv('SQL_ORGANICSOCIAL_DATABASE')
-    username = os.getenv('SQL_USERNAME')
-    password = os.getenv('SQL_PASSWORD')
+    username = os.getenv('SQL_USERNAME_BILOGIN')
+    password = os.getenv('SQL_PASSWORD_BILOGIN')
     
     if not all([server, database, username, password]): 
         error_msg = "Missing SQL environment variables in centralized .env"

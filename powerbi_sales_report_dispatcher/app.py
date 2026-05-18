@@ -83,7 +83,7 @@ class LiveReportingEngine:
         return self.msal_app.acquire_token_for_client(scopes=scopes).get("access_token")
 
 def fetch_sql_metrics(show_id):
-    conn_str = f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={os.getenv('SQL_SERVER')};DATABASE=TicketingDS;UID={os.getenv('SQL_USERNAME')};PWD={os.getenv('SQL_PASSWORD')};TrustServerCertificate=yes;"
+    conn_str = f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={os.getenv('SQL_SERVER')};DATABASE=TicketingDS;UID={os.getenv('SQL_USERNAME_BILOGIN')};PWD={os.getenv('SQL_PASSWORD_BILOGIN')};TrustServerCertificate=yes;"
     yesterday_query = "CAST(DATEADD(day, -1, GETDATE()) AS Date)"
     metrics = {}
     
