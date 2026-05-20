@@ -44,6 +44,17 @@ SHOWS_CONFIG = [
         "pbi_dataset_id": "ee878be9-5355-412d-ba52-d4c4c2661cf0",
         "dashboard_url": "https://app.powerbi.com/groups/d8e48a79-0972-4f4e-a6da-891f284f7953/reports/a389ea5b-949f-4bb7-b4f2-97571dee86b3/80a435e098a8b67d5307",
         "recipients": ["figures@dewynters.com", "a.trott@dewynters.com", "c.dobson@dewynters.com"]
+    },
+    {
+        "id": "5", 
+        "show_name": "Magic Mike", 
+        "show_id": 44, 
+        "db_type": "TransactLive", # Unique identifier for the new DB
+        "pbi_workspace_id": "67ad38b6-3981-401a-9032-2d0807b5f8d6", 
+        "pbi_report_id": "c4fa1a2d-7882-4bba-91c8-b8bb1114cdb5",
+        "pbi_dataset_id": "2176834f-4728-4e1a-bc23-196b43d70b2d",
+        "dashboard_url": "https://app.powerbi.com/groups/67ad38b6-3981-401a-9032-2d0807b5f8d6/reports/c4fa1a2d-7882-4bba-91c8-b8bb1114cdb5",
+        "recipients": ["figures@dewynters.com", "a.trott@dewynters.com", "c.dobson@dewynters.com"]
     }
 ]
 
@@ -82,7 +93,7 @@ class LiveReportingEngine:
     def get_token(self, scopes):
         return self.msal_app.acquire_token_for_client(scopes=scopes).get("access_token")
 
-def fetch_sql_metrics(show_id):
+def fetch_legacy_metrics(show_id):
     conn_str = f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={os.getenv('SQL_SERVER')};DATABASE=TicketingDS;UID={os.getenv('SQL_USERNAME_BILOGIN')};PWD={os.getenv('SQL_PASSWORD_BILOGIN')};TrustServerCertificate=yes;"
     yesterday_query = "CAST(DATEADD(day, -1, GETDATE()) AS Date)"
     metrics = {}
@@ -104,9 +115,75 @@ def fetch_sql_metrics(show_id):
             
     return metrics
 
+def fetch_transact_metrics(show_id):
+    conn_str = f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={os.getenv('SQL_SERVER')};DATABASE=TransactDSLive;UID={os.getenv('SQL_USERNAME_BILOGIN')};PWD={os.getenv('SQL_PASSWORD_BILOGIN')};TrustServerCertificate=yes;"
+    metrics = {}
+    
+    with pyodbc.connect(conn_str, timeout=10) as conn:
+        cursor = conn.cursor()
+        
+        # 1. Perf Checker
+        cursor.execute(f"SELECT DISTINCT(COUNT(PerformanceDetailId)) FROM PerformanceDetail WHERE ShowId = {show_id} AND CAST(PerformanceDateTime AS Date) = CAST(DATEADD(day, -1, GETDATE()) AS Date)")
+        metrics['no_of_perfs'] = cursor.fetchone()[0]
+        
+        # 2. Wrap
+        cursor.execute(f"SELECT FORMAT(SUM(CASE WHEN CAST(TS.PurchaseDate AS Date) = CAST(DATEADD(day, -1, GETDATE()) AS Date) AND IsReservation = 0 THEN Gross ELSE 0 END),'N0'), FORMAT(SUM(CASE WHEN CAST(TS.PurchaseDate AS Date) = CAST(DATEADD(day, -1, GETDATE()) AS Date) AND IsReservation = 0 THEN TicketCount ELSE 0 END),'N0'), CAST(SUM(CASE WHEN CAST(TS.PurchaseDate AS Date) = CAST(DATEADD(day, -1, GETDATE()) AS Date) AND IsReservation = 0 THEN Gross ELSE 0 END)/ SUM(CASE WHEN CAST(TS.PurchaseDate AS Date) = CAST(DATEADD(day, -1, GETDATE()) AS Date) AND IsReservation = 0 AND IsComp = 0 THEN TicketCount ELSE 0 END) AS decimal(5,2)) FROM TicketSale TS WHERE TS.PerformanceDetailId IN (SELECT DISTINCT PerformanceDetailId FROM PerformanceDetail WHERE ShowId = {show_id}) AND CAST(TS.PurchaseDate AS Date) = CAST(DATEADD(day, -1, GETDATE()) AS Date) GROUP BY CAST(TS.PurchaseDate AS Date)")
+        wrap = cursor.fetchone() or (None, None, None)
+        
+        # 3. Advance
+        cursor.execute(f"SELECT FORMAT(SUM(CASE WHEN IsReservation = 0 THEN Gross ELSE 0 END),'N0'), ROUND(SUM(CASE WHEN IsReservation = 0 THEN Gross ELSE 0 END) / 1000000.0,2), FORMAT(SUM(CASE WHEN IsReservation = 0 THEN TicketCount ELSE 0 END),'N0'), ROUND(SUM(CASE WHEN IsReservation = 0 THEN TicketCount ELSE 0 END)/1000.0,1), CAST(SUM(CASE WHEN IsReservation = 0 THEN Gross ELSE 0 END)/ SUM(CASE WHEN IsReservation = 0 AND IsComp = 0 THEN TicketCount ELSE 0 END) as decimal (5,2)), FORMAT(SUM(CASE WHEN IsReservation = 1 THEN Gross ELSE 0 END),'N0'), FORMAT(SUM(CASE WHEN IsReservation = 1 THEN TicketCount ELSE 0 END),'N0') FROM TicketSale WHERE PerformanceDetailId IN (SELECT DISTINCT PerformanceDetailId FROM PerformanceDetail WHERE ShowId = {show_id} AND PerformanceDatetime > GETDATE())")
+        adv = cursor.fetchone() or (None, None, None, None, None, None, None)
+        
+        # 4. Cumulative
+        cursor.execute(f"SELECT FORMAT((SUM(Gross)+ 14359011),'N0'), ROUND((SUM(Gross)+ 14359011)/1000000.0,1), FORMAT((SUM(TicketCount) + 204451),'N0'), ROUND((SUM(TicketCount) + 204451)/1000.0,1), CAST( (SUM(Gross)+ 14359011) /(SUM(CASE WHEN IsComp = 0 THEN TicketCount ELSE 0 END) + 204451) as decimal (5,2)) FROM TicketSale WHERE PerformanceDetailId IN (SELECT DISTINCT PerformanceDetailId FROM PerformanceDetail WHERE ShowId = {show_id}) AND IsReservation = 0")
+        cumul = cursor.fetchone() or (None, None, None, None, None)
+        
+        # Map to Legacy standard, appending Reserved Tickets (adv[6]) to the end
+        metrics['main'] = (
+            wrap[0], wrap[1], wrap[2],   
+            adv[0], adv[2], adv[4], adv[5], 
+            cumul[0], cumul[2], cumul[4], adv[6]  
+        )
+        
+        # 5. Weekly
+        cursor.execute(f"WITH A AS (SELECT PerformanceDateTime, SUM(Gross) AS Gross, GrossPotential, SUM(TicketCount) AS TicketCount, SeatingCapacity FROM TicketSale TS JOIN PerformanceDetail PD ON TS.PerformanceDetailId = PD.PerformanceDetailId WHERE TS.PerformanceDetailId IN (SELECT DISTINCT PerformanceDetailId FROM PerformanceDetail WHERE ShowId = {show_id}) AND IsReservation = 0 AND CAST(PerformanceDateTime AS Date) BETWEEN CAST(GETDATE() - DATEPART(dw, GETDATE()-2) AS Date) AND CAST(GETDATE() - DATEPART(dw, GETDATE()-2)+7 AS Date) GROUP BY PerformanceDateTime, GrossPotential, SeatingCapacity) SELECT CAST((SUM(A.Gross) / SUM(A.GrossPotential))*100 AS decimal(4,0)), CAST((SUM(A.TicketCount) *1.0 / SUM(A.SeatingCapacity))*100 AS decimal(4,0)) FROM A")
+        metrics['weekly'] = cursor.fetchone() or (None, None)
+        
+        # 6. Perf Detail
+        if metrics['no_of_perfs'] > 0:
+            cursor.execute(f"SELECT ROUND(SUM(CASE WHEN PN.TimeOfPerformanceNameId = 3 THEN Gross END)/1000.0,1), FORMAT(CAST(SUM(CASE WHEN PN.TimeOfPerformanceNameId = 3 THEN Gross END) AS float) /CAST(AVG(CASE WHEN PN.TimeOfPerformanceNameId = 3 THEN GrossPotential END) AS float) *100,'N0'), SUM(CASE WHEN PN.TimeOfPerformanceNameId = 3 THEN TicketCount END), FORMAT(CAST(SUM(CASE WHEN PN.TimeOfPerformanceNameId = 3 THEN TicketCount END) AS float) /CAST(AVG(CASE WHEN PN.TimeOfPerformanceNameId = 3 THEN SeatingCapacity END) AS float) *100,'N0'), ROUND(SUM(CASE WHEN PN.TimeOfPerformanceNameId = 4 THEN Gross ELSE 0 END)/1000.0,1), FORMAT(CAST(SUM(CASE WHEN PN.TimeOfPerformanceNameId = 4 THEN Gross END) AS float) /CAST(AVG(CASE WHEN PN.TimeOfPerformanceNameId = 4 THEN GrossPotential END) AS float) *100,'N0'), SUM(CASE WHEN PN.TimeOfPerformanceNameId = 4 THEN TicketCount ELSE 0 END), FORMAT(CAST(SUM(CASE WHEN PN.TimeOfPerformanceNameId = 4 THEN TicketCount END) AS float) /CAST(AVG(CASE WHEN PN.TimeOfPerformanceNameId = 4 THEN SeatingCapacity END) AS float) *100,'N0'), ROUND(SUM(CASE WHEN PN.TimeOfPerformanceNameId = 7 THEN Gross ELSE 0 END)/1000.0,1), FORMAT(CAST(SUM(CASE WHEN PN.TimeOfPerformanceNameId = 7 THEN Gross END) AS float) /CAST(AVG(CASE WHEN PN.TimeOfPerformanceNameId = 7 THEN GrossPotential END) AS float) *100,'N0'), SUM(CASE WHEN PN.TimeOfPerformanceNameId = 7 THEN TicketCount ELSE 0 END), FORMAT(CAST(SUM(CASE WHEN PN.TimeOfPerformanceNameId = 7 THEN TicketCount END) AS float) /CAST(AVG(CASE WHEN PN.TimeOfPerformanceNameId = 7 THEN SeatingCapacity END) AS float) *100,'N0') FROM TicketSale TS JOIN PerformanceDetail PD ON PD.PerformanceDetailId = TS.PerformanceDetailId JOIN TimeOfPerformanceNames PN ON PN.TimeOfPerformanceNameId = PD.TimeOfPerformanceNameId WHERE ShowId = {show_id} AND CAST(PD.PerformanceDateTime AS Date) = CAST(DATEADD(day, -1, GETDATE()) AS Date) AND IsReservation = 0")
+            perf = cursor.fetchone()
+            if perf:
+                metrics['perf_detail'] = (
+                    perf[1], perf[3], perf[0],  # Matinee (GP%, Cap%, Gross)
+                    perf[5], perf[7], perf[4],  # Evening (GP%, Cap%, Gross)
+                    perf[9], perf[11], perf[8]  # Night   (GP%, Cap%, Gross)
+                )
+                
+    return metrics
+
+def get_show_metrics(config):
+    """Router function to decouple database logic from the rest of the app."""
+    if config.get("db_type") == "TransactLive":
+        return fetch_transact_metrics(config["show_id"])
+    else:
+        return fetch_legacy_metrics(config["show_id"])
+
 def build_email_html(config, m):
-    w_g, w_t, w_atp, a_g, a_t, a_atp, res_g, c_g, c_t, c_atp = m['main']
-    wk_gp, wk_cap = m['weekly']
+    main_data = m.get('main', [])
+    w_g = main_data[0] if len(main_data) > 0 else None
+    w_t = main_data[1] if len(main_data) > 1 else None
+    w_atp = main_data[2] if len(main_data) > 2 else None
+    a_g = main_data[3] if len(main_data) > 3 else None
+    a_t = main_data[4] if len(main_data) > 4 else None
+    a_atp = main_data[5] if len(main_data) > 5 else None
+    res_g = main_data[6] if len(main_data) > 6 else None
+    c_g = main_data[7] if len(main_data) > 7 else None
+    c_t = main_data[8] if len(main_data) > 8 else None
+    c_atp = main_data[9] if len(main_data) > 9 else None
+    res_t = main_data[10] if len(main_data) > 10 else None
+
+    wk_gp, wk_cap = m.get('weekly', (None, None))
     
     def is_val(val):
         return val is not None and str(val).lower() != 'none'
@@ -114,20 +191,36 @@ def build_email_html(config, m):
     summary_items = []
     if is_val(w_g) and is_val(w_t):
         summary_items.append(f"&emsp;&bull; Yesterday’s wrap was <strong>£{w_g}</strong> and <strong>{w_t}</strong> tickets with an ATP of <strong>£{w_atp}</strong>.")
+    if is_val(a_g) and is_val(a_t):
+        summary_items.append(f"&emsp;&bull; The advance is currently at <strong>£{a_g}</strong> and <strong>{a_t}</strong> tickets with an ATP of <strong>£{a_atp}</strong>.")
     if is_val(c_g) and is_val(c_t):
         summary_items.append(f"&emsp;&bull; Cumulative sales are currently at <strong>£{c_g}</strong> and <strong>{c_t}</strong> tickets with an ATP of <strong>£{c_atp}</strong>.")
-    if is_val(a_g) and is_val(a_t):
-        summary_items.append(f"&emsp;&bull; The advance is currently at <strong>£{a_g}</strong> and <strong>{a_t}</strong> tickets with an ATP of <strong>£{a_atp}</strong> (incl. comps).")
+    
     if is_val(res_g):
-        summary_items.append(f"&emsp;&bull; The reserve gross is currently <strong>£{res_g}</strong>.")
+        if is_val(res_t):
+            summary_items.append(f"&emsp;&bull; The reserve gross is currently <strong>£{res_g}</strong> and <strong>{res_t}</strong> tickets.")
+        else:
+            summary_items.append(f"&emsp;&bull; The reserve gross is currently <strong>£{res_g}</strong>.")
 
+    # Dynamic Performances
     if m.get('no_of_perfs', 0) > 0 and 'perf_detail' in m:
-        m_gp, m_cap, m_gr, e_gp, e_cap, e_gr = m['perf_detail']
+        p = m['perf_detail']
         perf_sub_items = []
-        if is_val(m_gp):
-            perf_sub_items.append(f"&emsp;&emsp;Matinee - {m_gp}% GP (£{m_gr}k) and {m_cap}% capacity.")
-        if is_val(e_gp):
-            perf_sub_items.append(f"&emsp;&emsp;Evening - {e_gp}% GP (£{e_gr}k) and {e_cap}% capacity.")
+        
+        # Parse Matinee and Evening
+        if len(p) >= 6:
+            m_gp, m_cap, m_gr, e_gp, e_cap, e_gr = p[0:6]
+            if is_val(m_gp):
+                perf_sub_items.append(f"&emsp;&emsp;Matinee - {m_gp}% GP (£{m_gr}k) and {m_cap}% capacity.")
+            if is_val(e_gp):
+                perf_sub_items.append(f"&emsp;&emsp;Evening - {e_gp}% GP (£{e_gr}k) and {e_cap}% capacity.")
+        
+        # Parse Night (if present)
+        if len(p) >= 9:
+            n_gp, n_cap, n_gr = p[6:9]
+            if is_val(n_gp):
+                perf_sub_items.append(f"&emsp;&emsp;Night - {n_gp}% GP (£{n_gr}k) and {n_cap}% capacity.")
+                
         if perf_sub_items:
             summary_items.append("&emsp;&bull; Yesterday’s performances:")
             summary_items.extend(perf_sub_items)
@@ -204,10 +297,10 @@ def get_state():
 @app.route('/preview/<show_id>')
 def preview_email(show_id):
     config = next((s for s in SHOWS_CONFIG if s["id"] == show_id), None)
-    if not config:
-        return "Show not found", 404
+    if not config: return "Show not found", 404
     try:
-        metrics = fetch_sql_metrics(config['show_id'])
+        # Changed this line to use the router
+        metrics = get_show_metrics(config) 
         return build_email_html(config, metrics)
     except Exception as e:
         return f"Error fetching preview data: {str(e)}", 500
@@ -217,7 +310,7 @@ def query_database(show_id):
     config = next((s for s in SHOWS_CONFIG if s["id"] == show_id), None)
     if not config: return {"error": "Show not found"}, 404
     try:
-        m = fetch_sql_metrics(config['show_id'])
+        m = get_show_metrics(config)
         res = [
             {"Metric": "Wrap", "Value": f"£{m['main'][0]}"},
             {"Metric": "Tickets Sold", "Value": m['main'][1]},
@@ -296,7 +389,7 @@ def stream_logs(show_id):
 
             yield msg("🗄️ Fetching Sales Metrics from SQL...")
             try:
-                metrics = fetch_sql_metrics(config['show_id'])
+                metrics = get_show_metrics(config)
                 yield msg(f"📊 SQL Data Fetched.")
             except Exception as e:
                 yield msg(f"❌ SQL Error: {str(e)}", "error")
