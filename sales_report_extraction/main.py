@@ -55,7 +55,15 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
             existing_tags = email.get('categories', [])
             fingerprint = email.get('internetMessageId')
             
-            if email_dt < start_date_dt or "sales_report_extracted" in existing_tags or "sales_report_failed" in existing_tags or "sales_report_duplicate" in existing_tags or not email.get('hasAttachments'):
+            is_link_based = crit.get('attachment_source') == 'html_link'
+            has_physical_attachment = email.get('hasAttachments')
+
+            if email_dt < start_date_dt or "sales_report_extracted" in existing_tags or "sales_report_failed" in existing_tags or "sales_report_duplicate" in existing_tags:
+                skipped += 1
+                continue
+                
+            # If it's a standard rule but has no physical attachment, skip it.
+            if not is_link_based and not has_physical_attachment:
                 skipped += 1
                 continue
 
@@ -102,14 +110,22 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
         effective_dt = raw_dt + timedelta(hours=offset_hours)
         effective_dt_str = effective_dt.isoformat()
         
-        content_bytes, _ = graph.download_attachment(msg_id, expected_ext)
+        # Calculate standard path FIRST
         std_name = engine.generate_filename(rule['metadata'], effective_dt_str, expected_ext)
         temp_path = os.path.join(engine.base_dir, engine.dirs['inbox'], std_name)
         
-        with open(temp_path, 'wb') as f: 
-            f.write(content_bytes)
-            f.flush()
-            os.fsync(f.fileno())
+        attachment_source = rule['match_criteria'].get('attachment_source', 'physical')
+        
+        if attachment_source == 'html_link':
+            from src.link_extractor import download_from_html_link
+            html_body = email.get('body', {}).get('content', '')
+            download_from_html_link(html_body, temp_path) 
+        else:
+            content_bytes, _ = graph.download_attachment(msg_id, expected_ext)
+            with open(temp_path, 'wb') as f: 
+                f.write(content_bytes)
+                f.flush()
+                os.fsync(f.fileno())
 
         raw_url = sp_uploader.upload_file(temp_path, std_name, show_name, venue_name, "Raw")
         df, validation_result, csv_path = engine.process_file(temp_path, rule)
@@ -209,7 +225,7 @@ def reset_failed_emails(days_back: int):
     return reset_count
 
 @flow(name="Sales Extractor Flow", log_prints=True)
-def sales_extractor_flow(days_back: int = 30, target_rule_name: str | None = None, retry_failed: bool = False, disable_notifications: bool = False):
+def sales_extractor_flow(days_back: int = 7, target_rule_name: str | None = None, retry_failed: bool = False, disable_notifications: bool = False):
     if retry_failed:
         logger = get_run_logger()
         reset_count = reset_failed_emails(days_back)

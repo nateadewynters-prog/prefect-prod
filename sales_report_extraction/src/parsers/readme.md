@@ -15,6 +15,7 @@ This directory contains specialized extraction modules. The orchestrator dynamic
 
 The following parsers are currently implemented and active:
 
+- **`gmg_hk_jesus_christ_superstar_xlsx_parser.py`**: Specialized parser for GMG Hong Kong reports (XLSX inside ZIP).
 - **`malvern_theatre_contractual_report_pdf_parser.py`**: Extracts contractual data from Malvern Theatre PDF reports.
 - **`nederlandaer_devil_wears_prada_cumulative_extraction_pdf.py`**: Specialized cumulative extractor for "The Devil Wears Prada" reports from Nederlandaer.
 - **`ticketek_event_settlement_excel_parser.py`**: Robust Excel parser for Ticketek settlement reports, supporting complex lookups.

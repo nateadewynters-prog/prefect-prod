@@ -15,20 +15,24 @@ This directory contains the application logic, decoupled from the orchestration 
 
 ### 📡 API & External Clients
 - **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading, and **category tagging** for state management. Features `tag_email` and `untag_email` methods with HTTP 409/412 retry logic to handle Exchange server conflicts. Now includes `internetMessageId` extraction for fingerprint-based deduplication.
+- **`link_extractor.py`**: Extracts and downloads files from HTML links within email bodies, used primarily for Ticketmaster-based reports where attachments are hosted externally.
 - **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs or raw passthrough files. It logs file size (KB) and utilizes centralized environment variables. Notifications have been removed; exceptions now bubble up to the orchestrator.
 - **`sharepoint_uploader.py`**: Handles file uploads to the Medallion SharePoint site. Notifications have been removed; exceptions bubble up to the orchestrator.
 
 ### 🧠 Core Engine
 - **`file_processor.py`**: The `ProcessingEngine` class. Manages the full file lifecycle:
-    - **Deterministic Report Dating:** Converts UTC to local venue time via `pytz` and standardizes dates.
+    - **Deterministic Report Dating:** Converts UTC to local venue time via `pytz` and standardizes dates, incorporating **Sales Day Offset** logic for late-night reports.
     - **Medallion I/O:** Standardizes filenames and moves files across zones (`inbox` -> `archive`/`processed`/`failed`).
     - **Dynamic Parser Invocation:** Uses `importlib` to route files to specialized parsers.
     - **Passthrough Logic:** Routes raw attachments directly for rules configured with `"passthrough_only": true`.
     - **Failure Handling:** Moves problematic files to the `failed/` zone. Notifications have been removed; exceptions bubble up.
+- **`naming.py`**: Centralized logic for generating standardized, deterministic filenames based on show/venue metadata and reporting dates.
+- **`mapping.py`**: Handles data transformation and lookups, mapping vendor-specific codes to internal identifiers using local CSV tables.
 
 ### 🧱 Shared Models & Utilities
 - **`models.py`**: Unified Data Contracts (e.g., `ValidationResult`).
 - **`database.py`**: Shared logic for internal databases.
+- **`error_db_client.py`**: Specialized client for logging mapping and lookup failures to the central `dataops_tracking.db` for later review.
 - **`env_setup.py`**: Centralized environment variable loader. Includes **`get_universal_logger`** with an automatic fallback to standard Python logging for local testing.
 - **`notifications.py`**: Microsoft Teams Adaptive Card logic for alerting. Features **Dual-Channel Routing** (Ops vs. Dev) via `TEAMS_WEBHOOK_OPS` and `TEAMS_WEBHOOK_DEV` environment variables. Includes a `disable_notifications` toggle for silent runs.
 

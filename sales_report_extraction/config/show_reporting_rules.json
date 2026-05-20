@@ -252,6 +252,182 @@
       "processing": {
         "passthrough_only": true
       }
+    },
+    {
+      "rule_name": "TICKETMASTER_THE_BODYGUARD_TOUR_2026",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "ticketmaster.com",
+        "subject_keyword": "Daily Report: Sales Comparison - The Bodyguard",
+        "attachment_type": ".xlsx",
+        "attachment_source": "html_link"
+      },
+      "metadata": {
+        "show_name": "The Bodyguard 2025",
+        "venue_name": "Dublin Bord Gais Energy Theatre",
+        "report_type": "Advance",
+        "show_id": "233", 
+        "venue_id": "41",
+        "document_id": "71",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "TICKETMASTER_JESUS_CHRIST_SUPERSTAR_AUCKLAND",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "ticketmaster.com",
+        "subject_keyword": "Daily Report: Sales Comparison - AKL JCS",
+        "attachment_type": ".xlsx",
+        "attachment_source": "html_link"
+      },
+      "metadata": {
+        "show_name": "Jesus Christ Superstar",
+        "venue_name": "Auckland Civic Theatre",
+        "report_type": "Advance",
+        "show_id": "287", 
+        "venue_id": "222",
+        "document_id": "71",
+        "timezone": "Pacific/Auckland"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "TICKETMASTER_JESUS_CHRIST_SUPERSTAR_WELLINGTONJAMES",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "ticketmaster.com",
+        "subject_keyword": "Daily Report: Sales Comparison - WLG JCS",
+        "attachment_type": ".xlsx",
+        "attachment_source": "html_link"
+      },
+      "metadata": {
+        "show_name": "Jesus Christ Superstar",
+        "venue_name": "Wellington St. James Theatre",
+        "report_type": "Advance",
+        "show_id": "287", 
+        "venue_id": "223",
+        "document_id": "71",
+        "timezone": "Pacific/Auckland"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "TICKETMASTER_WAITRESS_DUBLINBOARDGAIS",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "ticketmaster.com",
+        "subject_keyword": "Daily Report: Sales Comparison - Waitress",
+        "attachment_type": ".xlsx",
+        "attachment_source": "html_link"
+      },
+      "metadata": {
+        "show_name": "Waitress Tour 2026",
+        "venue_name": "Dublin Bord Gais Energy Theatre",
+        "report_type": "Advance",
+        "show_id": "280", 
+        "venue_id": "41",
+        "document_id": "71",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "TICKETMASTER_ANNIE_DUBLINBOARDGAIS",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "ticketmaster.com",
+        "subject_keyword": "Daily Report: Sales Comparison - Annie",
+        "attachment_type": ".xlsx",
+        "attachment_source": "html_link"
+      },
+      "metadata": {
+        "show_name": "Annie Tour 2026",
+        "venue_name": "Dublin Bord Gais Energy Theatre",
+        "report_type": "Advance",
+        "show_id": "279", 
+        "venue_id": "41",
+        "document_id": "71",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "TICKETMASTER_MAMAMIA_BELFAST",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "ticketmaster.com",
+        "subject_keyword": "Daily Report: Sales Comparison - MM! Belfast",
+        "attachment_type": ".xlsx",
+        "attachment_source": "html_link"
+      },
+      "metadata": {
+        "show_name": "Mamma Mia!",
+        "venue_name": "Belfast SSE Arena",
+        "report_type": "Advance",
+        "show_id": "234", 
+        "venue_id": "218",
+        "document_id": "71",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "TICKETMASTER_SILENCEOFTHELAMBS_DUBLIN",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "ticketmaster.com",
+        "subject_keyword": "Daily Report: Sales Comparison - SotL 2026 Tour",
+        "attachment_type": ".xlsx",
+        "attachment_source": "html_link"
+      },
+      "metadata": {
+        "show_name": "Silence of the Lambs Tour 2026",
+        "venue_name": "Dublin Bord Gais Energy Theatre",
+        "report_type": "Advance",
+        "show_id": "285", 
+        "venue_id": "41",
+        "document_id": "71",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "TICKETMASTER_HIGHSOCIETY_DUBLIN",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "ticketmaster.com",
+        "subject_keyword": "Daily Report: Sales Comparison - High Society Tour 2026",
+        "attachment_type": ".xlsx",
+        "attachment_source": "html_link"
+      },
+      "metadata": {
+        "show_name": "High Society Tour 2026",
+        "venue_name": "Dublin Bord Gais Energy Theatre",
+        "report_type": "Advance",
+        "show_id": "288", 
+        "venue_id": "41",
+        "document_id": "71",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
     }
   ]
 }

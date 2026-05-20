@@ -42,11 +42,12 @@ This system uses a dual-layer approach to ensure no report is processed twice:
 3. **Tagging:** Once processed, the `"sales_report_extracted"` tag is applied.
 4. **Robustness:** Includes HTTP 409/412 retry logic to handle Exchange server concurrency conflicts during tagging operations.
 
-### 🌐 Deterministic Timezone Logic
-To ensure 100% accurate reporting dates, the engine uses venue-specific timezones defined in `config/show_reporting_rules.json`:
-1. It converts the UTC timestamp from the Graph API to the venue's **local timezone** (e.g., `Asia/Singapore`).
-2. It subtracts **1 day** (since reports reflect the previous day's sales).
-3. This ensures the filename and database entry perfectly align with the local business day regardless of when the email was received.
+### 🌐 Deterministic Timezone Logic & Sales Day Offset
+To ensure 100% accurate reporting dates, the engine uses venue-specific timezones and optional offset hours defined in `config/show_reporting_rules.json`:
+1. **Offset:** Adds `sales_day_offset_hours` to the arrival time to handle late-night reports that belong to the "previous" business day.
+2. **Conversion:** Converts the adjusted UTC timestamp from the Graph API to the venue's **local timezone** (e.g., `Asia/Singapore`).
+3. **Standardization:** The system subtracts **1 day** (since reports reflect the previous day's sales).
+4. **Consistency:** This ensures the filename and database entry perfectly align with the local business day regardless of the UTC offset or the exact hour the email arrived.
 
 ### 🛠️ Universal Logging (Local Testing)
 The system uses `get_universal_logger` (from `src.env_setup`) to ensure scripts run seamlessly in both production and local environments. It automatically detects the Prefect context and falls back to a standard Python `StreamHandler` if running outside of a flow, preventing "MissingContext" crashes.
@@ -64,7 +65,7 @@ The system uses `get_universal_logger` (from `src.env_setup`) to ensure scripts 
 ### 🎯 Granular Task Routing
 The pipeline is decomposed into resilient Prefect `@tasks`:
 - **`fetch_and_route_emails`**: Handles search, routing, and fingerprint-based deduplication with 2 retries.
-- **`process_email`**: Encapsulates the full lifecycle of a single file. Utility failures (SFTP, SharePoint) now bubble up to this task, which manages the final tagging and alerting.
+- **`process_email`**: Encapsulates the full lifecycle of a single file. Supports both **physical attachments** and **link-based extraction** (e.g., Ticketmaster). Utility failures (SFTP, SharePoint) now bubble up to this task, which manages the final tagging and alerting.
 
 ### 📤 Dual-Channel Notifications
 Alerting is routed based on the target audience using dedicated `.env` variables:
