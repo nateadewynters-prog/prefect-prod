@@ -434,7 +434,7 @@
       "active": true,
       "match_criteria": {
         "sender_domain": "ticketmaster.com",
-        "subject_keyword": "Daily Report: Sales Comparison - High Society Tour 2026",
+        "subject_keyword": "Daily Report: Sales Comparison - Mean Girls Tour",
         "attachment_type": ".xlsx",
         "attachment_source": "html_link"
       },
