@@ -428,6 +428,28 @@
       "processing": {
         "passthrough_only": true
       }
+    },
+    {
+      "rule_name": "TICKETMASTER_MEANGIRLS_DUBLIN",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "ticketmaster.com",
+        "subject_keyword": "Daily Report: Sales Comparison - High Society Tour 2026",
+        "attachment_type": ".xlsx",
+        "attachment_source": "html_link"
+      },
+      "metadata": {
+        "show_name": "Mean Girls Tour 2026",
+        "venue_name": "Dublin Bord Gais Energy Theatre",
+        "report_type": "Advance",
+        "show_id": "274", 
+        "venue_id": "41",
+        "document_id": "71",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
     }
   ]
 }
