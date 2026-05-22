@@ -46,10 +46,15 @@ SHOWS_CONFIG = [
         "recipients": ["figures@dewynters.com", "a.trott@dewynters.com", "c.dobson@dewynters.com"]
     },
     {
-        "id": "5", 
-        "show_name": "Magic Mike", 
-        "show_id": 44, 
-        "db_type": "TransactLive", # Unique identifier for the new DB
+    "id": "5", "show_name": "My Neighbour Totoro", "show_id": 222, "db_type": "Legacy",
+    "pbi_workspace_id": "2d12753e-740c-421c-b84c-20790dedc4f2",
+    "pbi_report_id": "5ba3d957-c0ba-4027-8aea-12730ede5113",
+    "pbi_dataset_id": "c14312f5-bd83-44cc-95ef-27ba1b86ddbe",
+    "dashboard_url": "https://app.powerbi.com/groups/2d12753e-740c-421c-b84c-20790dedc4f2/reports/5ba3d957-c0ba-4027-8aea-12730ede5113",
+    "recipients": ["figures@dewynters.com", "a.trott@dewynters.com", "c.dobson@dewynters.com"]
+    },
+    {
+        "id": "6", "show_name": "Magic Mike", "show_id": 44, "db_type": "TransactLive", # Unique identifier for the new DB
         "pbi_workspace_id": "67ad38b6-3981-401a-9032-2d0807b5f8d6", 
         "pbi_report_id": "c4fa1a2d-7882-4bba-91c8-b8bb1114cdb5",
         "pbi_dataset_id": "2176834f-4728-4e1a-bc23-196b43d70b2d",
