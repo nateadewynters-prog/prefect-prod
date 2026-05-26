@@ -7,8 +7,28 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&display=swap');
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .log-entry { border-left: 2px solid #3b82f6; padding-left: 10px; margin-bottom: 4px; animation: fadeIn 0.3s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+        
+        .log-entry { 
+            border-left: 2px solid #3b82f6; 
+            padding-left: 10px; 
+            margin-bottom: 4px; 
+            animation: fadeIn 0.3s ease-in; 
+        }
+        
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateX(-5px); } 
+            to { opacity: 1; transform: translateX(0); } 
+        }
+
+        /* NEW: Custom Glow Animation for the History Icon */
+        @keyframes iconGlow {
+            0% { filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.3)); color: #9ca3af; }
+            50% { filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.9)); color: #3b82f6; }
+            100% { filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.3)); color: #9ca3af; }
+        }
+        .icon-glow {
+            animation: iconGlow 2.5s infinite ease-in-out;
+        }
     </style>
 </head>
 <body class="bg-gray-100 p-6 font-sans">
@@ -19,7 +39,16 @@
         
         <div class="bg-white rounded-lg shadow p-8 mb-6">
             <div class="flex justify-between items-center border-b pb-4 mb-6">
-                <h1 class="text-3xl font-bold text-gray-800">Power BI Report Dispatcher</h1>
+                
+                <div class="flex items-center gap-3">
+                    <h1 class="text-3xl font-bold text-gray-800">Power BI Report Dispatcher</h1>
+                    <button onclick="openHistoryModal()" class="transition-colors p-1 rounded-full hover:bg-blue-50 mt-1" title="View Dispatch History">
+                        <svg class="w-6 h-6 icon-glow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </button>
+                </div>
+
                 <div id="status-indicator" class="hidden flex items-center text-blue-600 font-bold px-4 py-2 bg-blue-50 rounded-lg">
                     <span class="animate-ping mr-3 inline-flex h-3 w-3 rounded-full bg-blue-500 opacity-75"></span> 
                     SYSTEM BUSY: DISPATCHING
@@ -83,11 +112,41 @@
                         </tr>
                     </thead>
                     <tbody id="modalBody" class="font-mono text-sm text-gray-700">
-                        </tbody>
+                    </tbody>
                 </table>
             </div>
             <div class="p-4 bg-gray-50 text-right">
                 <button onclick="closeModal()" class="bg-gray-800 hover:bg-black text-white px-6 py-2 rounded-lg font-bold transition-colors">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="historyModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full flex flex-col max-h-[80vh]">
+            <div class="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Dispatch History
+                </h3>
+                <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="p-0 overflow-y-auto flex-grow">
+                <table class="w-full text-left border-collapse">
+                    <thead class="sticky top-0 bg-white shadow-sm">
+                        <tr class="border-b text-gray-500 text-xs uppercase tracking-wider">
+                            <th class="py-3 px-6 font-semibold">Show Name</th>
+                            <th class="py-3 px-6 font-semibold">Duration</th>
+                            <th class="py-3 px-6 font-semibold">PDF Size</th>
+                            <th class="py-3 px-6 font-semibold">Dispatched On</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody" class="text-sm text-gray-700 divide-y divide-gray-100">
+                    </tbody>
+                </table>
+            </div>
+            <div class="p-4 bg-gray-50 border-t rounded-b-xl flex justify-between items-center text-sm">
+                <div class="font-bold text-gray-700">Total Dispatches: <span id="totalDispatches" class="text-blue-600 text-lg ml-1">0</span></div>
+                <button onclick="closeHistoryModal()" class="bg-gray-800 hover:bg-black text-white px-6 py-2 rounded-lg font-bold transition-colors shadow-sm">Close</button>
             </div>
         </div>
     </div>
@@ -131,6 +190,43 @@
         }
 
         function closeModal() { document.getElementById('queryModal').classList.add('hidden'); }
+
+        function openHistoryModal() {
+            document.getElementById('historyModal').classList.remove('hidden');
+            const tbody = document.getElementById('historyBody');
+            tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-blue-500 font-bold animate-pulse">Loading history...</td></tr>';
+            
+            fetch('/api/history')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('totalDispatches').innerText = data.total;
+                    if (data.history.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-gray-500 font-medium">No reports have been dispatched yet.</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = data.history.map(row => {
+                        // Safe fallbacks for older logs
+                        const duration = row.duration_mins ? `${row.duration_mins} Mins` : 'N/A';
+                        const size = row.pdf_size_mb ? `${row.pdf_size_mb.toFixed(2)} MB` : 'N/A';
+
+                        return `
+                        <tr class="hover:bg-blue-50 transition-colors">
+                            <td class="py-3 px-6 font-bold text-gray-800">${row.show_name}</td>
+                            <td class="py-3 px-6 text-gray-600 font-mono text-xs">${duration}</td>
+                            <td class="py-3 px-6 text-gray-600 font-mono text-xs">${size}</td>
+                            <td class="py-3 px-6 text-gray-600 font-mono text-xs">${row.timestamp}</td>
+                        </tr>
+                        `;
+                    }).join('');
+                })
+                .catch(err => {
+                    tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-red-500 font-bold">Error loading history data.</td></tr>`;
+                });
+        }
+
+        function closeHistoryModal() {
+            document.getElementById('historyModal').classList.add('hidden');
+        }
 
         function pollSharedState() {
             fetch('/api/state')

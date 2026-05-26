@@ -64,6 +64,9 @@ services:
       - "8002:8002"
     volumes:
       - /opt/prefect/prod/.env:/app/.env:ro
+      - ./data:/app/data
+    environment:
+      - DB_PATH=/app/data/dispatcher_state.db
     restart: unless-stopped
     logging:
       driver: "json-file"

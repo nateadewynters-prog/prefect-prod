@@ -64,8 +64,10 @@ SHOWS_CONFIG = [
 ]
 
 # --- SHARED STATE DATABASE (LOCKS & LOGS) ---
+DB_PATH = os.getenv("DB_PATH", "dispatcher_state.db")
+
 def get_db_conn():
-    conn = sqlite3.connect('dispatcher_state.db', check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -73,7 +75,8 @@ def init_db():
     with get_db_conn() as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS locks (show_id TEXT PRIMARY KEY, is_locked INTEGER)")
         conn.execute("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, msg TEXT, type TEXT, timestamp DATETIME DEFAULT (datetime('now', 'localtime')))")
-        conn.execute("UPDATE locks SET is_locked = 0") # Reset locks on startup
+        conn.execute("CREATE TABLE IF NOT EXISTS dispatch_history (id INTEGER PRIMARY KEY AUTOINCREMENT, show_name TEXT, duration_mins INTEGER, pdf_size_mb REAL, timestamp DATETIME DEFAULT (datetime('now', 'localtime')))")
+        conn.execute("UPDATE locks SET is_locked = 0")
 init_db()
 
 def set_lock(show_id, locked):
@@ -291,6 +294,14 @@ def send_graph_email(config, html_body, pdf_content, png_bytes, graph_token):
 def dispatcher():
     return render_template('dispatcher.html', shows=SHOWS_CONFIG)
 
+@app.route('/api/history')
+def get_history():
+    with get_db_conn() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM dispatch_history").fetchone()[0]
+        # --- NEW: Added duration_mins and pdf_size_mb to the SELECT statement ---
+        history = [dict(row) for row in conn.execute("SELECT show_name, duration_mins, pdf_size_mb, timestamp FROM dispatch_history ORDER BY timestamp DESC LIMIT 50").fetchall()]
+    return jsonify({"total": total, "history": history})
+
 @app.route('/api/state')
 def get_state():
     with get_db_conn() as conn:
@@ -354,6 +365,8 @@ def stream_logs(show_id):
 
             yield msg(f"========== NEW DISPATCH: {config['show_name'].upper()} ==========", "separator")
             yield msg(f"🚀 Starting pipeline for {config['show_name']}...")
+
+            start_time = time.time()
             
             engine = LiveReportingEngine()
             yield msg("🔑 Requesting Azure AD Tokens...")
@@ -442,9 +455,19 @@ def stream_logs(show_id):
                 send_graph_email(config, build_email_html(config, metrics), pdf_bytes, png_bytes, graph_token)
                 yield msg(f"✅ SUCCESS: {config['show_name']} report sent.", "success")
                 
-                # New line to log the email addresses it was sent to
                 email_list = ", ".join(config['recipients'])
                 yield msg(f"Sent to email addresses: {email_list}", "info")
+                
+                # --- NEW: Calculate and insert metrics ---
+                duration_mins = max(1, round((time.time() - start_time) / 60))
+                pdf_size_mb = round(len(pdf_bytes) / (1024 * 1024), 2)
+
+                with get_db_conn() as conn:
+                    conn.execute(
+                        "INSERT INTO dispatch_history (show_name, duration_mins, pdf_size_mb) VALUES (?, ?, ?)", 
+                        (config['show_name'], duration_mins, pdf_size_mb)
+                    )
+                    conn.commit()
                 
             except Exception as e:
                 yield msg(f"❌ Graph API Error: {str(e)}", "error")
