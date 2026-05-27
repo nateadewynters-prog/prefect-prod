@@ -3,19 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Homepage</title>
+    <title>B.I.S.C.U.I.T</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         function gotoService(port) {
             window.location.href = window.location.protocol + '//' + window.location.hostname + ':' + port;
+        }
+        function gotoUrl(url) {
+            window.location.href = url;
         }
     </script>
 </head>
 <body class="bg-gray-100 p-8 font-sans min-h-screen">
     <div class="max-w-6xl mx-auto">
         <header class="text-center mb-12">
-            <h1 class="text-4xl font-extrabold text-gray-900 mb-2">Homepage</h1>
-            <p class="text-gray-500 text-lg">Ubuntu Machine Portal</p>
+            <h1 class="text-4xl font-extrabold text-gray-900 mb-2">B.I.S.C.U.I.T</h1>
+            <p class="text-gray-500 text-lg">Useful Links</p>
         </header>
 
         <section class="mb-12">
@@ -56,6 +59,85 @@
                     </div>
                 </div>
 
+                <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation/AllItems.aspx')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
+                    <div class="flex flex-col items-center text-center space-y-4">
+                        <div class="text-5xl transition-transform group-hover:scale-110">📋</div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-blue-700">Sales Reporting Master List</h3>
+                            <p class="text-sm text-gray-500 mt-2">SharePoint master list for Sales Reporting automation configuration.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section class="mb-12">
+            <div class="flex items-center mb-6">
+                <div class="h-px flex-1 bg-gray-200"></div>
+                <h2 class="px-4 text-sm font-bold text-gray-400 uppercase tracking-widest">Dave's Front End</h2>
+                <div class="h-px flex-1 bg-gray-200"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <!-- Dev column -->
+                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="text-lg">🧪</span>
+                        <h3 class="text-sm font-bold text-amber-700 uppercase tracking-widest">Dev</h3>
+                    </div>
+                    <div class="flex flex-col gap-3">
+
+                        <div onclick="gotoUrl('https://dewynterstickettestnew.azurewebsites.net/')" class="group block bg-white border-2 border-transparent rounded-xl p-4 hover:border-amber-400 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                            <div class="flex items-center gap-4">
+                                <div class="text-3xl transition-transform group-hover:scale-110">🎟️</div>
+                                <div>
+                                    <h4 class="font-bold text-gray-800 group-hover:text-amber-600">Test Legacy Front End</h4>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div onclick="gotoUrl('https://dewynterstransaction-b4dubaere4bvg8cv.uksouth-01.azurewebsites.net/')" class="group block bg-white border-2 border-transparent rounded-xl p-4 hover:border-amber-400 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                            <div class="flex items-center gap-4">
+                                <div class="text-3xl transition-transform group-hover:scale-110">🗄️</div>
+                                <div>
+                                    <h4 class="font-bold text-gray-800 group-hover:text-amber-600">Test Transactional Front End</h4>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Prod column -->
+                <div class="bg-green-50 border border-green-200 rounded-2xl p-5">
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="text-lg">🚀</span>
+                        <h3 class="text-sm font-bold text-green-700 uppercase tracking-widest">Prod</h3>
+                    </div>
+                    <div class="flex flex-col gap-3">
+
+                        <div onclick="gotoUrl('https://dewynterstickets.azurewebsites.net/')" class="group block bg-white border-2 border-transparent rounded-xl p-4 hover:border-green-500 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                            <div class="flex items-center gap-4">
+                                <div class="text-3xl transition-transform group-hover:scale-110">🎟️</div>
+                                <div>
+                                    <h4 class="font-bold text-gray-800 group-hover:text-green-700">Legacy Front End</h4>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div onclick="gotoUrl('https://dewynterstransactionlive.azurewebsites.net/')" class="group block bg-white border-2 border-transparent rounded-xl p-4 hover:border-green-500 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                            <div class="flex items-center gap-4">
+                                <div class="text-3xl transition-transform group-hover:scale-110">🗄️</div>
+                                <div>
+                                    <h4 class="font-bold text-gray-800 group-hover:text-green-700">Transactional Front End</h4>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
             </div>
         </section>
 
@@ -90,9 +172,43 @@
             </div>
         </section>
 
-        <footer class="mt-16 pt-8 border-t border-gray-200 text-center text-xs text-gray-400">
+        <div class="mt-16 mb-6 rounded-2xl bg-white shadow-sm border border-gray-200 px-6 py-5 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <span class="text-3xl">🏖️</span>
+                <div>
+                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Next Bank Holiday — England & Wales</p>
+                    <p id="bh-name" class="text-lg font-bold text-gray-800">Loading…</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <p id="bh-days" class="text-4xl font-extrabold text-blue-600">—</p>
+                <p id="bh-date" class="text-xs text-gray-400 mt-0.5"></p>
+            </div>
+        </div>
+
+        <footer class="pt-8 border-t border-gray-200 text-center text-xs text-gray-400">
             Internal Operations Tools &bull; Dewynters &bull; 2026
         </footer>
+
+        <script>
+            fetch('https://www.gov.uk/bank-holidays.json')
+                .then(r => r.json())
+                .then(data => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const events = data['england-and-wales'].events;
+                    const next = events.find(e => new Date(e.date) >= today);
+                    if (!next) return;
+                    const nextDate = new Date(next.date);
+                    const diff = Math.round((nextDate - today) / (1000 * 60 * 60 * 24));
+                    document.getElementById('bh-name').textContent = next.title;
+                    document.getElementById('bh-days').textContent = diff === 0 ? 'Today! 🎉' : diff + (diff === 1 ? ' day' : ' days');
+                    document.getElementById('bh-date').textContent = nextDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                })
+                .catch(() => {
+                    document.getElementById('bh-name').textContent = 'Unable to load';
+                });
+        </script>
     </div>
 </body>
 </html>
