@@ -120,6 +120,30 @@
       }
     },
     {
+      "rule_name": "JESUS_CHRIST_SUPERSTAR_TAIWAN",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "khamtw@khmail.com.tw",
+        "subject_keyword": "JCS Taiwan sales",
+        "attachment_type": ".xlsx"
+      },
+      "metadata": {
+        "show_name": "Jesus Christ Superstar",
+        "venue_name": "Taiwan",
+        "report_type": "Advance",
+        "show_id": "287",
+        "venue_id": "181",
+        "document_id": "512",
+        "timezone": "Asia/Singapore",
+        "sales_day_offset_hours": 1
+      },
+      "processing": {
+        "parser_module": "src.parsers.taiwan_jesus_christ_superstar_xlsx_parser",
+        "parser_function": "taiwan_jesus_christ_superstar_xlsx_parser",
+        "needs_lookup": false
+      }
+    },
+    {
       "rule_name": "TICKETEK_JESUS_CHRIST_SUPERSTAR_MANILA",
       "active": true,
       "match_criteria": {
