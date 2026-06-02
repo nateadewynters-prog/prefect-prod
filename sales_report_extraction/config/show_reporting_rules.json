@@ -539,6 +539,28 @@
       "processing": {
         "passthrough_only": true
       }
+    },
+    {
+      "rule_name": "ATG_VENUES_WAITRESS_TOUR",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "reports@info.atgtickets.com",
+        "subject_keyword": "ATG Movement Report - Waitress - 2026",
+        "attachment_type": ".csv"
+      },
+      "metadata": {
+        "show_name": "Waitress Tour 2026",
+        "venue_name": "ATG Venues",
+        "report_type": "Advance",
+        "show_id": "280",
+        "venue_id": "0",
+        "document_id": "446",
+        "timezone": "Europe/London",
+        "sales_day_offset_hours": 0
+      },
+      "processing": {
+        "passthrough_only": true
+      }
     }
   ]
 }
