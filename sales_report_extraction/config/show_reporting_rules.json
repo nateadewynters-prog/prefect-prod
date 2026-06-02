@@ -474,6 +474,71 @@
       "processing": {
         "passthrough_only": true
       }
+    },
+    {
+      "rule_name": "ATG_VENUES_ANNIE_TOUR",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "reports@info.atgtickets.com",
+        "subject_keyword": "ATG Movement Report -  Annie - Tour",
+        "attachment_type": ".csv"
+      },
+      "metadata": {
+        "show_name": "Annie Tour 2026",
+        "venue_name": "ATG Venues",
+        "report_type": "Advance",
+        "show_id": "279",
+        "venue_id": "0",
+        "document_id": "446",
+        "timezone": "Europe/London",
+        "sales_day_offset_hours": 0
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "ATG_VENUES_HIGH_SOCIETY_TOUR",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "reports@info.atgtickets.com",
+        "subject_keyword": "ATG Movement Report - High Society - Tour - 2026 - Daily",
+        "attachment_type": ".csv"
+      },
+      "metadata": {
+        "show_name": "High Society Tour 2026",
+        "venue_name": "ATG Venues",
+        "report_type": "Advance",
+        "show_id": "288",
+        "venue_id": "0",
+        "document_id": "446",
+        "timezone": "Europe/London"
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "ATG_VENUES_MEAN_GIRLS_TOUR",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "reports@info.atgtickets.com",
+        "subject_keyword": "ATG Movement Report -  Mean Girls - Tour",
+        "attachment_type": ".csv"
+      },
+      "metadata": {
+        "show_name": "Mean Girls Tour 2026",
+        "venue_name": "ATG Venues",
+        "report_type": "Advance",
+        "show_id": "274",
+        "venue_id": "0",
+        "document_id": "446",
+        "timezone": "Europe/London",
+        "sales_day_offset_hours": 0
+      },
+      "processing": {
+        "passthrough_only": true
+      }
     }
   ]
 }
