@@ -9,7 +9,7 @@ app = Flask(__name__)
 TENANT_ID = os.getenv("AZURE_TENANT_ID")
 CLIENT_ID = os.getenv("AZURE_CLIENT_ID")
 CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
-SENDER_EMAIL = "figures@dewynters.com"
+SENDER_EMAIL = os.getenv("BUSINESS_INTELLIGENCE_INBOX_ADDRESS")
 
 # --- CONFIGURATION ---
 SHOWS_CONFIG = [
@@ -408,6 +408,14 @@ def stream_logs(show_id):
             yield msg("🗄️ Fetching Sales Metrics from SQL...")
             try:
                 metrics = get_show_metrics(config)
+
+                if not metrics.get('main'):
+                    yield msg(f"⛔ No sales data found for {config['show_name']} — report not sent.", "error")
+                    return
+                if not metrics.get('weekly'):
+                    yield msg(f"⛔ No weekly performance data found for {config['show_name']} — report not sent.", "error")
+                    return
+                    
                 yield msg(f"📊 SQL Data Fetched.")
             except Exception as e:
                 yield msg(f"❌ SQL Error: {str(e)}", "error")
