@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock, mock_open
 
 # --- TEST 1: The Orchestrator Routing ---
@@ -18,17 +19,19 @@ def test_fetch_and_route_skips_categorized_emails(mock_logger, mock_config, mock
         }]
     }[k]
 
+    recent = (datetime.now(timezone.utc) - timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
     fake_emails = [
         {
             "id": "MSG_1_CLEAN",
-            "receivedDateTime": "2026-03-06T10:00:00Z",
+            "receivedDateTime": recent,
             "hasAttachments": True,
             "from": {"emailAddress": {"address": "figures@theatre.com"}},
             "categories": []
         },
         {
             "id": "MSG_2_TAGGED_SUCCESS",
-            "receivedDateTime": "2026-03-06T10:05:00Z",
+            "receivedDateTime": recent,
             "hasAttachments": True,
             "from": {"emailAddress": {"address": "figures@theatre.com"}},
             "categories": ["sales_report_extracted"]
