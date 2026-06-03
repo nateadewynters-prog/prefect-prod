@@ -381,10 +381,21 @@ def stream_logs(show_id):
 
             yield msg("🔄 Triggering Power BI Dataset Refresh...")
             try:
+                # 1. Define the URLs
                 refresh_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/datasets/{config['pbi_dataset_id']}/refreshes"
-                requests.post(refresh_url, headers=pbi_headers, json={}).raise_for_status()
-                
                 status_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/datasets/{config['pbi_dataset_id']}/refreshes?$top=1"
+                
+                # 2. Attempt to trigger the refresh
+                trigger_req = requests.post(refresh_url, headers=pbi_headers, json={})
+                
+                # 3. Check for the specific "already running" error using the exact keywords from your logs
+                if trigger_req.status_code == 400 and ("already executing" in trigger_req.text.lower() or "refreshinprogress" in trigger_req.text.lower()):
+                    yield msg("ℹ️ A scheduled refresh is already running. Attaching to it...", "info")
+                else:
+                    # If it's a real error (e.g., 401 Unauthorized), raise it
+                    trigger_req.raise_for_status()
+                
+                # 4. Enter the polling loop
                 while True:
                     poll_req = requests.get(status_url, headers=pbi_headers)
                     poll_req.raise_for_status() 
@@ -398,6 +409,7 @@ def stream_logs(show_id):
                         yield msg("❌ Power BI Refresh Failed.", "error")
                         return
                     time.sleep(5)
+                    
             except requests.exceptions.HTTPError as e:
                 yield msg(f"❌ API Error: {e.response.status_code} - {e.response.text}", "error")
                 return
