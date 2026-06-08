@@ -3,213 +3,277 @@
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Power BI Dataset Refresher</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&display=swap');
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .log-entry { border-left: 2px solid #3b82f6; padding-left: 10px; margin-bottom: 4px; animation: fadeIn 0.3s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
-        /* Smooth transition for floating terminal */
-        #status-box { transition: transform 0.3s ease-in-out, opacity 0.3s; }
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{background:#f3f4f6;padding:1.5rem;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111}
+        a{text-decoration:none}
+        .back{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#6b7280;margin-bottom:1.25rem;cursor:pointer;background:none;border:none}
+        .back:hover{color:#111}
+        .shell{background:#fff;border-radius:12px;border:0.5px solid #e5e7eb;padding:1.5rem}
+        .header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:0.5px solid #e5e7eb}
+        .h-left{display:flex;flex-direction:column;gap:4px}
+        .h-title{font-size:18px;font-weight:500;color:#111}
+        .h-meta{font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:5px}
+        .dot{width:5px;height:5px;border-radius:50%;background:#639922;flex-shrink:0}
+        .h-actions{display:flex;align-items:center;gap:8px}
+        .sync-btn{display:flex;align-items:center;gap:5px;font-size:12px;padding:6px 10px;border-radius:8px;border:0.5px solid #d1d5db;background:#fff;color:#6b7280;cursor:pointer}
+        .sync-btn:hover{background:#f9fafb}
+        .sync-btn:disabled{opacity:0.5;cursor:default}
+        .search{position:relative;margin-bottom:1rem}
+        .search i{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:15px;color:#9ca3af;pointer-events:none}
+        .search input{width:100%;padding:7px 10px 7px 30px;border-radius:8px;border:0.5px solid #e5e7eb;background:#fff;color:#111;font-size:13px;outline:none}
+        .search input:focus{border-color:#d1d5db}
+        .ws-label{font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:#9ca3af;margin:1rem 0 0.5rem;padding-bottom:4px;border-bottom:0.5px solid #f3f4f6}
+        .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+        .card{background:#fff;border:0.5px solid #e5e7eb;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;transition:border-color 0.15s}
+        .card:hover{border-color:#d1d5db}
+        .card-name{font-size:13px;font-weight:500;color:#111;line-height:1.35}
+        .card-ds{font-size:11px;color:#9ca3af;font-family:'SF Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+        .card-refreshed{font-size:11px;color:#d1d5db;margin-top:2px}
+        .card-actions{display:flex;gap:5px;margin-top:auto}
+        .btn-view{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;font-size:12px;padding:6px;border-radius:8px;border:0.5px solid #e5e7eb;background:#f9fafb;color:#6b7280;cursor:pointer;transition:border-color 0.1s}
+        .btn-view:hover{border-color:#d1d5db;color:#111}
+        .btn-refresh{flex:1.6;display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px;font-weight:500;padding:6px 8px;border-radius:8px;border:0.5px solid #d1d5db;background:#fff;color:#111;cursor:pointer;position:relative;overflow:hidden;transition:border-color 0.15s,background 0.15s,color 0.15s;white-space:nowrap}
+        .btn-refresh:hover:not(:disabled){background:#f9fafb}
+        .btn-refresh:disabled{cursor:default}
+        .btn-refresh.state-running{background:#fffbeb;border-color:#fcd34d;color:#92400e}
+        .btn-refresh.state-running .progress-bar{position:absolute;bottom:0;left:0;height:2px;background:#d97706;opacity:0.6;animation:prog 3s ease-in-out infinite}
+        @keyframes prog{0%{width:5%}60%{width:80%}100%{width:93%}}
+        .btn-refresh.state-success{background:#f0fdf4;border-color:#86efac;color:#166534}
+        .btn-refresh.state-success .progress-bar{position:absolute;bottom:0;left:0;height:2px;width:100%;background:#22c55e;opacity:0.5}
+        .btn-refresh.state-error{background:#fef2f2;border-color:#fca5a5;color:#991b1b}
+        .btn-refresh.state-waiting{opacity:0.4;cursor:not-allowed}
+        .spin{display:inline-block;animation:spin 1s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .no-results{text-align:center;padding:3rem;color:#9ca3af;font-size:14px}
+        .status-bar{display:none;align-items:center;gap:8px;background:#fffbeb;border:0.5px solid #fcd34d;border-radius:8px;padding:8px 12px;margin-bottom:1rem;font-size:12px;color:#92400e}
+        .status-bar.visible{display:flex}
+        .status-pulse{width:7px;height:7px;border-radius:50%;background:#d97706;flex-shrink:0;animation:pulse 1.4s ease-in-out infinite}
+        @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.75)}}
+        .status-items{display:flex;flex-wrap:wrap;gap:4px;flex:1}
+        .status-tag{background:#fef3c7;border:0.5px solid #fde68a;border-radius:6px;padding:2px 8px;color:#92400e;font-weight:500}
     </style>
 </head>
-<body class="bg-gray-100 p-6 font-sans relative pb-24">
-    <div class="max-w-6xl mx-auto">
-        <button onclick="window.location.href = window.location.protocol + '//' + window.location.hostname;" class="text-blue-600 hover:underline mb-4 inline-block font-semibold bg-transparent border-0 cursor-pointer">
-            ← Back to Homepage
-        </button>
-        
-        <div class="bg-white rounded-lg shadow p-8 mb-6">
-            <div class="flex justify-between items-center border-b pb-4 mb-6">
-                <h1 class="text-3xl font-bold text-gray-800">Power BI Dataset Refresher</h1>
-                <div id="status-indicator" class="hidden flex items-center text-blue-600 font-bold px-4 py-2 bg-blue-50 rounded-lg">
-                    <span class="animate-ping mr-3 inline-flex h-3 w-3 rounded-full bg-blue-500 opacity-75"></span> 
-                    SYSTEM BUSY
-                </div>
-            </div>
+<body>
+    <button class="back" onclick="window.location.href=window.location.protocol+'//'+window.location.hostname">
+        <i class="ti ti-arrow-left" style="font-size:14px"></i> Back to homepage
+    </button>
 
-            <div class="mb-6 relative">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span class="text-gray-500 text-xl">🔍</span>
-                </div>
-                <input type="text" id="searchInput" placeholder="Search by Report Name or Workspace..." class="w-full pl-10 p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 font-semibold transition-all">
+    <div class="shell">
+        <div class="header">
+            <div class="h-left">
+                <span class="h-title">Power BI Dataset Refresher</span>
+                <span class="h-meta">
+                    <span class="dot"></span>
+                    Synced <span id="synced-at">{{ synced_at }}</span> &nbsp;·&nbsp; next sync at midnight
+                </span>
             </div>
+            <div class="h-actions">
+                <button class="sync-btn" id="sync-btn" onclick="manualSync()">
+                    <i class="ti ti-refresh" style="font-size:13px"></i> Sync reports
+                </button>
+            </div>
+        </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="reportsGrid">
-                {% for report in reports %}
-                <div class="report-card border border-gray-200 rounded-xl p-5 flex flex-col justify-between bg-gray-50 hover:bg-white transition-all shadow-sm">
+        <div class="search">
+            <i class="ti ti-search"></i>
+            <input type="text" id="searchInput" placeholder="Search by report or workspace…">
+        </div>
+
+        <div id="status-bar" class="status-bar">
+            <span class="status-pulse"></span>
+            <span style="flex-shrink:0">Refreshing</span>
+            <div class="status-items" id="status-items"></div>
+        </div>
+
+        <div id="cardContainer">
+            {% set ns = namespace(current_ws='') %}
+            {% for report in reports %}
+                {% if report.workspace_name != ns.current_ws %}
+                    {% if not loop.first %}</div>{% endif %}
+                    <div class="ws-label">{{ report.workspace_name }}</div>
+                    <div class="grid">
+                    {% set ns.current_ws = report.workspace_name %}
+                {% endif %}
+                <div class="card" data-name="{{ report.report_name|lower }}" data-ws="{{ report.workspace_name|lower }}">
                     <div>
-                        <h2 class="text-lg font-bold text-gray-800 report-title">{{ report.report_name }}</h2>
-                        <p class="text-xs text-gray-500 font-mono mt-1 mb-4 report-workspace">
-                            Workspace: <span class="font-bold">{{ report.workspace_name }}</span><br>
-                            Dataset ID: <span class="font-bold text-gray-400">{{ report.dataset_id or 'None Linked' }}</span>
-                        </p>
+                        <div class="card-name">{{ report.report_name }}</div>
+                        <div class="card-ds">{{ report.dataset_id[:8] if report.dataset_id else 'no dataset' }}…</div>
+                        <div class="card-refreshed" id="refreshed-{{ report.dataset_id }}">—</div>
                     </div>
-                    
-                    <div class="flex flex-col gap-2 mt-4">
-                        <a href="{{ report.dashboard_url }}" target="_blank" class="dashboard-link w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 px-4 rounded-lg text-center transition-all">
-                            📊 View Dashboard
+                    <div class="card-actions">
+                        <a href="{{ report.dashboard_url }}" target="_blank" class="btn-view">
+                            <i class="ti ti-external-link" style="font-size:12px"></i> View
                         </a>
-
-                        {% if report.dataset_id %}
-                        <button onclick="runRefresh('{{ report.id }}')" id="btn-{{ report.id }}" data-dataset="{{ report.dataset_id }}" class="tool-btn bg-gray-800 hover:bg-black text-white font-bold py-2 px-4 rounded-lg transition-all w-full disabled:opacity-50 truncate">
-                            🔄 Refresh Dataset
+                        <button
+                            class="btn-refresh"
+                            id="btn-{{ report.id }}"
+                            data-dataset="{{ report.dataset_id }}"
+                            onclick="runRefresh('{{ report.id }}')">
+                            <i class="ti ti-refresh" style="font-size:13px"></i> Refresh
                         </button>
-                        {% else %}
-                        <button disabled class="bg-gray-200 text-gray-400 font-bold py-2 px-4 rounded-lg cursor-not-allowed w-full">
-                            🚫 No Dataset
-                        </button>
-                        {% endif %}
                     </div>
                 </div>
-                {% endfor %}
-            </div>
-            
-            <div id="noResults" class="hidden text-center py-12 text-gray-500 font-semibold">
-                No reports found matching your search.
-            </div>
+            {% endfor %}
+            {% if reports %}</div>{% endif %}
         </div>
-    </div>
 
-    <div id="status-box" class="hidden fixed bottom-6 right-6 w-96 max-w-[90vw] bg-gray-900 rounded-xl shadow-2xl border border-gray-700 z-50 flex flex-col overflow-hidden">
-        <div class="bg-gray-800 px-4 py-3 border-b border-gray-700 flex justify-between items-center cursor-pointer hover:bg-gray-700 transition-colors" onclick="toggleTerminal()">
-            <div class="flex items-center space-x-2">
-                <span id="terminal-pulse" class="h-2 w-2 bg-blue-500 rounded-full inline-block"></span>
-                <h3 class="text-blue-400 font-mono font-bold uppercase tracking-widest text-xs">Live Terminal</h3>
-            </div>
-            <div class="flex space-x-4 text-gray-400">
-                <button onclick="clearLogs(); event.stopPropagation();" class="hover:text-white text-xs font-mono font-bold">CLEAR</button>
-                <button id="toggle-icon" class="hover:text-white text-xs font-mono font-bold">▼</button>
-            </div>
-        </div>
-        <div id="log-list" class="space-y-1 font-mono text-xs text-gray-300 h-64 overflow-y-auto bg-black p-4"></div>
+        <div id="noResults" class="no-results" style="display:none">No reports match your search.</div>
     </div>
 
     <script>
-        // --- SEARCH FUNCTIONALITY ---
-        document.getElementById('searchInput').addEventListener('input', function(e) {
-            const searchTerms = e.target.value.toLowerCase().split(' ').filter(term => term.trim() !== '');
-            const cards = document.querySelectorAll('.report-card');
-            let visibleCount = 0;
-
-            cards.forEach(card => {
-                const textToSearch = (card.querySelector('.report-title').innerText + " " + card.querySelector('.report-workspace').innerText).toLowerCase();
-                const isMatch = searchTerms.every(term => textToSearch.includes(term));
-                
-                if (isMatch || searchTerms.length === 0) {
-                    card.style.display = 'flex';
-                    visibleCount++;
+        // --- SEARCH ---
+        document.getElementById('searchInput').addEventListener('input', function() {
+            const terms = this.value.toLowerCase().split(' ').filter(Boolean);
+            let visible = 0;
+            document.querySelectorAll('.card').forEach(card => {
+                const text = card.dataset.name + ' ' + card.dataset.ws;
+                const match = !terms.length || terms.every(t => text.includes(t));
+                card.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+            document.getElementById('noResults').style.display = visible === 0 ? 'block' : 'none';
+            document.querySelectorAll('.ws-label, .grid').forEach(el => {
+                if (el.classList.contains('grid')) {
+                    el.style.display = [...el.querySelectorAll('.card')].some(c => c.style.display !== 'none') ? '' : 'none';
                 } else {
-                    card.style.display = 'none';
+                    const grid = el.nextElementSibling;
+                    el.style.display = grid && grid.style.display !== 'none' ? '' : 'none';
                 }
             });
-            document.getElementById('noResults').style.display = visibleCount === 0 ? 'block' : 'none';
         });
 
-        // --- TERMINAL TOGGLE ---
-        let isTerminalMinimized = false;
-        function toggleTerminal() {
-            isTerminalMinimized = !isTerminalMinimized;
-            const logList = document.getElementById('log-list');
-            const icon = document.getElementById('toggle-icon');
-            if (isTerminalMinimized) {
-                logList.style.display = 'none';
-                icon.innerText = '▲';
-            } else {
-                logList.style.display = 'block';
-                icon.innerText = '▼';
-                logList.scrollTop = logList.scrollHeight; // Auto-scroll to bottom when opened
-            }
+        // --- BUTTON STATE HELPERS ---
+        function setBtn(id, state, label, icon) {
+            const btn = document.getElementById('btn-' + id);
+            if (!btn) return;
+            btn.className = 'btn-refresh' + (state ? ' state-' + state : '');
+            btn.disabled = !!state;
+            const bar = (state === 'running' || state === 'success') ? '<span class="progress-bar"></span>' : '';
+            const spinOpen  = state === 'running' ? '<span class="spin">' : '';
+            const spinClose = state === 'running' ? '</span>' : '';
+            btn.innerHTML = `${spinOpen}<i class="ti ti-${icon}" style="font-size:13px"></i>${spinClose} ${label}${bar}`;
         }
 
-        // --- POLLING & REFRESH LOGIC ---
-        let lastLogCount = 0;
-
-        function clearLogs() { 
-            document.getElementById('log-list').innerHTML = '<div class="text-gray-500 italic">Console cleared locally...</div>';
-            lastLogCount = -1; 
+        function resetBtn(id) {
+            setBtn(id, '', 'Refresh', 'refresh');
+            const btn = document.getElementById('btn-' + id);
+            if (btn) btn.disabled = false;
         }
 
+        // --- STATE POLLING ---
         function pollSharedState() {
             fetch('/api/state')
                 .then(r => r.json())
                 .then(data => {
-                    const isSystemBusy = data.locks.length > 0;
-                    
-                    // Grab the absolute latest log to display inline on the button
-                    let latestLogText = "⏳ REFRESHING...";
-                    if (data.logs.length > 0) {
-                        latestLogText = data.logs[data.logs.length - 1].msg;
+                    if (data.synced_at) document.getElementById('synced-at').textContent = data.synced_at;
+
+                    if (data.last_refreshes) {
+                        Object.entries(data.last_refreshes).forEach(([dsId, ts]) => {
+                            const el = document.getElementById('refreshed-' + dsId);
+                            if (!el) return;
+                            const d = new Date(ts);
+                            const formatted = d.toLocaleDateString('en-GB', {day:'2-digit',month:'short'})
+                                + ' ' + d.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+                            el.textContent = 'Last refreshed ' + formatted;
+                        });
                     }
 
-                    document.querySelectorAll('.tool-btn').forEach(btn => {
-                        const datasetId = btn.getAttribute('data-dataset');
-                        if (isSystemBusy) {
-                            btn.disabled = true;
-                            if (data.locks.includes(datasetId)) {
-                                // INLINE STATUS: Show the latest log right on the card button!
-                                btn.innerText = latestLogText;
-                                btn.className = "tool-btn w-full font-bold py-2 px-4 rounded-lg transition-all animate-pulse bg-yellow-600 hover:bg-yellow-600 text-white truncate";
-                            } else {
-                                btn.innerText = "Waiting in queue...";
-                                btn.className = "tool-btn w-full font-bold py-2 px-4 rounded-lg transition-all opacity-50 bg-gray-800 cursor-not-allowed text-white truncate";
+                    // --- STATUS BAR ---
+                    const statusBar = document.getElementById('status-bar');
+                    const statusItems = document.getElementById('status-items');
+                    if (data.locks && data.locks.length > 0) {
+                        const names = data.locks.map(dsId => {
+                            const btn = document.querySelector(`.btn-refresh[data-dataset="${dsId}"]`);
+                            if (btn) {
+                                const card = btn.closest('.card');
+                                if (card) return card.querySelector('.card-name').textContent.trim();
                             }
-                        } else {
+                            return dsId.slice(0, 8) + '…';
+                        });
+                        statusItems.innerHTML = names.map(n => `<span class="status-tag">${n}</span>`).join('');
+                        statusBar.classList.add('visible');
+                    } else {
+                        statusBar.classList.remove('visible');
+                        statusItems.innerHTML = '';
+                    }
+
+                    const busy = data.locks.length > 0;
+                    document.querySelectorAll('.btn-refresh').forEach(btn => {
+                        if (btn.classList.contains('state-success') || btn.classList.contains('state-error')) return;
+                        const ds = btn.getAttribute('data-dataset');
+                        const isActive = data.locks.includes(ds);
+                        if (isActive) {
+                            btn.className = 'btn-refresh state-running';
+                            btn.disabled = true;
+                            btn.innerHTML = '<span class="spin"><i class="ti ti-refresh" style="font-size:13px"></i></span> In progress<span class="progress-bar"></span>';
+                        } else if (busy && !isActive) {
+                            btn.className = 'btn-refresh state-waiting';
+                            btn.disabled = true;
+                            btn.innerHTML = '<i class="ti ti-clock" style="font-size:13px"></i> Waiting…';
+                        } else if (!btn.classList.contains('state-running')) {
+                            btn.className = 'btn-refresh';
                             btn.disabled = false;
-                            btn.innerText = "🔄 Refresh Dataset";
-                            btn.className = "tool-btn bg-gray-800 hover:bg-black text-white font-bold py-2 px-4 rounded-lg transition-all w-full disabled:opacity-50 truncate";
+                            btn.innerHTML = '<i class="ti ti-refresh" style="font-size:13px"></i> Refresh';
                         }
                     });
-
-                    document.querySelectorAll('.dashboard-link').forEach(link => {
-                        link.classList.toggle('opacity-50', isSystemBusy);
-                        link.classList.toggle('pointer-events-none', isSystemBusy);
-                    });
-
-                    // Manage Floating Terminal Visibility
-                    if (isSystemBusy || data.logs.length > 0) {
-                        document.getElementById('status-box').classList.remove('hidden');
-                        document.getElementById('status-indicator').classList.toggle('hidden', !isSystemBusy);
-                        
-                        // Toggle pulsing light on terminal
-                        const pulse = document.getElementById('terminal-pulse');
-                        isSystemBusy ? pulse.classList.add('animate-pulse', 'bg-yellow-400') : pulse.classList.remove('animate-pulse', 'bg-yellow-400');
-                        if(!isSystemBusy) pulse.classList.add('bg-blue-500');
-                    }
-
-                    if (data.logs.length !== lastLogCount && lastLogCount !== -1) {
-                        const logList = document.getElementById('log-list');
-                        logList.innerHTML = data.logs.map(l => {
-                            let colorClass = 'text-gray-300';
-                            if (l.type === 'success') colorClass = 'text-green-400 border-green-500';
-                            if (l.type === 'error') colorClass = 'text-red-400 border-red-500 font-bold';
-                            if (l.type === 'separator') colorClass = 'text-blue-400 border-blue-500 font-bold mt-4 mb-2'; 
-                            
-                            const timeStr = l.timestamp.split(' ')[1]; 
-                            return `<div class="log-entry ${colorClass}"><span class="text-gray-600">[${timeStr}]</span> ${l.msg}</div>`;
-                        }).join('');
-                        
-                        if (!isTerminalMinimized) logList.scrollTop = logList.scrollHeight; 
-                        lastLogCount = data.logs.length;
-                    } else if (lastLogCount === -1) {
-                        lastLogCount = data.logs.length; 
-                    }
                 })
-                .catch(err => console.error("Polling error:", err));
+                .catch(() => {});
         }
 
         pollSharedState();
         setInterval(pollSharedState, 2000);
 
+        // --- DATASET REFRESH ---
         function runRefresh(id) {
-            const eventSource = new EventSource(`/stream/${id}`);
-            eventSource.onmessage = function(event) { if (event.data === "[DONE]") eventSource.close(); };
-            eventSource.onerror = function() { eventSource.close(); };
-            
-            // Auto-open terminal if it was minimized
-            if (isTerminalMinimized) toggleTerminal();
-            
-            setTimeout(pollSharedState, 300);
+            const btn = document.getElementById('btn-' + id);
+            if (!btn || btn.disabled) return;
+
+            btn.className = 'btn-refresh state-running';
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spin"><i class="ti ti-refresh" style="font-size:13px"></i></span> In progress<span class="progress-bar"></span>';
+
+            const es = new EventSource('/stream/' + id);
+            es.onmessage = function(e) {
+                if (e.data === '[DONE]') {
+                    es.close();
+                    return;
+                }
+                try {
+                    const d = JSON.parse(e.data);
+                    if (d.type === 'success') {
+                        btn.className = 'btn-refresh state-success';
+                        btn.innerHTML = '<i class="ti ti-check" style="font-size:13px"></i> Complete<span class="progress-bar"></span>';
+                        setTimeout(() => resetBtn(id), 3000);
+                    } else if (d.type === 'error') {
+                        btn.className = 'btn-refresh state-error';
+                        btn.disabled = true;
+                        btn.innerHTML = '<i class="ti ti-alert-triangle" style="font-size:13px"></i> Failed';
+                        setTimeout(() => resetBtn(id), 4000);
+                    }
+                } catch(err) {}
+            };
+            es.onerror = function() {
+                es.close();
+                btn.className = 'btn-refresh state-error';
+                btn.disabled = true;
+                btn.innerHTML = '<i class="ti ti-alert-triangle" style="font-size:13px"></i> Failed';
+                setTimeout(() => resetBtn(id), 4000);
+            };
+        }
+
+        // --- MANUAL SYNC ---
+        function manualSync() {
+            const btn = document.getElementById('sync-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spin"><i class="ti ti-refresh" style="font-size:13px"></i></span> Syncing…';
+            fetch('/api/reload-reports', { method: 'POST' })
+                .then(() => setTimeout(() => window.location.reload(), 4000))
+                .catch(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="ti ti-refresh" style="font-size:13px"></i> Sync reports';
+                });
         }
     </script>
 </body>
