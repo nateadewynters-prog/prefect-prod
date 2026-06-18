@@ -76,6 +76,14 @@ def init_db():
         conn.execute("CREATE TABLE IF NOT EXISTS locks (show_id TEXT PRIMARY KEY, is_locked INTEGER)")
         conn.execute("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, msg TEXT, type TEXT, timestamp DATETIME DEFAULT (datetime('now', 'localtime')))")
         conn.execute("CREATE TABLE IF NOT EXISTS dispatch_history (id INTEGER PRIMARY KEY AUTOINCREMENT, show_name TEXT, duration_mins INTEGER, pdf_size_mb REAL, timestamp DATETIME DEFAULT (datetime('now', 'localtime')))")
+
+        # Migration: add per-phase timing columns (seconds) if they don't already exist.
+        # Existing rows get NULL, which renders as a blank in the history table.
+        existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(dispatch_history)")}
+        for col in ("refresh_secs", "sql_secs", "export_secs"):
+            if col not in existing_cols:
+                conn.execute(f"ALTER TABLE dispatch_history ADD COLUMN {col} REAL")
+
         conn.execute("UPDATE locks SET is_locked = 0")
 init_db()
 
@@ -298,8 +306,7 @@ def dispatcher():
 def get_history():
     with get_db_conn() as conn:
         total = conn.execute("SELECT COUNT(*) FROM dispatch_history").fetchone()[0]
-        # --- NEW: Added duration_mins and pdf_size_mb to the SELECT statement ---
-        history = [dict(row) for row in conn.execute("SELECT show_name, duration_mins, pdf_size_mb, timestamp FROM dispatch_history ORDER BY timestamp DESC LIMIT 50").fetchall()]
+        history = [dict(row) for row in conn.execute("SELECT show_name, duration_mins, pdf_size_mb, refresh_secs, sql_secs, export_secs, timestamp FROM dispatch_history ORDER BY timestamp DESC LIMIT 50").fetchall()]
     return jsonify({"total": total, "history": history})
 
 @app.route('/api/state')
@@ -380,6 +387,8 @@ def stream_logs(show_id):
             pbi_headers = {"Authorization": f"Bearer {pbi_token}", "Content-Type": "application/json"}
 
             yield msg("🔄 Triggering Power BI Dataset Refresh...")
+            refresh_start = time.time()
+            refresh_secs = None
             try:
                 # 1. Define the URLs
                 refresh_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/datasets/{config['pbi_dataset_id']}/refreshes"
@@ -403,6 +412,7 @@ def stream_logs(show_id):
                     
                     yield msg(f"⏳ Refresh Status: {status}...")
                     if status == "Completed":
+                        refresh_secs = time.time() - refresh_start
                         yield msg("✅ Dataset Refresh Completed.", "success")
                         break
                     elif status == "Failed":
@@ -418,6 +428,8 @@ def stream_logs(show_id):
                 return
 
             yield msg("🗄️ Fetching Sales Metrics from SQL...")
+            sql_start = time.time()
+            sql_secs = None
             try:
                 metrics = get_show_metrics(config)
 
@@ -427,13 +439,16 @@ def stream_logs(show_id):
                 if not metrics.get('weekly'):
                     yield msg(f"⛔ No weekly performance data found for {config['show_name']} — report not sent.", "error")
                     return
-                    
+
+                sql_secs = time.time() - sql_start
                 yield msg(f"📊 SQL Data Fetched.")
             except Exception as e:
                 yield msg(f"❌ SQL Error: {str(e)}", "error")
                 return
 
             yield msg("📄 Triggering Power BI PDF Export...")
+            export_start = time.time()
+            export_secs = None
             try:
                 export_url = f"https://api.powerbi.com/v1.0/myorg/groups/{config['pbi_workspace_id']}/reports/{config['pbi_report_id']}/ExportTo"
                 resp = requests.post(export_url, headers=pbi_headers, json={"format": "PDF"})
@@ -456,6 +471,7 @@ def stream_logs(show_id):
                     
                 yield msg("📥 Downloading PDF File...")
                 pdf_bytes = requests.get(f"{poll_export_url}/file", headers=pbi_headers).content
+                export_secs = time.time() - export_start
             except Exception as e:
                 yield msg(f"❌ Export API Error: {str(e)}", "error")
                 return
@@ -484,8 +500,8 @@ def stream_logs(show_id):
 
                 with get_db_conn() as conn:
                     conn.execute(
-                        "INSERT INTO dispatch_history (show_name, duration_mins, pdf_size_mb) VALUES (?, ?, ?)", 
-                        (config['show_name'], duration_mins, pdf_size_mb)
+                        "INSERT INTO dispatch_history (show_name, duration_mins, pdf_size_mb, refresh_secs, sql_secs, export_secs) VALUES (?, ?, ?, ?, ?, ?)",
+                        (config['show_name'], duration_mins, pdf_size_mb, refresh_secs, sql_secs, export_secs)
                     )
                     conn.commit()
                 

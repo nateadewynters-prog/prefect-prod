@@ -27,4 +27,4 @@ COPY . .
 EXPOSE 8002
 
 # Run the application with threads to handle concurrent SSE streams and polling
-CMD ["gunicorn", "--workers", "4", "--threads", "8", "--worker-class", "gthread", "--bind", "0.0.0.0:8002", "--timeout", "900", "app:app"]
+CMD ["gunicorn", "--workers", "4", "--threads", "8", "--worker-class", "gthread", "--bind", "0.0.0.0:8002", "--timeout", "1800", "app:app"]

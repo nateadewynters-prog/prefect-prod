@@ -122,7 +122,7 @@
     </div>
 
     <div id="historyModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full flex flex-col max-h-[80vh]">
+        <div class="bg-white rounded-xl shadow-2xl max-w-5xl w-full flex flex-col max-h-[85vh]">
             <div class="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
                 <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
                     <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
@@ -134,10 +134,13 @@
                 <table class="w-full text-left border-collapse">
                     <thead class="sticky top-0 bg-white shadow-sm">
                         <tr class="border-b text-gray-500 text-xs uppercase tracking-wider">
-                            <th class="py-3 px-6 font-semibold">Show Name</th>
-                            <th class="py-3 px-6 font-semibold">Duration</th>
-                            <th class="py-3 px-6 font-semibold">PDF Size</th>
-                            <th class="py-3 px-6 font-semibold">Dispatched On</th>
+                            <th class="py-3 px-5 font-semibold">Show Name</th>
+                            <th class="py-3 px-5 font-semibold">Refresh Dashboard</th>
+                            <th class="py-3 px-5 font-semibold">Fetch SQL Metrics</th>
+                            <th class="py-3 px-5 font-semibold">Export PDF</th>
+                            <th class="py-3 px-5 font-semibold">Total</th>
+                            <th class="py-3 px-5 font-semibold">PDF Size</th>
+                            <th class="py-3 px-5 font-semibold">Dispatched On</th>
                         </tr>
                     </thead>
                     <tbody id="historyBody" class="text-sm text-gray-700 divide-y divide-gray-100">
@@ -194,32 +197,45 @@
         function openHistoryModal() {
             document.getElementById('historyModal').classList.remove('hidden');
             const tbody = document.getElementById('historyBody');
-            tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-blue-500 font-bold animate-pulse">Loading history...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-blue-500 font-bold animate-pulse">Loading history...</td></tr>';
             
             fetch('/api/history')
                 .then(r => r.json())
                 .then(data => {
                     document.getElementById('totalDispatches').innerText = data.total;
                     if (data.history.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-gray-500 font-medium">No reports have been dispatched yet.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-500 font-medium">No reports have been dispatched yet.</td></tr>';
                         return;
                     }
                     tbody.innerHTML = data.history.map(row => {
                         const duration = row.duration_mins ? `${row.duration_mins} Mins` : 'N/A';
                         const size = row.pdf_size_mb ? `${row.pdf_size_mb.toFixed(2)} MB` : 'N/A';
 
+                        // Format a seconds value as "Xm Ys" / "Ys", or a dash when missing (old records)
+                        const fmtSecs = (s) => {
+                            if (s === null || s === undefined) return '—';
+                            const total = Math.round(s);
+                            if (total < 60) return `${total}s`;
+                            const m = Math.floor(total / 60);
+                            const sec = total % 60;
+                            return `${m}m ${sec}s`;
+                        };
+
                         return `
                         <tr class="hover:bg-blue-50 transition-colors">
-                            <td class="py-3 px-6 font-bold text-gray-800">${row.show_name}</td>
-                            <td class="py-3 px-6 text-gray-600 font-mono text-xs">${duration}</td>
-                            <td class="py-3 px-6 text-gray-600 font-mono text-xs">${size}</td>
-                            <td class="py-3 px-6 text-gray-600 font-mono text-xs">${row.timestamp}</td>
+                            <td class="py-3 px-5 font-bold text-gray-800">${row.show_name}</td>
+                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${fmtSecs(row.refresh_secs)}</td>
+                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${fmtSecs(row.sql_secs)}</td>
+                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${fmtSecs(row.export_secs)}</td>
+                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${duration}</td>
+                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${size}</td>
+                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${row.timestamp}</td>
                         </tr>
                         `;
                     }).join('');
                 })
                 .catch(err => {
-                    tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-red-500 font-bold">Error loading history data.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-red-500 font-bold">Error loading history data.</td></tr>`;
                 });
         }
 
