@@ -74,7 +74,7 @@ def get_db_conn():
 def init_db():
     with get_db_conn() as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS locks (show_id TEXT PRIMARY KEY, is_locked INTEGER)")
-        conn.execute("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, msg TEXT, type TEXT, timestamp DATETIME DEFAULT (datetime('now', 'localtime')))")
+        conn.execute("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, msg TEXT, type TEXT, stage TEXT, timestamp DATETIME DEFAULT (datetime('now', 'localtime')))")
         conn.execute("CREATE TABLE IF NOT EXISTS dispatch_history (id INTEGER PRIMARY KEY AUTOINCREMENT, show_name TEXT, duration_mins INTEGER, pdf_size_mb REAL, timestamp DATETIME DEFAULT (datetime('now', 'localtime')))")
 
         # Migration: add per-phase timing columns (seconds) if they don't already exist.
@@ -83,6 +83,12 @@ def init_db():
         for col in ("refresh_secs", "sql_secs", "export_secs"):
             if col not in existing_cols:
                 conn.execute(f"ALTER TABLE dispatch_history ADD COLUMN {col} REAL")
+
+        # Migration: add the stage column to logs for databases created before
+        # the stepper UI existed. Existing rows get NULL stage (rendered as untagged).
+        log_cols = {row[1] for row in conn.execute("PRAGMA table_info(logs)")}
+        if "stage" not in log_cols:
+            conn.execute("ALTER TABLE logs ADD COLUMN stage TEXT")
 
         conn.execute("UPDATE locks SET is_locked = 0")
 init_db()
@@ -96,9 +102,9 @@ def is_any_locked():
         row = conn.execute("SELECT COUNT(*) as active_locks FROM locks WHERE is_locked = 1").fetchone()
         return row['active_locks'] > 0
 
-def db_log(msg, msg_type="info"):
+def db_log(msg, msg_type="info", stage=None):
     with get_db_conn() as conn:
-        conn.execute("INSERT INTO logs (msg, type) VALUES (?, ?)", (msg, msg_type))
+        conn.execute("INSERT INTO logs (msg, type, stage) VALUES (?, ?, ?)", (msg, msg_type, stage))
 
 # --- HELPERS ---
 class LiveReportingEngine:
@@ -314,7 +320,7 @@ def get_state():
     with get_db_conn() as conn:
         locks = [row['show_id'] for row in conn.execute("SELECT show_id FROM locks WHERE is_locked = 1").fetchall()]
         thirty_mins_ago = (datetime.now() - timedelta(minutes=30)).strftime('%Y-%m-%d %H:%M:%S')
-        logs = [dict(row) for row in conn.execute("SELECT msg, type, timestamp FROM logs WHERE timestamp >= ? ORDER BY timestamp ASC", (thirty_mins_ago,)).fetchall()]
+        logs = [dict(row) for row in conn.execute("SELECT msg, type, stage, timestamp FROM logs WHERE timestamp >= ? ORDER BY timestamp ASC", (thirty_mins_ago,)).fetchall()]
     return jsonify({"locks": locks, "logs": logs})
 
 @app.route('/preview/<show_id>')
@@ -360,9 +366,11 @@ def stream_logs(show_id):
     set_lock(show_id, True)
 
     def generate():
-        def msg(text, msg_type="info"): 
-            db_log(text, msg_type) 
-            return f'data: {json.dumps({"msg": text, "type": msg_type})}\n\n'
+        current_stage = {"name": None}
+        def msg(text, msg_type="info", stage=None):
+            s = stage if stage is not None else current_stage["name"]
+            db_log(text, msg_type, s)
+            return f'data: {json.dumps({"msg": text, "type": msg_type, "stage": s})}\n\n'
             
         try:
             config = next((s for s in SHOWS_CONFIG if s["id"] == show_id), None)
@@ -376,6 +384,7 @@ def stream_logs(show_id):
             start_time = time.time()
             
             engine = LiveReportingEngine()
+            current_stage["name"] = "auth"
             yield msg("🔑 Requesting Azure AD Tokens...")
             pbi_token = engine.get_token(["https://analysis.windows.net/powerbi/api/.default"])
             graph_token = engine.get_token(["https://graph.microsoft.com/.default"])
@@ -386,6 +395,7 @@ def stream_logs(show_id):
 
             pbi_headers = {"Authorization": f"Bearer {pbi_token}", "Content-Type": "application/json"}
 
+            current_stage["name"] = "refresh"
             yield msg("🔄 Triggering Power BI Dataset Refresh...")
             refresh_start = time.time()
             refresh_secs = None
@@ -427,6 +437,7 @@ def stream_logs(show_id):
                 yield msg(f"❌ Refresh API Error: {str(e)}", "error")
                 return
 
+            current_stage["name"] = "sql"
             yield msg("🗄️ Fetching Sales Metrics from SQL...")
             sql_start = time.time()
             sql_secs = None
@@ -446,6 +457,7 @@ def stream_logs(show_id):
                 yield msg(f"❌ SQL Error: {str(e)}", "error")
                 return
 
+            current_stage["name"] = "export"
             yield msg("📄 Triggering Power BI PDF Export...")
             export_start = time.time()
             export_secs = None
@@ -469,6 +481,7 @@ def stream_logs(show_id):
                         return
                     time.sleep(5)
                     
+                current_stage["name"] = "download"
                 yield msg("📥 Downloading PDF File...")
                 pdf_bytes = requests.get(f"{poll_export_url}/file", headers=pbi_headers).content
                 export_secs = time.time() - export_start
@@ -476,6 +489,7 @@ def stream_logs(show_id):
                 yield msg(f"❌ Export API Error: {str(e)}", "error")
                 return
                 
+            current_stage["name"] = "render"
             yield msg("🖼️ Rendering PNG Preview from PDF...")
             try:
                 doc = fitz.open("pdf", pdf_bytes)
@@ -486,6 +500,7 @@ def stream_logs(show_id):
                 yield msg(f"❌ Rendering Error: {str(e)}", "error")
                 return
 
+            current_stage["name"] = "email"
             yield msg("📧 Dispatching Email via MS Graph...")
             try:
                 send_graph_email(config, build_email_html(config, metrics), pdf_bytes, png_bytes, graph_token)

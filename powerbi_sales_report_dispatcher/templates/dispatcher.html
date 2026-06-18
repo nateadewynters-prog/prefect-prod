@@ -7,126 +7,92 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&display=swap');
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        
-        .log-entry { 
-            border-left: 2px solid #3b82f6; 
-            padding-left: 10px; 
-            margin-bottom: 4px; 
-            animation: fadeIn 0.3s ease-in; 
-        }
-        
-        @keyframes fadeIn { 
-            from { opacity: 0; transform: translateX(-5px); } 
-            to { opacity: 1; transform: translateX(0); } 
-        }
 
-        /* Custom Glow Animation for the History Icon */
+        .progress-track { height: 6px; background: #e5e7eb; border-radius: 999px; overflow: hidden; }
+        .progress-fill  { height: 100%; background: #2563eb; transition: width .4s ease; }
+        .spin { display: inline-block; animation: sp .9s linear infinite; }
+        @keyframes sp { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+        .card-state { animation: fadeIn .25s ease-in; }
+
         @keyframes iconGlow {
-            0% { filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.3)); color: #9ca3af; }
-            50% { filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.9)); color: #3b82f6; }
-            100% { filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.3)); color: #9ca3af; }
+            0%   { filter: drop-shadow(0 0 2px rgba(59,130,246,.3)); color: #9ca3af; }
+            50%  { filter: drop-shadow(0 0 8px rgba(59,130,246,.9)); color: #3b82f6; }
+            100% { filter: drop-shadow(0 0 2px rgba(59,130,246,.3)); color: #9ca3af; }
         }
-        .icon-glow {
-            animation: iconGlow 2.5s infinite ease-in-out;
-        }
+        .icon-glow { animation: iconGlow 2.5s infinite ease-in-out; }
     </style>
 </head>
 <body class="bg-gray-100 p-6 font-sans">
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-5xl mx-auto">
         <button onclick="window.location.href = window.location.protocol + '//' + window.location.hostname;" class="text-blue-600 hover:underline mb-4 inline-block font-semibold bg-transparent border-0 cursor-pointer">
-            ← Back to Homepage
+            &larr; Back to Homepage
         </button>
-        
-        <div class="bg-white rounded-lg shadow p-8 mb-6">
-            <div class="flex justify-between items-center border-b pb-4 mb-6">
-                
+
+        <!-- HEADER + SUMMARY STRIP -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <div class="flex flex-wrap justify-between items-center gap-4">
                 <div class="flex items-center gap-3">
-                    <h1 class="text-3xl font-bold text-gray-800">Power BI Report Dispatcher</h1>
-                    <button onclick="openHistoryModal()" class="transition-colors p-1 rounded-full hover:bg-blue-50 mt-1" title="View Dispatch History">
+                    <h1 class="text-2xl font-bold text-gray-800">Power BI Report Dispatcher</h1>
+                    <button onclick="openHistoryModal()" class="transition-colors p-1 rounded-full hover:bg-blue-50" title="View dispatch history">
                         <svg class="w-6 h-6 icon-glow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                     </button>
                 </div>
-
-                <div id="status-indicator" class="hidden flex items-center text-blue-600 font-bold px-4 py-2 bg-blue-50 rounded-lg">
-                    <span class="animate-ping mr-3 inline-flex h-3 w-3 rounded-full bg-blue-500 opacity-75"></span> 
-                    SYSTEM BUSY: DISPATCHING
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {% for show in shows %}
-                <div class="border border-gray-200 rounded-xl p-5 flex flex-col justify-between bg-gray-50 hover:bg-white transition-all shadow-sm">
-                    <div>
-                        <h2 class="text-xl font-bold text-gray-800">{{ show.show_name }}</h2>
-                        <p class="text-xs text-gray-500 font-mono mt-1 mb-4">
-                            Show ID: <span class="font-bold">{{ show.show_id }}</span> | 
-                            Database: <span class="font-bold">{{ show.db_type }}</span>
-                        </p>
+                <div class="flex items-center gap-5">
+                    <div class="text-right">
+                        <div class="text-xs text-gray-500" id="summary-date"></div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <div class="progress-track w-36"><div class="progress-fill" id="summary-bar" style="width:0%; background:#16a34a;"></div></div>
+                            <span class="text-xs text-gray-600 whitespace-nowrap" id="summary-count">0 of 0 sent</span>
+                        </div>
                     </div>
-                    
-                    <div class="flex flex-col gap-2 mt-4">
-                        <a href="{{ show.dashboard_url }}" target="_blank" class="dashboard-link w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2.5 px-4 rounded-lg text-center transition-all">
-                            📊 View Dashboard
-                        </a>
-
-                        <button onclick="openQueryModal('{{ show.id }}')" class="secondary-btn w-full bg-green-100 hover:bg-green-200 text-green-700 font-bold py-2.5 px-4 rounded-lg text-center transition-all">
-                            🔍 Query Database
-                        </button>
-                        
-                        <button onclick="previewEmail('{{ show.id }}')" class="secondary-btn w-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold py-2.5 px-4 rounded-lg text-center transition-all">
-                            📧 View Email Body
-                        </button>
-
-                        <button onclick="runReport('{{ show.id }}')" id="btn-{{ show.id }}" class="tool-btn bg-gray-800 hover:bg-black text-white font-bold py-2.5 px-4 rounded-lg transition-all w-full disabled:opacity-50">
-                            Dispatch Report
-                        </button>
-                    </div>
+                    <span id="system-pill" class="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 font-semibold whitespace-nowrap">Idle</span>
                 </div>
-                {% endfor %}
             </div>
         </div>
 
-        <div id="status-box" class="hidden bg-gray-900 rounded-lg shadow-2xl p-6 border-t-4 border-blue-500">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-blue-400 font-mono font-bold uppercase tracking-widest text-sm">System Terminal</h3>
-                <button onclick="clearLogs()" class="text-gray-500 text-xs hover:text-white font-mono">CLEAR_CONSOLE</button>
+        <!-- BOARD -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for show in shows %}
+            <div class="show-card bg-white border border-gray-200 rounded-xl p-5 flex flex-col transition-shadow hover:shadow-md"
+                 data-id="{{ show.id }}" data-name="{{ show.show_name }}" data-db="{{ show.db_type }}" data-dashboard="{{ show.dashboard_url }}">
+                <div class="flex justify-between items-start mb-2">
+                    <h2 class="text-lg font-bold text-gray-800 leading-tight">{{ show.show_name }}</h2>
+                    <span class="text-[11px] text-gray-400 font-mono mt-1 ml-2 whitespace-nowrap">{{ show.db_type }}</span>
+                </div>
+
+                <div class="state-region flex-1 min-h-[58px]" id="state-{{ show.id }}"></div>
+
+                <div class="metrics-region hidden mt-3" id="metrics-{{ show.id }}"></div>
+
+                <div class="actions-region mt-4" id="actions-{{ show.id }}">
+                    <button onclick="runReport('{{ show.id }}')" id="btn-{{ show.id }}"
+                            class="dispatch-btn w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        &#9654; Dispatch
+                    </button>
+                    <div class="grid grid-cols-3 gap-2 mt-2">
+                        <a href="{{ show.dashboard_url }}" target="_blank" id="dash-{{ show.id }}"
+                           class="sec-btn text-center text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg transition-colors">Dashboard</a>
+                        <button onclick="toggleQuery('{{ show.id }}')" id="query-{{ show.id }}"
+                           class="sec-btn text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg transition-colors">Data</button>
+                        <button onclick="previewEmail('{{ show.id }}')" id="email-{{ show.id }}"
+                           class="sec-btn text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg transition-colors">Email</button>
+                    </div>
+                </div>
             </div>
-            <div id="log-list" class="space-y-1 font-mono text-xs md:text-sm text-gray-300 h-64 overflow-y-auto bg-black p-4 rounded-md border border-gray-800"></div>
+            {% endfor %}
         </div>
     </div>
 
-    <div id="queryModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
-            <div class="p-6 border-b flex justify-between items-center">
-                <h3 id="modalTitle" class="text-xl font-bold text-gray-800">SQL Raw Data</h3>
-                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
-            </div>
-            <div class="p-6 max-h-[450px] overflow-y-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="border-b text-gray-500 text-xs uppercase tracking-wider">
-                            <th class="py-2">Metric</th>
-                            <th class="py-2">Value</th>
-                        </tr>
-                    </thead>
-                    <tbody id="modalBody" class="font-mono text-sm text-gray-700">
-                    </tbody>
-                </table>
-            </div>
-            <div class="p-4 bg-gray-50 text-right">
-                <button onclick="closeModal()" class="bg-gray-800 hover:bg-black text-white px-6 py-2 rounded-lg font-bold transition-colors">Close</button>
-            </div>
-        </div>
-    </div>
-
+    <!-- HISTORY MODAL -->
     <div id="historyModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
         <div class="bg-white rounded-xl shadow-2xl max-w-5xl w-full flex flex-col max-h-[85vh]">
             <div class="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
                 <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
                     <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                    Dispatch History
+                    Dispatch history
                 </h3>
                 <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
             </div>
@@ -134,214 +100,296 @@
                 <table class="w-full text-left border-collapse">
                     <thead class="sticky top-0 bg-white shadow-sm">
                         <tr class="border-b text-gray-500 text-xs uppercase tracking-wider">
-                            <th class="py-3 px-5 font-semibold">Show Name</th>
-                            <th class="py-3 px-5 font-semibold">Refresh Dashboard</th>
-                            <th class="py-3 px-5 font-semibold">Fetch SQL Metrics</th>
-                            <th class="py-3 px-5 font-semibold">Export PDF</th>
+                            <th class="py-3 px-5 font-semibold">Show name</th>
+                            <th class="py-3 px-5 font-semibold">Refresh</th>
+                            <th class="py-3 px-5 font-semibold">SQL</th>
+                            <th class="py-3 px-5 font-semibold">Export</th>
                             <th class="py-3 px-5 font-semibold">Total</th>
-                            <th class="py-3 px-5 font-semibold">PDF Size</th>
-                            <th class="py-3 px-5 font-semibold">Dispatched On</th>
+                            <th class="py-3 px-5 font-semibold">PDF size</th>
+                            <th class="py-3 px-5 font-semibold">Dispatched on</th>
                         </tr>
                     </thead>
-                    <tbody id="historyBody" class="text-sm text-gray-700 divide-y divide-gray-100">
-                    </tbody>
+                    <tbody id="historyBody" class="text-sm text-gray-700 divide-y divide-gray-100"></tbody>
                 </table>
             </div>
             <div class="p-4 bg-gray-50 border-t rounded-b-xl flex justify-between items-center text-sm">
-                <div class="font-bold text-gray-700">Total Dispatches: <span id="totalDispatches" class="text-blue-600 text-lg ml-1">0</span></div>
+                <div class="font-bold text-gray-700">Total dispatches: <span id="totalDispatches" class="text-blue-600 text-lg ml-1">0</span></div>
                 <button onclick="closeHistoryModal()" class="bg-gray-800 hover:bg-black text-white px-6 py-2 rounded-lg font-bold transition-colors shadow-sm">Close</button>
             </div>
         </div>
     </div>
 
     <script>
-        let lastLogCount = 0;
+        // ---- Fixed pipeline stages (ids match the backend `stage` tag) ----
+        const STAGES = [
+            { id: 'auth',     label: 'Authenticating' },
+            { id: 'refresh',  label: 'Refreshing dataset' },
+            { id: 'sql',      label: 'Fetching SQL metrics' },
+            { id: 'export',   label: 'Exporting PDF' },
+            { id: 'download', label: 'Downloading PDF' },
+            { id: 'render',   label: 'Rendering preview' },
+            { id: 'email',    label: 'Dispatching email' },
+        ];
 
-        function clearLogs() { 
-            document.getElementById('log-list').innerHTML = '<div class="text-gray-500">Console cleared locally. Real-time events will appear here...</div>';
-            lastLogCount = -1; 
+        let historyByShow = {};   // name -> most recent history row
+        let lastBusy = null;      // detect busy -> idle transitions
+        let openLogId = null;     // which running card's detailed log is expanded
+
+        const fmtSecs = (s) => {
+            if (s === null || s === undefined || isNaN(s)) return '';
+            const t = Math.round(s);
+            if (t < 1) return '<1s';
+            if (t < 60) return `${t}s`;
+            return `${Math.floor(t / 60)}m ${t % 60}s`;
+        };
+        const parseTs = (ts) => new Date(ts.replace(' ', 'T'));
+        const clockOf = (ts) => ts ? ts.split(' ')[1].slice(0, 5) : '';
+        const todayStr = () => {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        };
+
+        // ---- Derive the most recent run from the log stream ----
+        function deriveRun(logs) {
+            let sepIdx = -1;
+            for (let i = logs.length - 1; i >= 0; i--) if (logs[i].type === 'separator') { sepIdx = i; break; }
+            const runLogs = sepIdx >= 0 ? logs.slice(sepIdx) : logs;
+            if (!runLogs.length) return null;
+
+            let showName = '';
+            if (sepIdx >= 0) {
+                const m = logs[sepIdx].msg.match(/NEW DISPATCH:\s*(.+?)\s*=+\s*$/);
+                if (m) showName = m[1].trim();
+            }
+            const byStage = {};
+            runLogs.forEach(l => { if (l.stage) (byStage[l.stage] = byStage[l.stage] || []).push(l); });
+
+            let currentIdx = -1;
+            STAGES.forEach((s, i) => { if (byStage[s.id] && byStage[s.id].length) currentIdx = i; });
+
+            let runEnd = null;
+            runLogs.forEach(l => { const t = parseTs(l.timestamp); if (!runEnd || t > runEnd) runEnd = t; });
+
+            const curStage = currentIdx >= 0 ? STAGES[currentIdx] : null;
+            const curLogs = curStage ? (byStage[curStage.id] || []) : [];
+            const failed = curLogs.some(l => l.type === 'error');
+            const errMsg = failed ? curLogs.filter(l => l.type === 'error').pop().msg.replace(/^[^\w£]*/, '') : '';
+
+            let elapsed = null;
+            if (curLogs.length) elapsed = (runEnd - parseTs(curLogs[0].timestamp)) / 1000;
+            const polls = curLogs.filter(l => /Status:/.test(l.msg)).length;
+
+            return { showName, byStage, currentIdx, curStage, runLogs, failed, errMsg, elapsed, polls };
         }
 
-        function previewEmail(id) {
-            const width = 900, height = 700;
-            const left = (window.innerWidth / 2) - (width / 2);
-            const top = (window.innerHeight / 2) - (height / 2);
-            window.open(`/preview/${id}`, 'EmailPreview', `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`);
+        // ---- Per-card renderers ----
+        function renderIdle(id, name) {
+            const sent = historyByShow[name];
+            const sentToday = sent && sent.timestamp && sent.timestamp.startsWith(todayStr());
+            if (sentToday) {
+                return `<div class="card-state">
+                    <div class="flex items-center gap-2 text-sm text-green-600 font-semibold"><span>&#10003;</span> Sent ${clockOf(sent.timestamp)}</div>
+                    <div class="text-xs text-gray-400 mt-1">Took ${sent.duration_mins ? sent.duration_mins + ' min' : 'n/a'} &middot; ${sent.pdf_size_mb ? sent.pdf_size_mb.toFixed(2) + ' MB' : ''}</div>
+                </div>`;
+            }
+            const last = sent ? `Last sent ${sent.timestamp.slice(5, 16).replace('-', '/')}` : 'No previous dispatch';
+            return `<div class="card-state">
+                <div class="flex items-center gap-2 text-sm text-amber-600 font-semibold"><span>&#9679;</span> Not sent today</div>
+                <div class="text-xs text-gray-400 mt-1">${last}</div>
+            </div>`;
         }
 
-        function openQueryModal(id) {
-            const body = document.getElementById('modalBody');
-            const title = document.getElementById('modalTitle');
-            document.getElementById('queryModal').classList.remove('hidden');
-            body.innerHTML = '<tr><td colspan="2" class="py-8 text-center animate-pulse text-blue-500 font-bold">Querying TicketingDS...</td></tr>';
-            
-            fetch(`/query/${id}`)
-                .then(r => r.json())
-                .then(res => {
-                    if (res.error) throw new Error(res.error);
-                    title.innerText = `${res.show} - Raw SQL Output`;
-                    body.innerHTML = res.data.map(r => `
-                        <tr class="border-b hover:bg-gray-50 transition-colors">
-                            <td class="py-3 text-gray-500 font-semibold">${r.Metric}</td>
-                            <td class="py-3 font-bold ${r.Value.includes('None') ? 'text-red-500':'text-blue-600'}">${r.Value}</td>
-                        </tr>
-                    `).join('');
-                })
-                .catch(err => {
-                    body.innerHTML = `<tr><td colspan="2" class="py-8 text-center text-red-500 font-bold font-mono">ERROR: ${err.message}</td></tr>`;
+        function renderWaiting() {
+            return `<div class="card-state flex items-center gap-2 text-sm text-gray-400 font-medium pt-1"><span>&hellip;</span> Waiting for current dispatch</div>`;
+        }
+
+        function renderFailed(id, run) {
+            return `<div class="card-state">
+                <div class="flex items-center gap-2 text-sm text-red-600 font-semibold"><span>&#10005;</span> Failed &middot; ${run.curStage ? run.curStage.label.toLowerCase() : ''}</div>
+                <div class="text-xs text-red-500 mt-1 break-words">${run.errMsg || 'See detailed log'}</div>
+            </div>`;
+        }
+
+        function renderRunning(id, run) {
+            if (run.failed) return renderFailed(id, run);
+            const n = run.currentIdx + 1;
+            const pct = Math.round((n / STAGES.length) * 100);
+            const poll = run.polls > 0 ? `Polling &middot; ${run.polls} check${run.polls === 1 ? '' : 's'} over ${fmtSecs(run.elapsed)}` : `${fmtSecs(run.elapsed)} elapsed`;
+            const logOpen = openLogId === id;
+            return `<div class="card-state">
+                <div class="flex items-center gap-2 text-sm text-blue-600 font-semibold mb-2">
+                    <span class="spin">&#8635;</span> ${run.curStage ? run.curStage.label : 'Starting'} &middot; step ${Math.max(n, 1)} of ${STAGES.length}
+                </div>
+                <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+                <div class="text-xs text-gray-400 mt-1.5">${poll}</div>
+                <button onclick="toggleLog('${id}')" class="text-xs text-gray-500 hover:text-gray-800 mt-2 font-medium">${logOpen ? '&#9662; Hide log' : '&#9656; Detailed log'}</button>
+                <div class="${logOpen ? '' : 'hidden'} mt-2 font-mono text-[11px] text-gray-300 bg-gray-900 rounded-md p-3 h-40 overflow-y-auto" id="log-${id}">${renderLogLines(run.runLogs)}</div>
+            </div>`;
+        }
+
+        function renderLogLines(runLogs) {
+            return runLogs.map(l => {
+                let c = 'text-gray-300';
+                if (l.type === 'success')   c = 'text-green-400';
+                if (l.type === 'error')     c = 'text-red-400 font-bold';
+                if (l.type === 'separator') c = 'text-blue-400 font-bold';
+                return `<div class="${c}"><span class="text-gray-600">[${clockOf(l.timestamp)}]</span> ${l.msg}</div>`;
+            }).join('');
+        }
+
+        function setActions(card, mode) {
+            // mode: 'idle' | 'waiting' | 'running' | 'failed'
+            const actions = card.querySelector('.actions-region');
+            const btn = card.querySelector('.dispatch-btn');
+            const secs = card.querySelectorAll('.sec-btn');
+            if (mode === 'running') { actions.classList.add('hidden'); return; }
+            actions.classList.remove('hidden');
+
+            if (mode === 'waiting') {
+                btn.disabled = true; btn.innerHTML = 'Waiting&hellip;';
+                btn.classList.add('bg-gray-400', 'hover:bg-gray-400');
+                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                secs.forEach(s => { s.classList.add('opacity-40', 'pointer-events-none'); });
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = (mode === 'failed') ? '&#8635; Retry dispatch' : '&#9654; Dispatch';
+                btn.classList.remove('bg-gray-400', 'hover:bg-gray-400');
+                btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                secs.forEach(s => { s.classList.remove('opacity-40', 'pointer-events-none'); });
+            }
+        }
+
+        // ---- Main poll ----
+        function pollSharedState() {
+            fetch('/api/state').then(r => r.json()).then(data => {
+                const busy = data.locks.length > 0;
+                const runningId = busy ? data.locks[0] : null;
+                const run = deriveRun(data.logs || []);
+
+                // System pill
+                const pill = document.getElementById('system-pill');
+                if (busy) {
+                    pill.innerHTML = '<span class="spin inline-block mr-1">&#8635;</span> Dispatching';
+                    pill.className = 'text-xs px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 font-semibold whitespace-nowrap';
+                } else {
+                    pill.textContent = 'Idle';
+                    pill.className = 'text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 font-semibold whitespace-nowrap';
+                }
+
+                document.querySelectorAll('.show-card').forEach(card => {
+                    const id = card.dataset.id, name = card.dataset.name;
+                    const region = document.getElementById('state-' + id);
+                    if (busy && id === runningId) {
+                        region.innerHTML = renderRunning(id, run);
+                        setActions(card, 'running');
+                    } else if (busy) {
+                        region.innerHTML = renderWaiting();
+                        setActions(card, 'waiting');
+                    } else if (run && run.showName === name && run.failed) {
+                        region.innerHTML = renderFailed(id, run);
+                        setActions(card, 'failed');
+                    } else {
+                        region.innerHTML = renderIdle(id, name);
+                        setActions(card, 'idle');
+                    }
                 });
+
+                // Refresh sent-statuses when a dispatch has just finished
+                if (lastBusy === true && busy === false) loadHistory();
+                lastBusy = busy;
+                updateSummary();
+            }).catch(err => console.error('Polling error:', err));
         }
 
-        function closeModal() { document.getElementById('queryModal').classList.add('hidden'); }
+        function updateSummary() {
+            document.getElementById('summary-date').textContent =
+                new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+            const cards = document.querySelectorAll('.show-card');
+            const total = cards.length;
+            let sent = 0;
+            cards.forEach(c => { const h = historyByShow[c.dataset.name]; if (h && h.timestamp && h.timestamp.startsWith(todayStr())) sent++; });
+            document.getElementById('summary-count').textContent = `${sent} of ${total} sent`;
+            document.getElementById('summary-bar').style.width = total ? `${Math.round((sent / total) * 100)}%` : '0%';
+        }
+
+        // ---- History (powers both the modal and the card sent-status) ----
+        function loadHistory(renderModal) {
+            return fetch('/api/history').then(r => r.json()).then(data => {
+                historyByShow = {};
+                (data.history || []).forEach(row => { if (!historyByShow[row.show_name]) historyByShow[row.show_name] = row; });
+                updateSummary();
+                document.querySelectorAll('.show-card').forEach(card => {
+                    const region = document.getElementById('state-' + card.dataset.id);
+                    if (!lastBusy && region && !region.querySelector('.spin')) region.innerHTML = renderIdle(card.dataset.id, card.dataset.name);
+                });
+                if (renderModal) renderHistoryTable(data);
+            });
+        }
 
         function openHistoryModal() {
             document.getElementById('historyModal').classList.remove('hidden');
+            document.getElementById('historyBody').innerHTML =
+                '<tr><td colspan="7" class="py-8 text-center text-blue-500 font-bold animate-pulse">Loading history&hellip;</td></tr>';
+            loadHistory(true).catch(() => {
+                document.getElementById('historyBody').innerHTML =
+                    '<tr><td colspan="7" class="py-8 text-center text-red-500 font-bold">Error loading history data.</td></tr>';
+            });
+        }
+        function closeHistoryModal() { document.getElementById('historyModal').classList.add('hidden'); }
+
+        function renderHistoryTable(data) {
+            document.getElementById('totalDispatches').textContent = data.total;
             const tbody = document.getElementById('historyBody');
-            tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-blue-500 font-bold animate-pulse">Loading history...</td></tr>';
-            
-            fetch('/api/history')
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('totalDispatches').innerText = data.total;
-                    if (data.history.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-500 font-medium">No reports have been dispatched yet.</td></tr>';
-                        return;
-                    }
-                    tbody.innerHTML = data.history.map(row => {
-                        const duration = row.duration_mins ? `${row.duration_mins} Mins` : 'N/A';
-                        const size = row.pdf_size_mb ? `${row.pdf_size_mb.toFixed(2)} MB` : 'N/A';
-
-                        // Format a seconds value as "Xm Ys" / "Ys", or a dash when missing (old records)
-                        const fmtSecs = (s) => {
-                            if (s === null || s === undefined) return '—';
-                            const total = Math.round(s);
-                            if (total < 60) return `${total}s`;
-                            const m = Math.floor(total / 60);
-                            const sec = total % 60;
-                            return `${m}m ${sec}s`;
-                        };
-
-                        return `
-                        <tr class="hover:bg-blue-50 transition-colors">
-                            <td class="py-3 px-5 font-bold text-gray-800">${row.show_name}</td>
-                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${fmtSecs(row.refresh_secs)}</td>
-                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${fmtSecs(row.sql_secs)}</td>
-                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${fmtSecs(row.export_secs)}</td>
-                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${duration}</td>
-                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${size}</td>
-                            <td class="py-3 px-5 text-gray-600 font-mono text-xs">${row.timestamp}</td>
-                        </tr>
-                        `;
-                    }).join('');
-                })
-                .catch(err => {
-                    tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-red-500 font-bold">Error loading history data.</td></tr>`;
-                });
+            if (!data.history || data.history.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-500 font-medium">No reports have been dispatched yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.history.map(row => `
+                <tr class="hover:bg-blue-50 transition-colors">
+                    <td class="py-3 px-5 font-bold text-gray-800">${row.show_name}</td>
+                    <td class="py-3 px-5 text-gray-600 font-mono text-xs">${fmtSecs(row.refresh_secs) || '&mdash;'}</td>
+                    <td class="py-3 px-5 text-gray-600 font-mono text-xs">${fmtSecs(row.sql_secs) || '&mdash;'}</td>
+                    <td class="py-3 px-5 text-gray-600 font-mono text-xs">${fmtSecs(row.export_secs) || '&mdash;'}</td>
+                    <td class="py-3 px-5 text-gray-600 font-mono text-xs">${row.duration_mins ? row.duration_mins + ' Mins' : 'N/A'}</td>
+                    <td class="py-3 px-5 text-gray-600 font-mono text-xs">${row.pdf_size_mb ? row.pdf_size_mb.toFixed(2) + ' MB' : 'N/A'}</td>
+                    <td class="py-3 px-5 text-gray-600 font-mono text-xs">${row.timestamp}</td>
+                </tr>`).join('');
         }
 
-        function closeHistoryModal() {
-            document.getElementById('historyModal').classList.add('hidden');
+        // ---- Inline metrics (lazy: one /query per click, not on load) ----
+        function toggleQuery(id) {
+            const box = document.getElementById('metrics-' + id);
+            if (!box.classList.contains('hidden')) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            box.classList.remove('hidden');
+            box.innerHTML = '<div class="text-xs text-blue-500 font-semibold animate-pulse py-2">Querying database&hellip;</div>';
+            fetch('/query/' + id).then(r => r.json()).then(res => {
+                if (res.error) throw new Error(res.error);
+                box.innerHTML = `<div class="border border-gray-100 rounded-lg overflow-hidden">
+                    ${res.data.map(r => `<div class="flex justify-between px-3 py-1.5 text-xs border-b border-gray-50 last:border-0">
+                        <span class="text-gray-500">${r.Metric}</span>
+                        <span class="font-semibold font-mono ${String(r.Value).includes('None') ? 'text-red-500' : 'text-gray-800'}">${r.Value}</span>
+                    </div>`).join('')}</div>`;
+            }).catch(err => { box.innerHTML = `<div class="text-xs text-red-500 font-mono py-2">Error: ${err.message}</div>`; });
         }
 
-        function pollSharedState() {
-            fetch('/api/state')
-                .then(r => r.json())
-                .then(data => {
-                    const isSystemBusy = data.locks.length > 0;
-
-                    // 1. Lock/Unlock Dispatch Buttons
-                    document.querySelectorAll('.tool-btn').forEach(btn => {
-                        const id = btn.id.replace('btn-', '');
-                        if (isSystemBusy) {
-                            btn.disabled = true;
-                            if (data.locks.includes(id)) {
-                                btn.innerText = "⏳ DISPATCHING...";
-                                btn.classList.add('animate-pulse', 'bg-yellow-600', 'hover:bg-yellow-600');
-                                btn.classList.remove('bg-gray-800', 'hover:bg-black', 'opacity-50');
-                            } else {
-                                btn.innerText = "Waiting...";
-                                btn.classList.add('opacity-50', 'bg-gray-800', 'cursor-not-allowed');
-                                btn.classList.remove('animate-pulse', 'bg-yellow-600', 'hover:bg-yellow-600');
-                            }
-                        } else {
-                            btn.disabled = false;
-                            btn.innerText = "Dispatch Report";
-                            btn.classList.remove('animate-pulse', 'bg-yellow-600', 'hover:bg-yellow-600', 'opacity-50', 'cursor-not-allowed');
-                            btn.classList.add('bg-gray-800', 'hover:bg-black');
-                        }
-                    });
-
-                    // 2. Lock/Unlock Secondary Buttons (Query & Email Preview)
-                    document.querySelectorAll('.secondary-btn').forEach(btn => {
-                        if (isSystemBusy) {
-                            btn.disabled = true;
-                            btn.classList.add('opacity-50', 'cursor-not-allowed');
-                        } else {
-                            btn.disabled = false;
-                            btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                        }
-                    });
-
-                    // 3. Lock/Unlock Dashboard Links
-                    document.querySelectorAll('.dashboard-link').forEach(link => {
-                        if (isSystemBusy) {
-                            link.classList.add('opacity-50', 'pointer-events-none');
-                        } else {
-                            link.classList.remove('opacity-50', 'pointer-events-none');
-                        }
-                    });
-
-                    // Manage visibility of the status elements
-                    if (isSystemBusy || data.logs.length > 0) {
-                        document.getElementById('status-box').classList.remove('hidden');
-                        if (isSystemBusy) {
-                            document.getElementById('status-indicator').classList.remove('hidden');
-                        } else {
-                            document.getElementById('status-indicator').classList.add('hidden');
-                        }
-                    }
-
-                    // Update the terminal output
-                    if (data.logs.length !== lastLogCount && lastLogCount !== -1) {
-                        const logList = document.getElementById('log-list');
-                        logList.innerHTML = data.logs.map(l => {
-                            let colorClass = 'text-gray-300';
-                            if (l.type === 'success') colorClass = 'text-green-400 border-green-500';
-                            if (l.type === 'error') colorClass = 'text-red-400 border-red-500 font-bold';
-                            if (l.type === 'separator') colorClass = 'text-blue-400 border-blue-500 font-bold mt-4 mb-2'; 
-                            
-                            const timeStr = l.timestamp.split(' ')[1]; 
-                            return `<div class="log-entry ${colorClass}"><span class="text-gray-600">[${timeStr}]</span> ${l.msg}</div>`;
-                        }).join('');
-                        
-                        logList.scrollTop = logList.scrollHeight; 
-                        lastLogCount = data.logs.length;
-                    } else if (lastLogCount === -1) {
-                        lastLogCount = data.logs.length; 
-                    }
-                })
-                .catch(err => console.error("Polling error:", err));
+        function previewEmail(id) {
+            const w = 900, h = 700;
+            const left = (window.innerWidth / 2) - (w / 2), top = (window.innerHeight / 2) - (h / 2);
+            window.open('/preview/' + id, 'EmailPreview', `width=${w},height=${h},top=${top},left=${left},scrollbars=yes`);
         }
 
-        pollSharedState();
-        setInterval(pollSharedState, 2000);
+        function toggleLog(id) { openLogId = (openLogId === id) ? null : id; pollSharedState(); }
 
         function runReport(id) {
-            const eventSource = new EventSource(`/stream/${id}`);
-            eventSource.onmessage = function(event) {
-                if (event.data === "[DONE]") {
-                    eventSource.close();
-                }
-            };
-            eventSource.onerror = function() {
-                eventSource.close();
-            };
-            // Force an immediate UI update so the button locks instantly
+            const es = new EventSource('/stream/' + id);
+            es.onmessage = (e) => { if (e.data === '[DONE]') es.close(); };
+            es.onerror = () => es.close();
             setTimeout(pollSharedState, 300);
         }
 
-        // Auto-open history modal on page load
-        window.onload = openHistoryModal;
+        // ---- Boot ----
+        loadHistory().finally(() => { pollSharedState(); });
+        setInterval(pollSharedState, 2000);
     </script>
 </body>
 </html>
