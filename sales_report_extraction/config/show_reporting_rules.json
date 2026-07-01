@@ -541,21 +541,43 @@
       }
     },
     {
-      "rule_name": "ATG_VENUES_WAITRESS_TOUR",
+      "rule_name": "SINGAPORE_MOULIN_ROUGE_TOUR",
       "active": true,
       "match_criteria": {
-        "sender_domain": "reports@info.atgtickets.com",
-        "subject_keyword": "ATG Movement Report - Waitress - 2026",
-        "attachment_type": ".csv"
+        "sender_domain": "sisticadmin@sistic.com.sg",
+        "subject_keyword": "Moulin Rouge! The Musical - Sales Summary Report",
+        "attachment_type": ".xls"
       },
       "metadata": {
-        "show_name": "Waitress Tour 2026",
-        "venue_name": "ATG Venues",
+        "show_name": "Moulin Rouge Tour",
+        "venue_name": "Singapore",
         "report_type": "Advance",
-        "show_id": "280",
-        "venue_id": "0",
-        "document_id": "446",
-        "timezone": "Europe/London",
+        "show_id": "229",
+        "venue_id": "125",
+        "document_id": "501",
+        "timezone": "Asia/Singapore",
+        "sales_day_offset_hours": 0
+      },
+      "processing": {
+        "passthrough_only": true
+      }
+    },
+    {
+      "rule_name": "SHANGHAI_MOULIN_ROUGE_TOUR",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "han.hazel.chen@gmail.com",
+        "subject_keyword": "MRSH Sales Data Update ",
+        "attachment_type": ".xlsX"
+      },
+      "metadata": {
+        "show_name": "Moulin Rouge Tour",
+        "venue_name": "Shanghai",
+        "report_type": "Advance",
+        "show_id": "229",
+        "venue_id": "264",
+        "document_id": "511",
+        "timezone": "Asia/Singapore",
         "sales_day_offset_hours": 0
       },
       "processing": {
