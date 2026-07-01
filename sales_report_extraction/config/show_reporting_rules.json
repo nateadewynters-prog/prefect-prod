@@ -11,27 +11,6 @@
   },
   "rules": [
     {
-      "rule_name": "BEAUTY_&_THE_BEAST_HULL",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "noreply@reports.spektrix.email",
-        "subject_keyword": "Hull New Theatre - Beauty & The Beast",
-        "attachment_type": ".xls"
-      },
-      "metadata": {
-        "show_name": "Beauty & The Beast",
-        "venue_name": "Hull",
-        "report_type": "Advance",
-        "show_id": "298",
-        "venue_id": "42",
-        "document_id": "62",
-        "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
-      }
-    },
-    {
       "rule_name": "NEDERLANDER_DEVIL_WEARS_PRADA_DOMINION_CUMULATIVE_PDF",
       "active": true,
       "match_criteria": {
@@ -52,27 +31,6 @@
         "parser_module": "src.parsers.nederlandaer_devil_wears_prada_cumulative_extraction_pdf",
         "parser_function": "nederlandaer_devil_wears_prada_cumulative_extraction_pdf",
         "needs_lookup": false
-      }
-    },
-    {
-      "rule_name": "GOLDILOCKS_AND_THE_THREE_BEARS_ABERDEEN",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "aberdeenperformingarts.com",
-        "subject_keyword": "Goldilocks and the 3 Bears Sales Report - Aberdeen",
-        "attachment_type": ".xls"
-      },
-      "metadata": {
-        "show_name": "Goldilocks and the Three Bears",
-        "venue_name": "Aberdeen",
-        "report_type": "Advance",
-        "show_id": "290",
-        "venue_id": "29",
-        "document_id": "355",
-        "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
       }
     },
     {
@@ -192,27 +150,6 @@
       }
     },
     {
-      "rule_name": "SILENCE_OF_THE_LAMBS_BOURNEMOUTH",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "reports@tessituranetwork.com",
-        "subject_keyword": "SotL 2026 Tour BOURNEMOUTH",
-        "attachment_type": ".xlsx"
-      },
-      "metadata": {
-        "show_name": "Silence of the Lambs Tour 2026",
-        "venue_name": "Bournemouth",
-        "report_type": "Advance",
-        "show_id": "285",
-        "venue_id": "51",
-        "document_id": "341",
-        "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
-      }
-    },
-    {
       "rule_name": "MALVERN_SILENCE_OF_THE_LAMBS",
       "active": true,
       "match_criteria": {
@@ -233,48 +170,6 @@
         "parser_module": "src.parsers.malvern_theatre_contractual_report_pdf_parser",
         "parser_function": "extract_contractual_report",
         "needs_lookup": false
-      }
-    },
-    {
-      "rule_name": "THE_LITTLE_MERMAID_BELFAST",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "noreply@boxoffice.goh.co.uk",
-        "subject_keyword": "The Little Mermaid - Grand Opera House Belfast",
-        "attachment_type": ".xls"
-      },
-      "metadata": {
-        "show_name": "The Little Mermaid",
-        "venue_name": "Grand Opera House Belfast",
-        "report_type": "Advance",
-        "show_id": "291",
-        "venue_id": "30",
-        "document_id": "81",
-        "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
-      }
-    },
-    {
-      "rule_name": "WAITRESS_BIRMINGHAM_TOUR_2026",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "SQLMail@birminghamhippodrome.com",
-        "subject_keyword": "Waitress 2026 Tour BIRMINGHAM",
-        "attachment_type": ".xlsx"
-      },
-      "metadata": {
-        "show_name": "Waitress Tour 2026",
-        "venue_name": "Birmingham Hippodrome",
-        "report_type": "Advance",
-        "show_id": "280",
-        "venue_id": "31",
-        "document_id": "58",
-        "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
       }
     },
     {
@@ -470,71 +365,6 @@
         "venue_id": "41",
         "document_id": "71",
         "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
-      }
-    },
-    {
-      "rule_name": "ATG_VENUES_ANNIE_TOUR",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "reports@info.atgtickets.com",
-        "subject_keyword": "ATG Movement Report -  Annie - Tour",
-        "attachment_type": ".csv"
-      },
-      "metadata": {
-        "show_name": "Annie Tour 2026",
-        "venue_name": "ATG Venues",
-        "report_type": "Advance",
-        "show_id": "279",
-        "venue_id": "0",
-        "document_id": "446",
-        "timezone": "Europe/London",
-        "sales_day_offset_hours": 0
-      },
-      "processing": {
-        "passthrough_only": true
-      }
-    },
-    {
-      "rule_name": "ATG_VENUES_HIGH_SOCIETY_TOUR",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "reports@info.atgtickets.com",
-        "subject_keyword": "ATG Movement Report - High Society - Tour - 2026 - Daily",
-        "attachment_type": ".csv"
-      },
-      "metadata": {
-        "show_name": "High Society Tour 2026",
-        "venue_name": "ATG Venues",
-        "report_type": "Advance",
-        "show_id": "288",
-        "venue_id": "0",
-        "document_id": "446",
-        "timezone": "Europe/London"
-      },
-      "processing": {
-        "passthrough_only": true
-      }
-    },
-    {
-      "rule_name": "ATG_VENUES_MEAN_GIRLS_TOUR",
-      "active": true,
-      "match_criteria": {
-        "sender_domain": "reports@info.atgtickets.com",
-        "subject_keyword": "ATG Movement Report -  Mean Girls - Tour",
-        "attachment_type": ".csv"
-      },
-      "metadata": {
-        "show_name": "Mean Girls Tour 2026",
-        "venue_name": "ATG Venues",
-        "report_type": "Advance",
-        "show_id": "274",
-        "venue_id": "0",
-        "document_id": "446",
-        "timezone": "Europe/London",
-        "sales_day_offset_hours": 0
       },
       "processing": {
         "passthrough_only": true
