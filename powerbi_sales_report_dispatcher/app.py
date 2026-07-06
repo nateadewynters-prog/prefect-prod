@@ -128,7 +128,7 @@ def fetch_legacy_metrics(show_id):
         cursor.execute(f"SELECT FORMAT(Wrap,'N0'), FORMAT(Tickets,'N0'), FORMAT(SalesATP,'N2'), FORMAT(Advance,'N0'), FORMAT(AdvanceTicketsSales,'N0'), FORMAT(Advance/AdvanceTicketsSales,'N2'), FORMAT(Reserved,'N0'), FORMAT(CumulativeGross,'N0'), FORMAT(CumulativeTicketSales,'N0'), FORMAT(CumulativeGross/CumulativeTicketSales,'N2') FROM CombinedWithEventsView WHERE ShowId = {show_id} AND Wrap IS NOT NULL AND RecordDate = {yesterday_query}")
         metrics['main'] = cursor.fetchone()
         
-        cursor.execute(f"WITH ThisWeek AS (SELECT DATEADD(dd, -(DATEPART(dw, MAX(RecordDate))-1), MAX(RecordDate)+1) AS WCDate, DATEADD(dd, 8-(DATEPART(dw, MAX(RecordDate))), MAX(RecordDate)) AS WEDate FROM ChannelSalesView WHERE ShowId = {show_id}) SELECT FORMAT(AVG(PercentageGross)*100,'N0'), FORMAT(AVG(PercentageTicketsSold)*100,'N0') FROM SalesByPerformanceView04 CROSS JOIN ThisWeek WHERE ShowId = {show_id} AND PerformanceDateTime BETWEEN WCDate AND WEDate AND DateOfUpdate = {yesterday_query}")
+        cursor.execute(f"WITH ThisWeek AS (SELECT MAX(RecordDate) AS MaxUpdateDate, DATEADD(wk, DATEDIFF(wk, 0, MAX(RecordDate)), 0) AS WCDate, DATEADD(wk, DATEDIFF(wk, 0, MAX(RecordDate)), 6) AS WEDate FROM ChannelSalesView WHERE ShowId = {show_id}) SELECT FORMAT(AVG(PercentageGross)*100,'N0') AS PercentGP, FORMAT(AVG(PercentageTicketsSold)*100,'N0') AS PercentCap FROM SalesByPerformanceView04 CROSS JOIN ThisWeek WHERE ShowId = {show_id} AND PerformanceDateTime BETWEEN WCDate AND WEDate AND DateOfUpdate = MaxUpdateDate")
         metrics['weekly'] = cursor.fetchone()
         
         if metrics['no_of_perfs'] > 0:
