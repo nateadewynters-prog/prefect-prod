@@ -457,6 +457,28 @@
       "processing": {
         "passthrough_only": true
       }
+    },
+    {
+      "rule_name": "ZURICH_MAMA_MIA_TOUR",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "noreply.reporting@eventim.de",
+        "subject_keyword": "MAMMA MIA! 2027 - Sales Report",
+        "attachment_type": ".xlsx"
+      },
+      "metadata": {
+        "show_name": "Mamma Mia!",
+        "venue_name": "Zurich",
+        "report_type": "Advance",
+        "show_id": "234",
+        "venue_id": "100",
+        "document_id": "486",
+        "timezone": "Europe/London",
+        "sales_day_offset_hours": 0
+      },
+      "processing": {
+        "passthrough_only": true
+      }
     }
   ]
 }
