@@ -14,192 +14,145 @@
         }
     </script>
 </head>
-<body class="bg-gray-100 p-8 font-sans min-h-screen">
+<body class="bg-slate-50 text-slate-800 p-6 md:p-12 font-sans min-h-screen selection:bg-blue-500 selection:text-white">
     <div class="max-w-6xl mx-auto">
-        <header class="text-center mb-12">
-            <h1 class="text-4xl font-extrabold text-gray-900 mb-2">B.I.S.C.U.I.T</h1>
-            <p class="text-gray-500 text-lg">Useful Links</p>
+        
+        <!-- Dashboard Top Bar -->
+        <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-12 pb-6 border-b border-slate-200">
+            <div>
+                <h1 class="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-2">
+                    B.I.S.C.U.I.T
+                </h1>
+            </div>
+            
+            <!-- Sleek Integrated Bank Holiday Monitor -->
+            <div class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm backdrop-blur-sm bg-white/80">
+                <span class="text-2xl animate-pulse">🏖️</span>
+                <div class="text-left">
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Next Bank Holiday</p>
+                    <p id="bh-name" class="text-xs font-bold text-slate-700">Loading…</p>
+                    <p id="bh-date" class="text-[10px] text-slate-400"></p>
+                </div>
+                <div class="border-l border-slate-100 pl-3 text-right">
+                    <p id="bh-days" class="text-lg font-black text-blue-600">—</p>
+                </div>
+            </div>
         </header>
 
+        <!-- Section: Reporting & Data Tools -->
         <section class="mb-12">
-            <div class="flex items-center mb-6">
-                <div class="h-px flex-1 bg-gray-200"></div>
-                <h2 class="px-4 text-sm font-bold text-gray-400 uppercase tracking-widest">Reporting & Data Tools</h2>
-                <div class="h-px flex-1 bg-gray-200"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Reporting & Data Tools
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 
-                <div onclick="gotoService('8003')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
-                    <div class="flex flex-col items-center text-center space-y-4">
-                        <div class="text-5xl transition-transform group-hover:scale-110">🔍</div>
-                        <div>
-                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-blue-700">DocID Tool</h3>
-                            <p class="text-sm text-gray-500 mt-2">Manage and look up configurations for Show, Theatre, and Document IDs.</p>
-                        </div>
-                    </div>
+                <div onclick="gotoService('8003')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">🔍</div>
+                    <h3 class="font-bold text-slate-700 transition-colors">DocID Tool</h3>
                 </div>
 
-                <div onclick="gotoService('8002')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
-                    <div class="flex flex-col items-center text-center space-y-4">
-                        <div class="text-5xl transition-transform group-hover:scale-110">📊</div>
-                        <div>
-                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-blue-700">Sales Dispatcher</h3>
-                            <p class="text-sm text-gray-500 mt-2">Automated Power BI dataset refreshes and PDF report distribution.</p>
-                        </div>
-                    </div>
+                <div onclick="gotoService('8002')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">📊</div>
+                    <h3 class="font-bold text-slate-700 transition-colors">Sales Dispatcher</h3>
                 </div>
 
-                <div onclick="gotoService('8004')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-yellow-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
-                    <div class="flex flex-col items-center text-center space-y-4">
-                        <div class="text-5xl transition-transform group-hover:scale-110">🔄</div>
-                        <div>
-                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-yellow-600">Power BI Refresher</h3>
-                            <p class="text-sm text-gray-500 mt-2">On-demand dataset refreshes and direct links to all Power BI Dashboards.</p>
-                        </div>
-                    </div>
+                <div onclick="gotoService('8004')" class="group flex items-center gap-4 bg-white border-l-4 border-l-yellow-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">🔄</div>
+                    <h3 class="font-bold text-slate-700 transition-colors">Power BI Refresher</h3>
                 </div>
 
-                <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation/AllItems.aspx')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
-                    <div class="flex flex-col items-center text-center space-y-4">
-                        <div class="text-5xl transition-transform group-hover:scale-110">📋</div>
-                        <div>
-                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-blue-700">Sales Reporting Master List</h3>
-                            <p class="text-sm text-gray-500 mt-2">SharePoint master list for Sales Reporting automation configuration.</p>
-                        </div>
-                    </div>
+                <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation/AllItems.aspx')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">📋</div>
+                    <h3 class="font-bold text-slate-700 transition-colors">Sales Reporting Master List</h3>
                 </div>
 
-                <div onclick="gotoUrl('https://dewyntersltd-my.sharepoint.com/:x:/g/personal/n_cannock_dewynters_com/IQAVF6BMcnOnQ7TFTKPaku6XAe8X43toYCYTARTispcciO8?rtime=YPk5hOTC3kg')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
-                    <div class="flex flex-col items-center text-center space-y-4">
-                        <div class="text-5xl transition-transform group-hover:scale-110">✅</div>
-                        <div>
-                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-blue-700">Sales Reports Check List</h3>
-                            <p class="text-sm text-gray-500 mt-2">SharePoint checklist for tracking and verifying sales report completion.</p>
-                        </div>
-                    </div>
+                <div onclick="gotoUrl('https://dewyntersltd-my.sharepoint.com/:x:/g/personal/n_cannock_dewynters_com/IQAVF6BMcnOnQ7TFTKPaku6XAe8X43toYCYTARTispcciO8?rtime=YPk5hOTC3kg')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">✅</div>
+                    <h3 class="font-bold text-slate-700 transition-colors">Sales Reports Check List</h3>
+                </div>
+
+                <div onclick="gotoUrl('https://3.basecamp.com/3792728/buckets/36092792/card_tables/9563110703')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">🎫</div>
+                    <h3 class="font-bold text-slate-700 transition-colors">Basecamp Execution Board</h3>
                 </div>
 
             </div>
         </section>
 
+        <!-- Section: Dave's Front End Environments -->
         <section class="mb-12">
-            <div class="flex items-center mb-6">
-                <div class="h-px flex-1 bg-gray-200"></div>
-                <h2 class="px-4 text-sm font-bold text-gray-400 uppercase tracking-widest">Dave's Front End</h2>
-                <div class="h-px flex-1 bg-gray-200"></div>
-            </div>
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Dave's Front End
+            </h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                <!-- Dev column -->
-                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                <!-- Dev Column -->
+                <div class="bg-slate-100/60 border border-slate-200/60 rounded-2xl p-5">
                     <div class="flex items-center gap-2 mb-4">
-                        <span class="text-lg">🧪</span>
-                        <h3 class="text-sm font-bold text-amber-700 uppercase tracking-widest">Dev</h3>
+                        <span class="text-base">🧪</span>
+                        <h3 class="text-xs font-bold text-amber-700 uppercase tracking-wider">Development</h3>
                     </div>
                     <div class="flex flex-col gap-3">
-
-                        <div onclick="gotoUrl('https://dewynterstickettestnew.azurewebsites.net/')" class="group block bg-white border-2 border-transparent rounded-xl p-4 hover:border-amber-400 transition-all cursor-pointer shadow-sm hover:shadow-md">
-                            <div class="flex items-center gap-4">
-                                <div class="text-3xl transition-transform group-hover:scale-110">🎟️</div>
-                                <div>
-                                    <h4 class="font-bold text-gray-800 group-hover:text-amber-600">Test Legacy Front End</h4>
-                                </div>
-                            </div>
+                        <div onclick="gotoUrl('https://dewynterstickettestnew.azurewebsites.net/')" class="group flex items-center gap-4 bg-white border-l-4 border-l-amber-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                            <div class="text-2xl group-hover:scale-110 transition-transform">🎟️</div>
+                            <h4 class="font-bold text-slate-700 transition-colors">Test Legacy Front End</h4>
                         </div>
 
-                        <div onclick="gotoUrl('https://dewynterstransaction-b4dubaere4bvg8cv.uksouth-01.azurewebsites.net/')" class="group block bg-white border-2 border-transparent rounded-xl p-4 hover:border-amber-400 transition-all cursor-pointer shadow-sm hover:shadow-md">
-                            <div class="flex items-center gap-4">
-                                <div class="text-3xl transition-transform group-hover:scale-110">🗄️</div>
-                                <div>
-                                    <h4 class="font-bold text-gray-800 group-hover:text-amber-600">Test Transactional Front End</h4>
-                                </div>
-                            </div>
+                        <div onclick="gotoUrl('https://dewynterstransaction-b4dubaere4bvg8cv.uksouth-01.azurewebsites.net/')" class="group flex items-center gap-4 bg-white border-l-4 border-l-amber-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                            <div class="text-2xl group-hover:scale-110 transition-transform">🗄️</div>
+                            <h4 class="font-bold text-slate-700 transition-colors">Test Transactional Front End</h4>
                         </div>
-
                     </div>
                 </div>
 
-                <!-- Prod column -->
-                <div class="bg-green-50 border border-green-200 rounded-2xl p-5">
+                <!-- Prod Column -->
+                <div class="bg-slate-100/60 border border-slate-200/60 rounded-2xl p-5">
                     <div class="flex items-center gap-2 mb-4">
-                        <span class="text-lg">🚀</span>
-                        <h3 class="text-sm font-bold text-green-700 uppercase tracking-widest">Prod</h3>
+                        <span class="text-base">🚀</span>
+                        <h3 class="text-xs font-bold text-emerald-700 uppercase tracking-wider">Production</h3>
                     </div>
                     <div class="flex flex-col gap-3">
-
-                        <div onclick="gotoUrl('https://dewynterstickets.azurewebsites.net/')" class="group block bg-white border-2 border-transparent rounded-xl p-4 hover:border-green-500 transition-all cursor-pointer shadow-sm hover:shadow-md">
-                            <div class="flex items-center gap-4">
-                                <div class="text-3xl transition-transform group-hover:scale-110">🎟️</div>
-                                <div>
-                                    <h4 class="font-bold text-gray-800 group-hover:text-green-700">Legacy Front End</h4>
-                                </div>
-                            </div>
+                        <div onclick="gotoUrl('https://dewynterstickets.azurewebsites.net/')" class="group flex items-center gap-4 bg-white border-l-4 border-l-emerald-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                            <div class="text-2xl group-hover:scale-110 transition-transform">🎟️</div>
+                            <h4 class="font-bold text-slate-700 transition-colors">Legacy Front End</h4>
                         </div>
 
-                        <div onclick="gotoUrl('https://dewynterstransactionlive.azurewebsites.net/')" class="group block bg-white border-2 border-transparent rounded-xl p-4 hover:border-green-500 transition-all cursor-pointer shadow-sm hover:shadow-md">
-                            <div class="flex items-center gap-4">
-                                <div class="text-3xl transition-transform group-hover:scale-110">🗄️</div>
-                                <div>
-                                    <h4 class="font-bold text-gray-800 group-hover:text-green-700">Transactional Front End</h4>
-                                </div>
-                            </div>
+                        <div onclick="gotoUrl('https://dewynterstransactionlive.azurewebsites.net/')" class="group flex items-center gap-4 bg-white border-l-4 border-l-emerald-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                            <div class="text-2xl group-hover:scale-110 transition-transform">🗄️</div>
+                            <h4 class="font-bold text-slate-700 transition-colors">Transactional Front End</h4>
                         </div>
-
                     </div>
                 </div>
 
             </div>
         </section>
 
-        <section>
-            <div class="flex items-center mb-6">
-                <div class="h-px flex-1 bg-gray-200"></div>
-                <h2 class="px-4 text-sm font-bold text-gray-400 uppercase tracking-widest">System Management</h2>
-                <div class="h-px flex-1 bg-gray-200"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+        <!-- Section: System Management -->
+        <section class="mb-16">
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span> System Management
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 
-                <div onclick="gotoService('4200')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-purple-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
-                    <div class="flex items-center space-x-6">
-                        <div class="text-5xl transition-transform group-hover:scale-110">🧠</div>
-                        <div class="text-left">
-                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-purple-700">Prefect Server</h3>
-                            <p class="text-sm text-gray-500 mt-1">Monitor background data extraction flows and orchestration health.</p>
-                        </div>
-                    </div>
+                <div onclick="gotoService('4200')" class="group flex items-center gap-4 bg-white border-l-4 border-l-purple-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform">🧠</div>
+                    <h3 class="font-bold text-slate-700 transition-colors">Prefect Server</h3>
                 </div>
 
-                <div onclick="gotoService('9000')" class="group block bg-white border-2 border-transparent rounded-2xl p-6 hover:border-emerald-500 transition-all cursor-pointer shadow-sm hover:shadow-xl">
-                    <div class="flex items-center space-x-6">
-                        <div class="text-5xl transition-transform group-hover:scale-110">🐳</div>
-                        <div class="text-left">
-                            <h3 class="text-xl font-bold text-gray-800 group-hover:text-emerald-700">Portainer</h3>
-                            <p class="text-sm text-gray-500 mt-1">Direct access to container management, status, and environment logs.</p>
-                        </div>
-                    </div>
+                <div onclick="gotoService('9000')" class="group flex items-center gap-4 bg-white border-l-4 border-l-emerald-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform">🐳</div>
+                    <h3 class="font-bold text-slate-700 transition-colors">Portainer</h3>
                 </div>
 
             </div>
         </section>
 
-        <div class="mt-16 mb-6 rounded-2xl bg-white shadow-sm border border-gray-200 px-6 py-5 flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <span class="text-3xl">🏖️</span>
-                <div>
-                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Next Bank Holiday — England & Wales</p>
-                    <p id="bh-name" class="text-lg font-bold text-gray-800">Loading…</p>
-                </div>
-            </div>
-            <div class="text-right">
-                <p id="bh-days" class="text-4xl font-extrabold text-blue-600">—</p>
-                <p id="bh-date" class="text-xs text-gray-400 mt-0.5"></p>
-            </div>
-        </div>
-
-        <footer class="pt-8 border-t border-gray-200 text-center text-xs text-gray-400">
-            Internal Operations Tools &bull; Dewynters &bull; 2026
+        <!-- Footer -->
+        <footer class="pt-8 border-t border-slate-200 text-center text-[10px] font-bold text-slate-400 tracking-widest">
+            INTERNAL OPERATIONS TOOLS &bull; DEWYNTERS &bull; 2026
         </footer>
 
+        <!-- Bank Holiday Data Fetcher -->
         <script>
             fetch('https://www.gov.uk/bank-holidays.json')
                 .then(r => r.json())
@@ -213,7 +166,7 @@
                     const diff = Math.round((nextDate - today) / (1000 * 60 * 60 * 24));
                     document.getElementById('bh-name').textContent = next.title;
                     document.getElementById('bh-days').textContent = diff === 0 ? 'Today! 🎉' : diff + (diff === 1 ? ' day' : ' days');
-                    document.getElementById('bh-date').textContent = nextDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                    document.getElementById('bh-date').textContent = nextDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
                 })
                 .catch(() => {
                     document.getElementById('bh-name').textContent = 'Unable to load';
