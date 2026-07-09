@@ -38,7 +38,7 @@ SHOWS_CONFIG = [
         "recipients": ["figures@dewynters.com", "a.trott@dewynters.com", "c.dobson@dewynters.com"]
     },
     {
-        "id": "4", "show_name": "Moulin Rouge!", "show_id": 45, "db_type": "Legacy",
+        "id": "4", "show_name": "Moulin! The Musical", "show_id": 45, "db_type": "Legacy",
         "pbi_workspace_id": "d8e48a79-0972-4f4e-a6da-891f284f7953", 
         "pbi_report_id": "a389ea5b-949f-4bb7-b4f2-97571dee86b3",
         "pbi_dataset_id": "ee878be9-5355-412d-ba52-d4c4c2661cf0",
@@ -259,7 +259,7 @@ def build_email_html(config, m):
             <p>Dear all,</p>
             <p>Please find attached your report for <strong>{config['show_name']}</strong><br>
             To view this on the Power BI Dashboard click <a href="{config['dashboard_url']}" style="color: #0078D4; text-decoration: none;">here</a>.</p>
-            <p style="margin-bottom: 4px;">In summary:</p>
+            <p style="margin-bottom: 4px;"><strong>In summary:</strong></p>
             {summary_html_block}
             <br>
             <img src="cid:preview_image_001" style="width: 100%; max-width: 800px; border: 1px solid #EEEEEE; display: block;">
