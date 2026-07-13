@@ -435,6 +435,28 @@
       "processing": {
         "passthrough_only": true
       }
+    },
+    {
+      "rule_name": "ISTANBUL_BODYGUARD_TOUR",
+      "active": true,
+      "match_criteria": {
+        "sender_domain": "zaferacar@bkmonline.net",
+        "subject_keyword": "The Bodyguard Tour Istanbul",
+        "attachment_type": ".xlsx"
+      },
+      "metadata": {
+        "show_name": "The Bodyguard 2025",
+        "venue_name": "Istanbul",
+        "report_type": "Advance",
+        "show_id": "233",
+        "venue_id": "265",
+        "document_id": "513",
+        "timezone": "Europe/Istanbul",
+        "sales_day_offset_hours": 0
+      },
+      "processing": {
+        "passthrough_only": true
+      }
     }
   ]
 }
