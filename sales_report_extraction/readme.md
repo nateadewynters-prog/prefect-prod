@@ -2,7 +2,7 @@
 
 **Host:** `dew-insights01`  
 **Status:** 🟢 Active (Polling every 15m)  
-**Architecture:** JSON-Driven Medallion Pattern with Server-Side State  
+**Architecture:** SharePoint-Driven Medallion Pattern with Server-Side State  
 
 ---
 
@@ -22,7 +22,7 @@ The system is **Stateless Locally**: It tracks processed state directly on the E
 ├── requirements.txt          # 📦 Infrastructure: Python dependencies
 ├── main.py                   # 🤖 ORCHESTRATOR: Main Prefect Entrypoint
 ├── architecture_flow.md      # 🗺️ DOCUMENTATION: High-level system diagram
-├── config/                   # ⚙️ CONFIG: JSON routing rules (Timezones, Parsers)
+├── config/                   # ⚙️ CONFIG: Global settings & paths (rules live in SharePoint)
 ├── data/                     # 💾 STORAGE: Medallion data (Inbox, Processed, Archive)
 └── src/                      # 🛠️ APPLICATION: Core logic
     ├── graph_client.py       # MS Graph API (Searching, Downloading, Tagging)
@@ -35,15 +35,18 @@ The system is **Stateless Locally**: It tracks processed state directly on the E
 
 ## 3. Configuration & State Management
 
+### 🗂️ Dynamic Rule Configuration (SharePoint-Driven)
+Routing rules (sender/subject matching, per-venue timezones, offset hours, and parser assignment) are no longer static JSON — `SharePointRuleLoader` (`src/config_loader.py`) loads them fresh from a SharePoint List at the start of every flow run, controlled by the `SHAREPOINT_RULES_LIST_NAME` env var. `config/show_reporting_rules.json` now holds only `global_settings` (base directory and Medallion folder paths).
+
 ### 🏷️ Server-Side Idempotency (Graph API & Fingerprinting)
 This system uses a dual-layer approach to ensure no report is processed twice:
 1. **Category Filtering:** The fetch task filters for emails *without* `"sales_report_extracted"`, `"sales_report_failed"`, or `"sales_report_duplicate"` tags.
-2. **`internetMessageId` Deduplication:** The orchestrator tracks the unique `internetMessageId` (fingerprint) of every email in the 30-day window. If a duplicate is detected, it is immediately tagged as `"sales_report_duplicate"` and skipped.
+2. **`internetMessageId` Deduplication:** The orchestrator tracks the unique `internetMessageId` (fingerprint) of every email in the `days_back` window. If a duplicate is detected, it is immediately tagged as `"sales_report_duplicate"` and skipped.
 3. **Tagging:** Once processed, the `"sales_report_extracted"` tag is applied.
 4. **Robustness:** Includes HTTP 409/412 retry logic to handle Exchange server concurrency conflicts during tagging operations.
 
 ### 🌐 Deterministic Timezone Logic & Sales Day Offset
-To ensure 100% accurate reporting dates, the engine uses venue-specific timezones and optional offset hours defined in `config/show_reporting_rules.json`:
+To ensure 100% accurate reporting dates, the engine uses venue-specific timezones and optional offset hours defined per-rule in the SharePoint rules list (loaded via `src/config_loader.py`):
 1. **Offset:** Adds `sales_day_offset_hours` to the arrival time to handle late-night reports that belong to the "previous" business day.
 2. **Conversion:** Converts the adjusted UTC timestamp from the Graph API to the venue's **local timezone** (e.g., `Asia/Singapore`).
 3. **Standardization:** The system subtracts **1 day** (since reports reflect the previous day's sales).
@@ -53,7 +56,7 @@ To ensure 100% accurate reporting dates, the engine uses venue-specific timezone
 The system uses `get_universal_logger` (from `src.env_setup`) to ensure scripts run seamlessly in both production and local environments. It automatically detects the Prefect context and falls back to a standard Python `StreamHandler` if running outside of a flow, preventing "MissingContext" crashes.
 
 ### 📈 Parameterized Execution (Prefect UI)
-- **`days_back`**: (Default: 30) Controls the dynamic rolling window for untagged email scans.
+- **`days_back`**: (Default: 7) Controls the dynamic rolling window for untagged email scans.
 - **`target_rule_name`**: (Optional) Filters execution to a specific vendor/show rule for historical correction.
 - **`retry_failed`**: (Default: False) When enabled, bulk-resets emails tagged with `"sales_report_failed"` within the `days_back` window, allowing them to be reprocessed.
 - **`disable_notifications`**: (Default: False) Silences Microsoft Teams alerts for the duration of the run—ideal for testing or massive backfills.

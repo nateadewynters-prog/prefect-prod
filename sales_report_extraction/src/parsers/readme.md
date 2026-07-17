@@ -7,7 +7,7 @@
 
 ## 1. Overview
 
-This directory contains specialized extraction modules. The orchestrator dynamically invokes these scripts based on rules defined in `config/show_reporting_rules.json`.
+This directory contains specialized extraction modules. The orchestrator dynamically invokes these scripts based on rules defined in the SharePoint rules list and loaded via `src/config_loader.py`.
 
 ---
 
@@ -18,6 +18,7 @@ The following parsers are currently implemented and active:
 - **`gmg_hk_jesus_christ_superstar_xlsx_parser.py`**: Specialized parser for GMG Hong Kong reports (XLSX inside ZIP).
 - **`malvern_theatre_contractual_report_pdf_parser.py`**: Extracts contractual data from Malvern Theatre PDF reports.
 - **`nederlandaer_devil_wears_prada_cumulative_extraction_pdf.py`**: Specialized cumulative extractor for "The Devil Wears Prada" reports from Nederlandaer.
+- **`taiwan_jesus_christ_superstar_xlsx_parser.py`**: Specialized bilingual (English/Mandarin) parser for Taiwan's Jesus Christ Superstar XLSX reports, validated against the 合計 grand-total row.
 - **`ticketek_event_settlement_excel_parser.py`**: Robust Excel parser for Ticketek settlement reports, supporting complex lookups.
 
 ---

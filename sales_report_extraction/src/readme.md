@@ -18,13 +18,14 @@ This directory contains the application logic, decoupled from the orchestration 
 - **`link_extractor.py`**: Extracts and downloads files from HTML links within email bodies, used primarily for Ticketmaster-based reports where attachments are hosted externally.
 - **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs or raw passthrough files. It logs file size (KB) and utilizes centralized environment variables. Notifications have been removed; exceptions now bubble up to the orchestrator.
 - **`sharepoint_uploader.py`**: Handles file uploads to the Medallion SharePoint site. Notifications have been removed; exceptions bubble up to the orchestrator.
+- **`config_loader.py`**: The `SharePointRuleLoader` class. Fetches every routing rule fresh from a SharePoint List via the Graph API at the start of each flow run, reshaping list items into the rule dicts the pipeline expects.
 
 ### 🧠 Core Engine
 - **`file_processor.py`**: The `ProcessingEngine` class. Manages the full file lifecycle:
     - **Deterministic Report Dating:** Converts UTC to local venue time via `pytz` and standardizes dates, incorporating **Sales Day Offset** logic for late-night reports.
     - **Medallion I/O:** Standardizes filenames and moves files across zones (`inbox` -> `archive`/`processed`/`failed`).
     - **Dynamic Parser Invocation:** Uses `importlib` to route files to specialized parsers.
-    - **Passthrough Logic:** Routes raw attachments directly for rules configured with `"passthrough_only": true`.
+    - **Passthrough Logic:** Routes raw attachments directly for rules where the SharePoint List's `ParserModule`/`ParserFunction` columns are left blank.
     - **Failure Handling:** Moves problematic files to the `failed/` zone. Notifications have been removed; exceptions bubble up.
 - **`naming.py`**: Centralized logic for generating standardized, deterministic filenames based on show/venue metadata and reporting dates.
 - **`mapping.py`**: Handles data transformation and lookups, mapping vendor-specific codes to internal identifiers using local CSV tables.
@@ -40,7 +41,7 @@ This directory contains the application logic, decoupled from the orchestration 
 
 ## 3. Design Principles
 
-1. **Stateless Logic:** The system relies on Graph tags and a **30-day dynamic rolling window**, ensuring it remains stateless locally.
+1. **Stateless Logic:** The system relies on Graph tags and a **dynamic rolling window** (`days_back`, default 7 days), ensuring it remains stateless locally.
 2. **Robust Retrieval:** Employs a simplified, subject-only keyword search to bypass KQL query limitations, with sender validation handled purely in Python.
 3. **Data Integrity:** Employs `f.flush()` and `os.fsync()` before SFTP uploads to prevent 0-byte file delivery.
 4. **Resilient Tagging:** Exchange server conflicts are mitigated with automatic retries for HTTP 409/412 responses during tagging and untagging.

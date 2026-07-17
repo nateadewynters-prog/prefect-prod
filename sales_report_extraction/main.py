@@ -11,6 +11,7 @@ from src.notifications import send_teams_notification
 from src.graph_client import GraphClient
 from src.file_processor import ProcessingEngine
 from src.sftp_client import upload_to_sftp
+from src.config_loader import SharePointRuleLoader
 from src.sharepoint_uploader import SharePointUploader
 
 # 1. Setup Environment
@@ -22,6 +23,9 @@ CONFIG_PATH = os.path.join(APP_ROOT, "config", "show_reporting_rules.json")
 
 with open(CONFIG_PATH, 'r') as f:
     CONFIG = json.load(f)
+
+RULES_LIST_NAME = os.getenv("SHAREPOINT_RULES_LIST_NAME", "Sales Reporting - Master List - Automation - Python")
+rule_loader = SharePointRuleLoader(RULES_LIST_NAME)
 
 # 3. Instantiate Domain Objects
 graph = GraphClient(
@@ -35,12 +39,14 @@ engine = ProcessingEngine(CONFIG['global_settings'], CONFIG_PATH)
 @task(name="Fetch and Route Emails", retries=2)
 def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
     logger = get_run_logger()
+
+    all_rules = rule_loader.load_rules()   # every rule now comes from SharePoint
+
     queued_sales_reports = []
     start_date_dt = datetime.now(timezone.utc) - timedelta(days=days_back)
-    
     seen_fingerprints = set()
 
-    for rule in CONFIG['rules']:
+    for rule in all_rules:                 # was: for rule in CONFIG['rules']:
         if not rule.get('active'): continue
         if target_rule and rule['rule_name'] != target_rule: continue
 
