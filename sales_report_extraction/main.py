@@ -164,6 +164,11 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
             link_display = f"📁 {raw_link_md}"
 
         graph.tag_email(msg_id, "sales_report_extracted")
+
+        try:
+            rule_loader.update_last_run(rule.get("_sp_item_id"))
+        except Exception as e:
+            logger.warning(f"⚠️ Could not update LastRun for {r_name}: {e}")
         
         return True, r_name, {
             "display": f"{show_name} - {venue_name}",

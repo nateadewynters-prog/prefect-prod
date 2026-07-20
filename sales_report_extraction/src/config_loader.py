@@ -1,6 +1,8 @@
 import os
 import requests
 import msal
+import pytz
+from datetime import datetime
 from src.env_setup import get_universal_logger
 
 
@@ -68,6 +70,8 @@ class SharePointRuleLoader:
         # thread lock on the object, which breaks cloudpickle when Prefect runs
         # a scheduled flow in a subprocess. GraphClient defers it for the same reason.
         self.app = None
+        # Cache the resolved list GUID so we don't look it up on every call.
+        self._list_id = None
 
     def _get_token(self) -> str:
         if self.app is None:
@@ -104,6 +108,12 @@ class SharePointRuleLoader:
             f"SharePoint list '{self.list_name}' not found on the configured site."
         )
 
+    def _get_list_id(self) -> str:
+        """Resolve the list GUID once and reuse it."""
+        if self._list_id is None:
+            self._list_id = self._resolve_list_id()
+        return self._list_id
+
     def _fetch_items(self, list_id: str) -> list:
         """Fetch every list item with its column values, following pagination."""
         url = (
@@ -129,7 +139,7 @@ class SharePointRuleLoader:
         """
         logger = get_universal_logger(__name__)
 
-        list_id = self._resolve_list_id()
+        list_id = self._get_list_id()
         items = self._fetch_items(list_id)
 
         rules = []
@@ -149,8 +159,15 @@ class SharePointRuleLoader:
                 )
                 continue
 
-            # Auto-generated rule name: SHOW_VENUE, uppercase, spaces -> underscores.
-            rule_name = f"{show_name}_{venue_name}".upper().replace(" ", "_")
+            report_type = (f.get("ReportType") or "").strip()
+
+            # Auto-generated rule name: SHOW_VENUE_REPORTTYPE, uppercase, spaces
+            # -> underscores. Report type is included so the same show + venue
+            # can carry more than one rule (e.g. an Advance and a Cumulative
+            # report) without the names colliding. Empty parts are dropped.
+            rule_name = "_".join(
+                p for p in (show_name, venue_name, report_type) if p
+            ).upper().replace(" ", "_")
 
             match_criteria = {
                 "sender_domain": (f.get("SenderDomain") or "").strip(),
@@ -166,7 +183,7 @@ class SharePointRuleLoader:
             metadata = {
                 "show_name": show_name,
                 "venue_name": venue_name,
-                "report_type": (f.get("ReportType") or "").strip(),
+                "report_type": report_type,
                 # Internal names use capital "ID"; ShowID/DocumentID are Number
                 # columns, so _to_id_str strips the trailing ".0" they return.
                 "show_id": _to_id_str(f.get("ShowID")),
@@ -204,6 +221,9 @@ class SharePointRuleLoader:
                     "match_criteria": match_criteria,
                     "metadata": metadata,
                     "processing": processing,
+                    # Internal: the SharePoint row id, used to stamp LastRun.
+                    # Not part of the logical rule; downstream code ignores it.
+                    "_sp_item_id": item.get("id"),
                 }
             )
 
@@ -212,3 +232,29 @@ class SharePointRuleLoader:
             f"'{self.list_name}'."
         )
         return rules
+
+    def update_last_run(self, item_id, when=None) -> None:
+        """
+        Stamp the LastRun column on a single rule's row with the current UK
+        time (or a supplied datetime). Best-effort: callers should treat a
+        failure here as non-fatal, since the report itself already succeeded.
+        """
+        if not item_id:
+            return
+
+        logger = get_universal_logger(__name__)
+
+        if when is None:
+            when = datetime.now(pytz.timezone("Europe/London"))
+        when_iso = when.isoformat()
+
+        list_id = self._get_list_id()
+        url = (
+            f"{self.base_url}/sites/{self.site_id}/lists/{list_id}"
+            f"/items/{item_id}/fields"
+        )
+        resp = requests.patch(
+            url, headers=self._headers(), json={"LastRun": when_iso}
+        )
+        resp.raise_for_status()
+        logger.info(f"🕒 Stamped LastRun on row {item_id}: {when_iso}")
