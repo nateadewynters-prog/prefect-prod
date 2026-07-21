@@ -12,6 +12,19 @@
         function gotoUrl(url) {
             window.location.href = url;
         }
+        function openSrml() {
+            const m = document.getElementById('srml-modal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+        }
+        function closeSrml() {
+            const m = document.getElementById('srml-modal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+        }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeSrml();
+        });
     </script>
 </head>
 <body class="bg-slate-50 text-slate-800 p-6 md:p-12 font-sans min-h-screen selection:bg-blue-500 selection:text-white">
@@ -24,18 +37,36 @@
                     B.I.S.C.U.I.T
                 </h1>
             </div>
-            
-            <!-- Sleek Integrated Bank Holiday Monitor -->
-            <div class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm backdrop-blur-sm bg-white/80">
-                <span class="text-2xl animate-pulse">🏖️</span>
-                <div class="text-left">
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Next Bank Holiday</p>
-                    <p id="bh-name" class="text-xs font-bold text-slate-700">Loading…</p>
-                    <p id="bh-date" class="text-[10px] text-slate-400"></p>
+
+            <!-- Status Pills -->
+            <div class="flex flex-col sm:flex-row items-stretch gap-3">
+
+                <!-- London Weather Monitor -->
+                <div class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm backdrop-blur-sm bg-white/80">
+                    <span id="wx-icon" class="text-2xl">🌡️</span>
+                    <div class="text-left">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">London</p>
+                        <p id="wx-desc" class="text-xs font-bold text-slate-700">Loading…</p>
+                        <p id="wx-feels" class="text-[10px] text-slate-400"></p>
+                    </div>
+                    <div class="border-l border-slate-100 pl-3 text-right">
+                        <p id="wx-temp" class="text-lg font-black text-blue-600">—</p>
+                    </div>
                 </div>
-                <div class="border-l border-slate-100 pl-3 text-right">
-                    <p id="bh-days" class="text-lg font-black text-blue-600">—</p>
+
+                <!-- Sleek Integrated Bank Holiday Monitor -->
+                <div class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm backdrop-blur-sm bg-white/80">
+                    <span class="text-2xl animate-pulse">🏖️</span>
+                    <div class="text-left">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Next Bank Holiday</p>
+                        <p id="bh-name" class="text-xs font-bold text-slate-700">Loading…</p>
+                        <p id="bh-date" class="text-[10px] text-slate-400"></p>
+                    </div>
+                    <div class="border-l border-slate-100 pl-3 text-right">
+                        <p id="bh-days" class="text-lg font-black text-blue-600">—</p>
+                    </div>
                 </div>
+
             </div>
         </header>
 
@@ -61,7 +92,7 @@
                     <h3 class="font-bold text-slate-700 transition-colors">Power BI Refresher</h3>
                 </div>
 
-                <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation/AllItems.aspx')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                <div onclick="openSrml()" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
                     <div class="text-2xl group-hover:scale-110 transition-transform duration-150">📋</div>
                     <h3 class="font-bold text-slate-700 transition-colors">Sales Reporting Master List</h3>
                 </div>
@@ -152,6 +183,29 @@
             INTERNAL OPERATIONS TOOLS &bull; DEWYNTERS &bull; 2026
         </footer>
 
+        <!-- Sales Reporting Master List Modal -->
+        <div id="srml-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40 backdrop-blur-sm p-6" onclick="if (event.target === this) closeSrml()">
+            <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 relative">
+                <button onclick="closeSrml()" class="absolute top-4 right-4 text-slate-300 hover:text-slate-600 text-2xl leading-none transition-colors">&times;</button>
+                <div class="flex items-center gap-3 mb-1">
+                    <span class="text-2xl">📋</span>
+                    <h3 class="text-lg font-black text-slate-900">Sales Reporting Master List</h3>
+                </div>
+                <p class="text-xs text-slate-400 mb-5 ml-11">Choose which list to open</p>
+                <div class="flex flex-col gap-3">
+                    <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation/AllItems.aspx')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                        <div class="text-2xl group-hover:scale-110 transition-transform">⚡</div>
+                        <h4 class="font-bold text-slate-700 transition-colors">Power Automate List</h4>
+                    </div>
+
+                    <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation%20%20Python/AllItems.aspx')" class="group flex items-center gap-4 bg-white border-l-4 border-l-emerald-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                        <div class="text-2xl group-hover:scale-110 transition-transform">🐍</div>
+                        <h4 class="font-bold text-slate-700 transition-colors">Python List</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Bank Holiday Data Fetcher -->
         <script>
             fetch('https://www.gov.uk/bank-holidays.json')
@@ -171,6 +225,59 @@
                 .catch(() => {
                     document.getElementById('bh-name').textContent = 'Unable to load';
                 });
+        </script>
+
+        <!-- London Weather Fetcher (Open-Meteo, no API key required) -->
+        <script>
+            (function () {
+                const WMO = {
+                    0:  ['☀️', 'Clear sky'],
+                    1:  ['🌤️', 'Mainly clear'],
+                    2:  ['⛅', 'Partly cloudy'],
+                    3:  ['☁️', 'Overcast'],
+                    45: ['🌫️', 'Fog'],
+                    48: ['🌫️', 'Rime fog'],
+                    51: ['🌦️', 'Light drizzle'],
+                    53: ['🌦️', 'Drizzle'],
+                    55: ['🌦️', 'Heavy drizzle'],
+                    56: ['🌧️', 'Freezing drizzle'],
+                    57: ['🌧️', 'Freezing drizzle'],
+                    61: ['🌧️', 'Light rain'],
+                    63: ['🌧️', 'Rain'],
+                    65: ['🌧️', 'Heavy rain'],
+                    66: ['🌧️', 'Freezing rain'],
+                    67: ['🌧️', 'Freezing rain'],
+                    71: ['🌨️', 'Light snow'],
+                    73: ['🌨️', 'Snow'],
+                    75: ['🌨️', 'Heavy snow'],
+                    77: ['🌨️', 'Snow grains'],
+                    80: ['🌦️', 'Light showers'],
+                    81: ['🌦️', 'Showers'],
+                    82: ['⛈️', 'Heavy showers'],
+                    85: ['🌨️', 'Snow showers'],
+                    86: ['🌨️', 'Snow showers'],
+                    95: ['⛈️', 'Thunderstorm'],
+                    96: ['⛈️', 'Thunderstorm'],
+                    99: ['⛈️', 'Thunderstorm']
+                };
+                const url = 'https://api.open-meteo.com/v1/forecast'
+                    + '?latitude=51.5074&longitude=-0.1278'
+                    + '&current=temperature_2m,apparent_temperature,weather_code'
+                    + '&timezone=Europe/London';
+                fetch(url)
+                    .then(r => r.json())
+                    .then(data => {
+                        const c = data.current;
+                        const info = WMO[c.weather_code] || ['🌡️', 'Weather'];
+                        document.getElementById('wx-icon').textContent = info[0];
+                        document.getElementById('wx-desc').textContent = info[1];
+                        document.getElementById('wx-temp').textContent = Math.round(c.temperature_2m) + '°C';
+                        document.getElementById('wx-feels').textContent = 'Feels ' + Math.round(c.apparent_temperature) + '°C';
+                    })
+                    .catch(() => {
+                        document.getElementById('wx-desc').textContent = 'Unable to load';
+                    });
+            })();
         </script>
     </div>
 </body>
