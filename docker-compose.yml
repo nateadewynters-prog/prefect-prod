@@ -124,6 +124,25 @@ services:
       driver: "json-file"
       options: { max-size: "10m", max-file: "3" }
 
+  # --- 10. POWER BI MEDIA REPORT DISPATCHER (UI TOOL) ---
+  powerbi-media-report-dispatcher:
+    build: ./powerbi_media_report_dispatcher
+    container_name: powerbi-media-report-dispatcher
+    ports:
+      - "8005:8002"
+    volumes:
+      - /opt/prefect/prod/.env:/app/.env:ro
+      - ./data:/app/data
+      - /opt/prefect/prod/keys/dewynters-6a2afc43a47e.json:/app/service_account.json:ro
+    environment:
+      - DB_PATH=/app/data/media_dispatcher_state.db      # was dispatcher_state.db
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service_account.json
+      - GBQ_PROJECT_ID=dewynters
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
 # --- VOLUMES ---
 volumes:
   portainer_data:

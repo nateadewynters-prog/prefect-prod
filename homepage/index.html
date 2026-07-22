@@ -12,19 +12,6 @@
         function gotoUrl(url) {
             window.location.href = url;
         }
-        function openSrml() {
-            const m = document.getElementById('srml-modal');
-            m.classList.remove('hidden');
-            m.classList.add('flex');
-        }
-        function closeSrml() {
-            const m = document.getElementById('srml-modal');
-            m.classList.add('hidden');
-            m.classList.remove('flex');
-        }
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') closeSrml();
-        });
     </script>
 </head>
 <body class="bg-slate-50 text-slate-800 p-6 md:p-12 font-sans min-h-screen selection:bg-blue-500 selection:text-white">
@@ -82,9 +69,24 @@
                     <h3 class="font-bold text-slate-700 transition-colors">DocID Tool</h3>
                 </div>
 
-                <div onclick="gotoService('8002')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
-                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">📊</div>
-                    <h3 class="font-bold text-slate-700 transition-colors">Sales Dispatcher</h3>
+                <!-- Dispatcher: hover to reveal Sales / Media split -->
+                <div class="group relative bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl shadow-sm hover:shadow-md transition-all duration-150 overflow-hidden min-h-[68px]">
+                    <!-- Default state -->
+                    <div class="flex items-center gap-4 p-4 transition-opacity duration-150 group-hover:opacity-0">
+                        <div class="text-2xl transition-transform duration-150">📊</div>
+                        <h3 class="font-bold text-slate-700 transition-colors">Dispatcher</h3>
+                    </div>
+                    <!-- Hover state: two options side by side -->
+                    <div class="absolute inset-0 flex bg-white opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150">
+                        <div onclick="gotoService('8002')" class="flex-1 flex items-center justify-center gap-2 px-2 border-r border-slate-200/80 hover:bg-slate-50 cursor-pointer transition-colors">
+                            <span class="text-xl">📊</span>
+                            <span class="font-bold text-slate-700 text-sm text-center">Sales Dispatcher</span>
+                        </div>
+                        <div onclick="gotoService('8005')" class="flex-1 flex items-center justify-center gap-2 px-2 hover:bg-slate-50 cursor-pointer transition-colors">
+                            <span class="text-xl">🎬</span>
+                            <span class="font-bold text-slate-700 text-sm text-center">Media Dispatcher</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div onclick="gotoService('8004')" class="group flex items-center gap-4 bg-white border-l-4 border-l-yellow-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
@@ -92,9 +94,24 @@
                     <h3 class="font-bold text-slate-700 transition-colors">Power BI Refresher</h3>
                 </div>
 
-                <div onclick="openSrml()" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
-                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">📋</div>
-                    <h3 class="font-bold text-slate-700 transition-colors">Sales Reporting Master List</h3>
+                <!-- Sales Reporting Master List: hover to reveal Power Automate / Python split -->
+                <div class="group relative bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl shadow-sm hover:shadow-md transition-all duration-150 overflow-hidden min-h-[68px]">
+                    <!-- Default state -->
+                    <div class="flex items-center gap-4 p-4 transition-opacity duration-150 group-hover:opacity-0">
+                        <div class="text-2xl transition-transform duration-150">📋</div>
+                        <h3 class="font-bold text-slate-700 transition-colors">Sales Reporting Master List</h3>
+                    </div>
+                    <!-- Hover state: two options side by side -->
+                    <div class="absolute inset-0 flex bg-white opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150">
+                        <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation/AllItems.aspx')" class="flex-1 flex items-center justify-center gap-2 px-2 border-r border-slate-200/80 hover:bg-slate-50 cursor-pointer transition-colors">
+                            <span class="text-xl">⚡</span>
+                            <span class="font-bold text-slate-700 text-sm text-center">Power Automate List</span>
+                        </div>
+                        <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation%20%20Python/AllItems.aspx')" class="flex-1 flex items-center justify-center gap-2 px-2 hover:bg-slate-50 cursor-pointer transition-colors">
+                            <span class="text-xl">🐍</span>
+                            <span class="font-bold text-slate-700 text-sm text-center">Python List</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div onclick="gotoUrl('https://dewyntersltd-my.sharepoint.com/:x:/g/personal/n_cannock_dewynters_com/IQAVF6BMcnOnQ7TFTKPaku6XAe8X43toYCYTARTispcciO8?rtime=YPk5hOTC3kg')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
@@ -182,29 +199,6 @@
         <footer class="pt-8 border-t border-slate-200 text-center text-[10px] font-bold text-slate-400 tracking-widest">
             INTERNAL OPERATIONS TOOLS &bull; DEWYNTERS &bull; 2026
         </footer>
-
-        <!-- Sales Reporting Master List Modal -->
-        <div id="srml-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40 backdrop-blur-sm p-6" onclick="if (event.target === this) closeSrml()">
-            <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 relative">
-                <button onclick="closeSrml()" class="absolute top-4 right-4 text-slate-300 hover:text-slate-600 text-2xl leading-none transition-colors">&times;</button>
-                <div class="flex items-center gap-3 mb-1">
-                    <span class="text-2xl">📋</span>
-                    <h3 class="text-lg font-black text-slate-900">Sales Reporting Master List</h3>
-                </div>
-                <p class="text-xs text-slate-400 mb-5 ml-11">Choose which list to open</p>
-                <div class="flex flex-col gap-3">
-                    <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation/AllItems.aspx')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
-                        <div class="text-2xl group-hover:scale-110 transition-transform">⚡</div>
-                        <h4 class="font-bold text-slate-700 transition-colors">Power Automate List</h4>
-                    </div>
-
-                    <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation%20%20Python/AllItems.aspx')" class="group flex items-center gap-4 bg-white border-l-4 border-l-emerald-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
-                        <div class="text-2xl group-hover:scale-110 transition-transform">🐍</div>
-                        <h4 class="font-bold text-slate-700 transition-colors">Python List</h4>
-                    </div>
-                </div>
-            </div>
-        </div>
 
         <!-- Bank Holiday Data Fetcher -->
         <script>
