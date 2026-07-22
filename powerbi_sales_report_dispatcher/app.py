@@ -38,7 +38,7 @@ SHOWS_CONFIG = [
         "recipients": ["figures@dewynters.com", "a.trott@dewynters.com", "c.dobson@dewynters.com"]
     },
     {
-        "id": "4", "show_name": "Moulin! The Musical", "show_id": 45, "db_type": "Legacy",
+        "id": "4", "show_name": "Moulin Rouge! The Musical", "show_id": 45, "db_type": "Legacy",
         "pbi_workspace_id": "d8e48a79-0972-4f4e-a6da-891f284f7953", 
         "pbi_report_id": "a389ea5b-949f-4bb7-b4f2-97571dee86b3",
         "pbi_dataset_id": "ee878be9-5355-412d-ba52-d4c4c2661cf0",
