@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power BI Media Report Dispatcher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&display=swap');
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .progress-track { height: 6px; background: #e5e7eb; border-radius: 999px; overflow: hidden; }
+        .progress-fill  { height: 100%; background: #7c3aed; transition: width .4s ease; }
+        .spin { display: inline-block; animation: sp .9s linear infinite; }
+        @keyframes sp { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+        .card-state { animation: fadeIn .25s ease-in; }
+        @keyframes iconGlow {
+            0%   { filter: drop-shadow(0 0 2px rgba(124,58,237,.3)); color: #9ca3af; }
+            50%  { filter: drop-shadow(0 0 8px rgba(124,58,237,.9)); color: #7c3aed; }
+            100% { filter: drop-shadow(0 0 2px rgba(124,58,237,.3)); color: #9ca3af; }
+        }
+        .icon-glow { animation: iconGlow 2.5s infinite ease-in-out; }
+    </style>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+    <div class="max-w-5xl mx-auto">
+        <button onclick="window.location.href = window.location.protocol + '//' + window.location.hostname;" class="text-violet-600 hover:underline mb-4 inline-block font-semibold bg-transparent border-0 cursor-pointer">
+            &larr; Back to Homepage
+        </button>
+
+        <!-- HEADER + SUMMARY STRIP -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <div class="flex flex-wrap justify-between items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <h1 class="text-2xl font-bold text-gray-800">Power BI Media Report Dispatcher</h1>
+                    <button onclick="openHistoryModal()" class="transition-colors p-1 rounded-full hover:bg-violet-50" title="View dispatch history">
+                        <svg class="w-6 h-6 icon-glow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="flex items-center gap-5">
+                    <div class="text-right">
+                        <div class="text-xs text-gray-500" id="summary-date"></div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <div class="progress-track w-36"><div class="progress-fill" id="summary-bar" style="width:0%; background:#16a34a;"></div></div>
+                            <span class="text-xs text-gray-600 whitespace-nowrap" id="summary-count">0 of 0 sent</span>
+                        </div>
+                    </div>
+                    <span id="system-pill" class="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 font-semibold whitespace-nowrap">Idle</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOARD -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for show in shows %}
+            <div class="show-card bg-white border border-gray-200 rounded-xl p-5 flex flex-col transition-shadow hover:shadow-md"
+                 data-id="{{ show.id }}" data-name="{{ show.show_name }}"
+                 data-configured="{{ 'yes' if show.workspace_id and show.report_id else 'no' }}">
+                <div class="flex justify-between items-start mb-2">
+                    <h2 class="text-lg font-bold text-gray-800 leading-tight">{{ show.show_name }}</h2>
+                    <span class="text-[11px] text-gray-400 font-mono mt-1 ml-2 whitespace-nowrap">{{ show.code }}</span>
+                </div>
+
+                <div class="state-region flex-1 min-h-[58px]" id="state-{{ show.id }}"></div>
+                <div class="metrics-region hidden mt-3" id="metrics-{{ show.id }}"></div>
+
+                <div class="actions-region mt-4" id="actions-{{ show.id }}">
+                    <button onclick="refreshDashboard('{{ show.id }}')" id="refresh-{{ show.id }}"
+                            class="refresh-btn w-full bg-white border border-violet-600 text-violet-700 hover:bg-violet-50 font-semibold py-2.5 px-4 rounded-lg transition-all mb-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        &#8635; Refresh Dashboard
+                    </button>
+                    <button onclick="runReport('{{ show.id }}')" id="btn-{{ show.id }}"
+                            class="dispatch-btn w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        &#9654; Dispatch
+                    </button>
+                    <div class="grid grid-cols-3 gap-2 mt-2">
+                        {% if show.dashboard_url %}
+                        <a href="{{ show.dashboard_url }}" target="_blank"
+                           class="sec-btn text-center text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg transition-colors">Dashboard</a>
+                        {% else %}
+                        <span class="text-center text-xs font-semibold text-gray-300 bg-gray-50 py-2 rounded-lg">Dashboard</span>
+                        {% endif %}
+                        <button onclick="toggleMetrics('{{ show.id }}')"
+                           class="sec-btn text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg transition-colors leading-tight">Media Figures</button>
+                        <button onclick="previewEmail('{{ show.id }}')"
+                           class="sec-btn text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg transition-colors leading-tight">Email Preview</button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- HISTORY MODAL -->
+    <div id="historyModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl shadow-2xl max-w-5xl w-full flex flex-col max-h-[85vh]">
+            <div class="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <h3 class="text-xl font-bold text-gray-800">Dispatch history</h3>
+                <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="p-0 overflow-y-auto flex-grow">
+                <table class="w-full text-left border-collapse">
+                    <thead class="sticky top-0 bg-white shadow-sm">
+                        <tr class="border-b text-gray-500 text-xs uppercase tracking-wider">
+                            <th class="py-3 px-5 font-semibold">Show name</th>
+                            <th class="py-3 px-5 font-semibold">Week</th>
+                            <th class="py-3 px-5 font-semibold">Spend</th>
+                            <th class="py-3 px-5 font-semibold">Revenue</th>
+                            <th class="py-3 px-5 font-semibold">ROAS</th>
+                            <th class="py-3 px-5 font-semibold">Duration</th>
+                            <th class="py-3 px-5 font-semibold">Dispatched on</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody" class="text-sm text-gray-700 divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+            <div class="p-4 bg-gray-50 border-t rounded-b-xl flex justify-between items-center text-sm">
+                <div class="font-bold text-gray-700">Total dispatches: <span id="totalDispatches" class="text-violet-600 text-lg ml-1">0</span></div>
+                <button onclick="closeHistoryModal()" class="bg-gray-800 hover:bg-black text-white px-6 py-2 rounded-lg font-bold transition-colors shadow-sm">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Stage ids must match the stage tags in app.py.
+        const DISPATCH_STAGES = [
+            { id: 'auth',        label: 'Authenticating' },
+            { id: 'bigquery',    label: 'Fetching BigQuery data' },
+            { id: 'export_pptx', label: 'Exporting PPTX' },
+            { id: 'export_png',  label: 'Rendering preview' },
+            { id: 'email',       label: 'Dispatching email' },
+        ];
+        const REFRESH_STAGES = [
+            { id: 'auth',    label: 'Authenticating' },
+            { id: 'refresh', label: 'Refreshing dataset' },
+        ];
+
+        let historyByShow = {};   // name -> most recent history row
+        let lastBusy = null;
+        let openLogId = null;
+
+        const fmtSecs = (s) => {
+            if (s === null || s === undefined || isNaN(s)) return '';
+            const t = Math.round(s);
+            if (t < 60) return `${t}s`;
+            return `${Math.floor(t / 60)}m ${t % 60}s`;
+        };
+        const parseTs = (ts) => new Date(ts.replace(' ', 'T'));
+        const clockOf = (ts) => ts ? ts.split(' ')[1].slice(0, 5) : '';
+        const money = (v) => '£' + Number(v).toLocaleString('en-GB', { maximumFractionDigits: 0 });
+        const thisMonday = () => {
+            const d = new Date(); const day = (d.getDay() + 6) % 7; // 0 = Monday
+            d.setDate(d.getDate() - day); d.setHours(0, 0, 0, 0);
+            return d;
+        };
+
+        // Rebuild the most recent run from the shared log stream
+        function deriveRun(logs) {
+            let sepIdx = -1;
+            for (let i = logs.length - 1; i >= 0; i--) if (logs[i].type === 'separator') { sepIdx = i; break; }
+            const runLogs = sepIdx >= 0 ? logs.slice(sepIdx) : logs;
+            if (!runLogs.length) return null;
+
+            let showName = '', mode = 'dispatch';
+            if (sepIdx >= 0) {
+                const m = logs[sepIdx].msg.match(/NEW (DISPATCH|REFRESH):\s*(.+?)\s*=+\s*$/);
+                if (m) { mode = m[1].toLowerCase(); showName = m[2].trim(); }
+            }
+            const stages = mode === 'refresh' ? REFRESH_STAGES : DISPATCH_STAGES;
+
+            const byStage = {};
+            runLogs.forEach(l => { if (l.stage) (byStage[l.stage] = byStage[l.stage] || []).push(l); });
+
+            let currentIdx = -1;
+            stages.forEach((s, i) => { if (byStage[s.id] && byStage[s.id].length) currentIdx = i; });
+
+            let runEnd = null;
+            runLogs.forEach(l => { const t = parseTs(l.timestamp); if (!runEnd || t > runEnd) runEnd = t; });
+
+            const curStage = currentIdx >= 0 ? stages[currentIdx] : null;
+            const curLogs = curStage ? (byStage[curStage.id] || []) : [];
+            const failed = curLogs.some(l => l.type === 'error');
+            const errMsg = failed ? curLogs.filter(l => l.type === 'error').pop().msg.replace(/^[^\w£]*/, '') : '';
+
+            let elapsed = null;
+            if (curLogs.length) elapsed = (runEnd - parseTs(curLogs[0].timestamp)) / 1000;
+
+            return { showName, mode, stages, currentIdx, curStage, runLogs, failed, errMsg, elapsed };
+        }
+
+        // ---- Per-card renderers ----
+        function renderIdle(id, name, configured) {
+            if (!configured) {
+                return `<div class="card-state">
+                    <div class="flex items-center gap-2 text-sm text-gray-400 font-semibold"><span>&#9888;</span> Not configured yet</div>
+                    <div class="text-xs text-gray-400 mt-1">Add the Power BI workspace/report ID in app.py</div>
+                </div>`;
+            }
+            const last = historyByShow[name];
+            if (last && last.timestamp && parseTs(last.timestamp) >= thisMonday()) {
+                return `<div class="card-state">
+                    <div class="flex items-center gap-2 text-sm text-green-600 font-semibold"><span>&#10003;</span> Sent this week</div>
+                    <div class="text-xs text-gray-400 mt-1">${clockOf(last.timestamp)} · ${last.pptx_size_mb ? last.pptx_size_mb.toFixed(2) + ' MB' : ''}</div>
+                </div>`;
+            }
+            const lastTxt = last ? `Last sent ${last.timestamp.slice(5, 16).replace('-', '/')}` : 'No previous dispatch';
+            return `<div class="card-state">
+                <div class="flex items-center gap-2 text-sm text-amber-600 font-semibold"><span>&#9679;</span> Not sent this week</div>
+                <div class="text-xs text-gray-400 mt-1">${lastTxt}</div>
+            </div>`;
+        }
+
+        function renderWaiting() {
+            return `<div class="card-state flex items-center gap-2 text-sm text-gray-400 font-medium pt-1"><span>&hellip;</span> Waiting for current dispatch</div>`;
+        }
+
+        function renderFailed(run) {
+            return `<div class="card-state">
+                <div class="flex items-center gap-2 text-sm text-red-600 font-semibold"><span>&#10005;</span> Failed &middot; ${run.curStage ? run.curStage.label.toLowerCase() : ''}</div>
+                <div class="text-xs text-red-500 mt-1 break-words">${run.errMsg || 'See detailed log'}</div>
+            </div>`;
+        }
+
+        function renderRunning(id, run) {
+            if (run.failed) return renderFailed(run);
+            const n = run.currentIdx + 1;
+            const total = run.stages.length;
+            const pct = Math.round((n / total) * 100);
+            const logOpen = openLogId === id;
+            const verb = run.mode === 'refresh' ? 'Refreshing' : 'Dispatching';
+            return `<div class="card-state">
+                <div class="flex items-center gap-2 text-sm text-violet-600 font-semibold mb-2">
+                    <span class="spin">&#8635;</span> ${run.curStage ? run.curStage.label : 'Starting'} &middot; step ${Math.max(n, 1)} of ${total}
+                </div>
+                <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+                <div class="text-xs text-gray-400 mt-1.5">${verb} &middot; ${fmtSecs(run.elapsed)} elapsed</div>
+                <button onclick="toggleLog('${id}')" class="text-xs text-gray-500 hover:text-gray-800 mt-2 font-medium">${logOpen ? '&#9662; Hide log' : '&#9656; Detailed log'}</button>
+                <div class="${logOpen ? '' : 'hidden'} mt-2 font-mono text-[11px] text-gray-300 bg-gray-900 rounded-md p-3 h-40 overflow-y-auto">${renderLogLines(run.runLogs)}</div>
+            </div>`;
+        }
+
+        function renderLogLines(runLogs) {
+            return runLogs.map(l => {
+                let c = 'text-gray-300';
+                if (l.type === 'success')   c = 'text-green-400';
+                if (l.type === 'error')     c = 'text-red-400 font-bold';
+                if (l.type === 'separator') c = 'text-violet-400 font-bold';
+                return `<div class="${c}"><span class="text-gray-600">[${clockOf(l.timestamp)}]</span> ${l.msg}</div>`;
+            }).join('');
+        }
+
+        function setActions(card, mode) {
+            const actions = card.querySelector('.actions-region');
+            const btn = card.querySelector('.dispatch-btn');
+            const refreshBtn = card.querySelector('.refresh-btn');
+            const secs = card.querySelectorAll('.sec-btn');
+            if (mode === 'running') { actions.classList.add('hidden'); return; }
+            actions.classList.remove('hidden');
+
+            const configured = card.dataset.configured === 'yes';
+            if (mode === 'waiting') {
+                btn.disabled = true; btn.innerHTML = 'Waiting&hellip;';
+                btn.classList.add('bg-gray-400', 'hover:bg-gray-400');
+                btn.classList.remove('bg-violet-600', 'hover:bg-violet-700');
+                refreshBtn.disabled = true;
+                refreshBtn.classList.add('opacity-40', 'pointer-events-none');
+                secs.forEach(s => s.classList.add('opacity-40', 'pointer-events-none'));
+            } else {
+                btn.disabled = !configured;
+                btn.innerHTML = (mode === 'failed') ? '&#8635; Retry dispatch' : '&#9654; Dispatch';
+                btn.classList.remove('bg-gray-400', 'hover:bg-gray-400');
+                btn.classList.add('bg-violet-600', 'hover:bg-violet-700');
+                refreshBtn.disabled = !configured;
+                refreshBtn.classList.remove('opacity-40', 'pointer-events-none');
+                secs.forEach(s => s.classList.remove('opacity-40', 'pointer-events-none'));
+            }
+        }
+
+        // ---- Main poll ----
+        function pollSharedState() {
+            fetch('/api/state').then(r => r.json()).then(data => {
+                const busy = data.locks.length > 0;
+                const runningId = busy ? data.locks[0] : null;
+                const run = deriveRun(data.logs || []);
+
+                const pill = document.getElementById('system-pill');
+                if (busy) {
+                    pill.innerHTML = '<span class="spin inline-block mr-1">&#8635;</span> Dispatching';
+                    pill.className = 'text-xs px-3 py-1.5 rounded-full bg-violet-50 text-violet-600 font-semibold whitespace-nowrap';
+                } else {
+                    pill.textContent = 'Idle';
+                    pill.className = 'text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 font-semibold whitespace-nowrap';
+                }
+
+                document.querySelectorAll('.show-card').forEach(card => {
+                    const id = card.dataset.id, name = card.dataset.name;
+                    const configured = card.dataset.configured === 'yes';
+                    const region = document.getElementById('state-' + id);
+                    if (busy && id === runningId) {
+                        region.innerHTML = renderRunning(id, run);
+                        setActions(card, 'running');
+                    } else if (busy) {
+                        region.innerHTML = renderWaiting();
+                        setActions(card, 'waiting');
+                    } else if (run && run.showName && run.showName.toUpperCase() === name.toUpperCase() && run.failed) {
+                        region.innerHTML = renderFailed(run);
+                        setActions(card, 'failed');
+                    } else {
+                        region.innerHTML = renderIdle(id, name, configured);
+                        setActions(card, 'idle');
+                    }
+                });
+
+                if (lastBusy === true && busy === false) loadHistory();
+                lastBusy = busy;
+                updateSummary();
+            }).catch(err => console.error('Polling error:', err));
+        }
+
+        function updateSummary() {
+            document.getElementById('summary-date').textContent =
+                new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+            const cards = document.querySelectorAll('.show-card');
+            const total = cards.length;
+            let sent = 0;
+            cards.forEach(c => {
+                const h = historyByShow[c.dataset.name];
+                if (h && h.timestamp && parseTs(h.timestamp) >= thisMonday()) sent++;
+            });
+            document.getElementById('summary-count').textContent = `${sent} of ${total} sent this week`;
+            document.getElementById('summary-bar').style.width = total ? `${Math.round((sent / total) * 100)}%` : '0%';
+        }
+
+        // ---- History ----
+        function loadHistory(renderModal) {
+            return fetch('/api/history').then(r => r.json()).then(data => {
+                historyByShow = {};
+                (data.history || []).forEach(row => { if (!historyByShow[row.show_name]) historyByShow[row.show_name] = row; });
+                updateSummary();
+                document.querySelectorAll('.show-card').forEach(card => {
+                    const region = document.getElementById('state-' + card.dataset.id);
+                    if (!lastBusy && region && !region.querySelector('.spin'))
+                        region.innerHTML = renderIdle(card.dataset.id, card.dataset.name, card.dataset.configured === 'yes');
+                });
+                if (renderModal) renderHistoryTable(data);
+            });
+        }
+
+        function openHistoryModal() {
+            document.getElementById('historyModal').classList.remove('hidden');
+            document.getElementById('historyBody').innerHTML =
+                '<tr><td colspan="7" class="py-8 text-center text-violet-500 font-bold animate-pulse">Loading history&hellip;</td></tr>';
+            loadHistory(true).catch(() => {
+                document.getElementById('historyBody').innerHTML =
+                    '<tr><td colspan="7" class="py-8 text-center text-red-500 font-bold">Error loading history.</td></tr>';
+            });
+        }
+        function closeHistoryModal() { document.getElementById('historyModal').classList.add('hidden'); }
+
+        function renderHistoryTable(data) {
+            document.getElementById('totalDispatches').textContent = data.total;
+            const tbody = document.getElementById('historyBody');
+            if (!data.history || data.history.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-500 font-medium">No reports dispatched yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.history.map(row => `
+                <tr class="hover:bg-violet-50 transition-colors">
+                    <td class="py-3 px-5 font-bold text-gray-800">${row.show_name}</td>
+                    <td class="py-3 px-5 text-gray-600 text-xs">${row.date_range || '&mdash;'}</td>
+                    <td class="py-3 px-5 text-gray-600 font-mono text-xs">${row.spend != null ? money(row.spend) : '&mdash;'}</td>
+                    <td class="py-3 px-5 text-gray-600 font-mono text-xs">${row.revenue != null ? money(row.revenue) : '&mdash;'}</td>
+                    <td class="py-3 px-5 text-gray-600 font-mono text-xs">${row.roas != null ? '£' + row.roas.toFixed(2) : '&mdash;'}</td>
+                    <td class="py-3 px-5 text-gray-600 font-mono text-xs">${fmtSecs(row.duration_secs) || '&mdash;'}</td>
+                    <td class="py-3 px-5 text-gray-600 font-mono text-xs">${row.timestamp}</td>
+                </tr>`).join('');
+        }
+
+        // ---- Inline media figures (one BigQuery read per click) ----
+        function toggleMetrics(id) {
+            const box = document.getElementById('metrics-' + id);
+            if (!box.classList.contains('hidden')) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            box.classList.remove('hidden');
+            box.innerHTML = '<div class="text-xs text-violet-500 font-semibold animate-pulse py-2">Querying BigQuery&hellip;</div>';
+            fetch('/metrics/' + id).then(r => r.json()).then(res => {
+                if (res.error) throw new Error(res.error);
+                box.innerHTML = `<div class="border border-gray-100 rounded-lg overflow-hidden">
+                    ${res.data.map(r => `<div class="flex justify-between px-3 py-1.5 text-xs border-b border-gray-50 last:border-0">
+                        <span class="text-gray-500">${r.Metric}</span>
+                        <span class="font-semibold font-mono text-gray-800">${r.Value}</span>
+                    </div>`).join('')}</div>`;
+            }).catch(err => { box.innerHTML = `<div class="text-xs text-red-500 font-mono py-2">Error: ${err.message}</div>`; });
+        }
+
+        function previewEmail(id) {
+            const w = 900, h = 700;
+            const left = (window.innerWidth / 2) - (w / 2), top = (window.innerHeight / 2) - (h / 2);
+            window.open('/preview/' + id, 'EmailPreview', `width=${w},height=${h},top=${top},left=${left},scrollbars=yes`);
+        }
+
+        function toggleLog(id) { openLogId = (openLogId === id) ? null : id; pollSharedState(); }
+
+        function runReport(id) {
+            const es = new EventSource('/stream/' + id);
+            es.onmessage = (e) => { if (e.data === '[DONE]') es.close(); };
+            es.onerror = () => es.close();
+            setTimeout(pollSharedState, 300);
+        }
+
+        function refreshDashboard(id) {
+            const es = new EventSource('/refresh/' + id);
+            es.onmessage = (e) => { if (e.data === '[DONE]') es.close(); };
+            es.onerror = () => es.close();
+            setTimeout(pollSharedState, 300);
+        }
+
+        // ---- Boot ----
+        loadHistory().finally(() => { pollSharedState(); });
+        setInterval(pollSharedState, 2000);
+    </script>
+</body>
+</html>
