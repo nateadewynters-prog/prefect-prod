@@ -75,23 +75,36 @@ class GraphClient:
             
         return all_emails
 
-    def download_attachment(self, msg_id: str, expected_ext: str) -> Tuple[bytes, str]:
-        """Fetches attachments and returns the target file's bytes and its actual name."""
+    def download_attachment(self, msg_id: str, expected_ext: str, filename_keyword: str | None = None) -> Tuple[bytes, str]:
+        """
+        Fetches attachments and returns the target file's bytes and its actual name.
+
+        When filename_keyword is given, only an attachment whose file name
+        contains that fragment is accepted. This is how one email carrying
+        reports for several venues is split between rules (e.g. "MRSH" for
+        Shanghai vs "MRGZ" for Guangzhou). Left as None, behaviour is unchanged:
+        the first attachment with the expected extension wins.
+        """
         logger = get_run_logger()
         endpoint = f"{self.base_url}/users/{self.target_user}/messages/{msg_id}/attachments"
         resp = requests.get(endpoint, headers=self.get_headers())
         resp.raise_for_status()
-        
+
         attachments = resp.json().get('value', [])
         for att in attachments:
             ext = att['name'][att['name'].rfind('.'):].lower()
-            if ext == expected_ext:
-                logger.info(f"📎 Successfully downloaded expected attachment: {att['name']}")
-                return base64.b64decode(att['contentBytes']), att['name']
-                
+            if ext != expected_ext:
+                continue
+            if filename_keyword and filename_keyword.lower() not in att['name'].lower():
+                continue
+
+            logger.info(f"📎 Successfully downloaded expected attachment: {att['name']}")
+            return base64.b64decode(att['contentBytes']), att['name']
+
         # Instead of generic failure, capture what files WERE actually there
         found_files = [a['name'] for a in attachments]
-        error_msg = f"No attachment found with extension {expected_ext}. Files found: {found_files}"
+        keyword_note = f" containing '{filename_keyword}'" if filename_keyword else ""
+        error_msg = f"No attachment found with extension {expected_ext}{keyword_note}. Files found: {found_files}"
         logger.error(f"❌ {error_msg}")
         raise ValueError(error_msg)
 

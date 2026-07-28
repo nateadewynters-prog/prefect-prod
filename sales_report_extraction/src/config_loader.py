@@ -180,6 +180,14 @@ class SharePointRuleLoader:
             if source:
                 match_criteria["attachment_source"] = source
 
+            # Optional: when one email carries attachments for several venues,
+            # this picks the right one by a fragment of its file name
+            # (e.g. "MRSH" vs "MRGZ"). Blank -> take the first matching
+            # attachment, which is the original behaviour.
+            filename_keyword = (f.get("FileNameKeyword") or "").strip()
+            if filename_keyword:
+                match_criteria["filename_keyword"] = filename_keyword
+
             metadata = {
                 "show_name": show_name,
                 "venue_name": venue_name,

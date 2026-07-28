@@ -75,7 +75,9 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
 
             actual_sender = email.get('from', {}).get('emailAddress', {}).get('address', '').lower()
             if crit['sender_domain'].lower() in actual_sender:
-                if fingerprint and fingerprint in seen_fingerprints:
+                # Key on (rule, message) so two rules can each claim the same
+                # email when it carries an attachment for each of them.
+                if fingerprint and (rule['rule_name'], fingerprint) in seen_fingerprints:
                     logger.info(f"👯 Twin detected: '{email['subject']}'. Tagging as duplicate.")
                     try:
                         graph.tag_email(email['id'], "sales_report_duplicate")
@@ -83,6 +85,11 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
                         logger.warning(f"⚠️ Failed to tag duplicate: {e}")
                     skipped += 1
                     continue
+                
+                seen_fingerprints.add((rule['rule_name'], fingerprint))
+                queued_sales_reports.append({"email_data": email, "rule": rule})
+            else:
+                skipped += 1
                 
                 seen_fingerprints.add(fingerprint)
                 queued_sales_reports.append({"email_data": email, "rule": rule})
