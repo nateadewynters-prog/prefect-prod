@@ -9,6 +9,12 @@ venv/
 # Ignore Large Data Outputs
 BrandwatchOutputs/
 
+# Ignore live SQLite state. These are runtime data, not source: the deploy
+# workflow runs `git reset --hard`, which would otherwise overwrite the
+# production DB with a stale committed snapshot (reverting schema migrations
+# and restoring stale locks). Must stay ignored so `git clean -fd` skips them.
+data/*.db
+
 # Ignore Python Cache
 __pycache__/
 *.pyc
