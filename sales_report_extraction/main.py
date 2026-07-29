@@ -91,11 +91,6 @@ def fetch_and_route_emails(days_back: int, target_rule: str | None = None):
             else:
                 skipped += 1
                 
-                seen_fingerprints.add(fingerprint)
-                queued_sales_reports.append({"email_data": email, "rule": rule})
-            else:
-                skipped += 1
-                
         logger.info(f"📊 Rule '{rule['rule_name']}': Found {len(emails)}, Queued {len(emails) - skipped}")
 
     return queued_sales_reports
@@ -134,7 +129,10 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
             html_body = email.get('body', {}).get('content', '')
             download_from_html_link(html_body, temp_path) 
         else:
-            content_bytes, _ = graph.download_attachment(msg_id, expected_ext)
+            filename_keyword = rule['match_criteria'].get('filename_keyword')
+            content_bytes, _ = graph.download_attachment(
+                msg_id, expected_ext, filename_keyword=filename_keyword
+            )
             with open(temp_path, 'wb') as f: 
                 f.write(content_bytes)
                 f.flush()
