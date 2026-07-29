@@ -9,7 +9,16 @@ and is built to look and behave the same way.
 
 ```
 powerbi_media_report_dispatcher/
-├── app.py                 # backend: config, BigQuery, Power BI export, email, SSE
+├── app.py                 # thin entrypoint: builds the app, exposes `app` for gunicorn
+├── config.py              # env vars, constants (STAGES), SHOWS_CONFIG  ← the file you edit
+├── state.py               # SQLite: locks, logs, dispatch history
+├── pipeline.py            # the dispatch/refresh jobs + shared SSE plumbing
+├── routes.py              # all HTTP endpoints (Flask Blueprint)
+├── services/
+│   ├── auth.py            # Azure AD tokens (MSAL)
+│   ├── bigquery.py        # spend / revenue / ROAS
+│   ├── powerbi.py         # report export + dataset refresh
+│   └── email.py           # email HTML + MS Graph send
 ├── templates/
 │   └── dispatcher.html    # the board UI
 ├── Dockerfile
@@ -17,9 +26,29 @@ powerbi_media_report_dispatcher/
 └── README.md
 ```
 
+Previously everything lived in one ~560-line `app.py`; it's now split into
+small, single-purpose modules so each file can be read and debugged on its own.
+The behaviour is unchanged — same routes, same JSON, same SSE format.
+
+### Where does X live?
+
+| I want to…                                   | Look in                     |
+|----------------------------------------------|-----------------------------|
+| add / edit a show, recipients, Power BI IDs  | `config.py` (`SHOWS_CONFIG`)|
+| change an env var / secret name              | `config.py`                 |
+| touch the locks / logs / history tables      | `state.py`                  |
+| change the email wording or layout           | `services/email.py`         |
+| change the BigQuery query                    | `services/bigquery.py`      |
+| change the Power BI export / refresh calls   | `services/powerbi.py`       |
+| change Azure auth / scopes                   | `services/auth.py`          |
+| change the dispatch/refresh steps or logs    | `pipeline.py`               |
+| add / change a URL endpoint or its JSON      | `routes.py`                 |
+| change how the app boots (gunicorn `app:app`)| `app.py`                    |
+| change the board UI                          | `templates/dispatcher.html` |
+
 ## The one file you edit regularly
 
-`SHOWS_CONFIG` in `app.py` — one entry per show. To add a show, copy an entry
+`SHOWS_CONFIG` in `config.py` — one entry per show. To add a show, copy an entry
 and change `code`, `show_name`, `gbq_name`, the Power BI IDs, and `recipients`.
 
 **The Devil Wears Prada is left unconfigured on purpose** — its uploaded script
