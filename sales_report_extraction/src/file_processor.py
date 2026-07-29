@@ -7,6 +7,17 @@ from src.models import ValidationResult
 from src.naming import generate_standard_filename, get_medallion_folders
 from src.mapping import apply_event_lookups
 
+# Excel rejects these characters in a sheet name and caps the name at 31 chars.
+INVALID_SHEET_CHARS = "[]:*?/\\"
+
+
+def _safe_sheet_name(name: str) -> str:
+    """Turn a show name into a legal Excel sheet name."""
+    for char in INVALID_SHEET_CHARS:
+        name = name.replace(char, "-")
+    return name.strip().upper()[:31] or "SHEET1"
+
+
 class ProcessingEngine:
     def __init__(self, global_config: dict, config_path: str):
         self.base_dir = global_config['base_dir'] 
@@ -67,15 +78,24 @@ class ProcessingEngine:
             df = apply_event_lookups(df, rule, lookups_dir)
 
         # 5. Save Processed File & Archive Raw File
-        csv_path = os.path.join(proc_dir, filename.replace(os.path.splitext(filename)[1], '.csv')) 
-        logger.info(f"💾 Saving {len(df)} rows to processed CSV: {csv_path}")
-        df.to_csv(csv_path, index=False) 
+        # A parser can declare OUTPUT_EXT (e.g. ".xlsx") when the contractor needs
+        # a specific format. Parsers that don't declare one still get a .csv, so
+        # this stays backwards compatible with every existing rule.
+        output_ext = getattr(parser_module, 'OUTPUT_EXT', '.csv')
+        output_path = os.path.join(proc_dir, f"{os.path.splitext(filename)[0]}{output_ext}")
+
+        logger.info(f"💾 Saving {len(df)} rows to processed file: {output_path}")
+        if output_ext == '.xlsx':
+            sheet_name = _safe_sheet_name(rule['metadata'].get('show_name', 'Sheet1'))
+            df.to_excel(output_path, index=False, sheet_name=sheet_name)
+        else:
+            df.to_csv(output_path, index=False)
         
         archive_path = os.path.join(arch_dir, filename) 
         logger.info(f"📦 Archiving raw file -> {archive_path}")
         shutil.move(temp_path, archive_path) 
         
-        return df, validation_result, csv_path 
+        return df, validation_result, output_path 
 
     def handle_failure(self, temp_path: str):
         """Moves a failing file from the inbox to the quarantine/failed folder."""
