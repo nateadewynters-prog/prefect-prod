@@ -68,11 +68,10 @@ SHOWS_CONFIG = [
     {
         "id": "3", "code": "DWP", "show_name": "The Devil Wears Prada",
         "gbq_name": "The Devil Wears Prada",
-        # TODO: not configured yet — the card is disabled until these are filled in.
-        "workspace_id": "",
-        "report_id": "",
-        "dashboard_url": "",
-        "recipients": BASE_RECIPIENTS,
+        "workspace_id": "b5687f95-8331-4389-88bc-10680652c6f7",
+        "report_id": "bfefb4a8-8162-4d48-8bf7-2ba42af332c6",
+        "dashboard_url": "https://app.powerbi.com/groups/b5687f95-8331-4389-88bc-10680652c6f7/reports/bfefb4a8-8162-4d48-8bf7-2ba42af332c6/2af7b29d9a85004eabc5?experience=power-bi",
+        "recipients": ["a.cameron@dewynters.com"],
     },
     {
         "id": "4", "code": "FRA", "show_name": "Frameless",
