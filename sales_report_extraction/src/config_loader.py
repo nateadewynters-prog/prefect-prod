@@ -143,6 +143,12 @@ class SharePointRuleLoader:
         items = self._fetch_items(list_id)
 
         rules = []
+        # Maps each rule_name we keep to the SharePoint item id that produced it.
+        # Two rows generating the same name cannot be told apart downstream:
+        # main.py dedupes on (rule_name, message id), so the second row would tag
+        # the email as a duplicate and its report would never be collected.
+        seen_rule_names = {}
+
         for item in items:
             f = item.get("fields", {})
 
@@ -168,6 +174,17 @@ class SharePointRuleLoader:
             rule_name = "_".join(
                 p for p in (show_name, venue_name, report_type) if p
             ).upper().replace(" ", "_")
+
+            # The name is uppercased above, so rows differing only by letter case
+            # ("Mamma Mia!" vs "mamma mia!") collide here as well.
+            if rule_name in seen_rule_names:
+                logger.error(
+                    f"Skipping SharePoint rule '{rule_name}' (item id "
+                    f"{item.get('id')}): item id {seen_rule_names[rule_name]} "
+                    f"already uses this name. Give one of the rows a different "
+                    f"Show Name, Venue Name or Report Type so they do not clash."
+                )
+                continue
 
             match_criteria = {
                 "sender_domain": (f.get("SenderDomain") or "").strip(),
@@ -234,6 +251,9 @@ class SharePointRuleLoader:
                     "_sp_item_id": item.get("id"),
                 }
             )
+            # Claim the name only once the row is actually kept, so a row we
+            # skipped for some other reason never blocks a later valid one.
+            seen_rule_names[rule_name] = item.get("id")
 
         logger.info(
             f"Loaded {len(rules)} rule(s) from SharePoint list "

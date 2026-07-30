@@ -204,6 +204,27 @@ def test_row_with_missing_show_or_venue_is_skipped(loader):
     assert rules[0]["rule_name"] == "GOOD_SHOW_GOOD_VENUE"
 
 
+def test_duplicate_rule_name_is_skipped(loader):
+    """Two rows generating the same rule_name -> keep the first, skip the second."""
+    base = {
+        "VenueName": "Zurich", "SenderDomain": "x@y.com",
+        "SubjectKeyword": "Report", "AttachmentType": ".xlsx",
+        "ReportType": "Advance",
+        "ShowID": 1.0, "VenueID": "2", "DocumentID": 3.0, "Active": True,
+    }
+    # Only the letter case differs, but rule_name is uppercased, so these clash.
+    first = {**base, "Title": "Mamma Mia!"}
+    second = {**base, "Title": "mamma mia!"}
+
+    fake_logger = MagicMock()
+    with patch("src.config_loader.get_universal_logger", return_value=fake_logger):
+        rules = _run_load(loader, [_item(first, "1"), _item(second, "2")])
+
+    assert len(rules) == 1
+    assert rules[0]["_sp_item_id"] == "1"   # the row that got there first wins
+    assert fake_logger.error.called
+
+
 def test_inactive_rule_still_loads_but_marked_inactive(loader):
     """Loader returns all rows; main.py is responsible for skipping inactive ones."""
     fields = {
