@@ -106,6 +106,10 @@
                 paginationSize: PAGE_SIZE,
                 placeholder: "No DocID records to display.",
 
+                // Default view: highest DocType ID first. Users can still sort
+                // by any column; this only sets the state on load.
+                initialSort: [{ column: "docId", dir: "desc" }],
+
                 ajaxResponse: function(url, params, response){
                     // Guard the shape: an error body (or any non-array) would
                     // otherwise throw inside Tabulator and leave a blank table
@@ -140,9 +144,12 @@
                     { title: "Show Name", field: "showName", widthGrow: 2 },
                     { title: "Theatre Name", field: "theatreName", widthGrow: 2 },
                     { title: "Document Name", field: "docName", widthGrow: 2 },
-                    { title: "Show ID", field: "showId", hozAlign: "right", cssClass: "font-mono font-bold" },
-                    { title: "Theatre ID", field: "theatreId", hozAlign: "right", cssClass: "font-mono font-bold" },
-                    { title: "DocType ID", field: "docId", hozAlign: "right", cssClass: "font-mono font-bold" }
+                    // sorter is declared explicitly rather than left to Tabulator's
+                    // sampling of the first row: the default sort now depends on
+                    // it, and a lexicographic fallback would order 9 above 100.
+                    { title: "Show ID", field: "showId", hozAlign: "right", cssClass: "font-mono font-bold", sorter: "number" },
+                    { title: "Theatre ID", field: "theatreId", hozAlign: "right", cssClass: "font-mono font-bold", sorter: "number" },
+                    { title: "DocType ID", field: "docId", hozAlign: "right", cssClass: "font-mono font-bold", sorter: "number" }
                 ]
             });
 
