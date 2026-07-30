@@ -14,7 +14,7 @@ This suite verifies client authentication, file processing logic, server-side ta
 ## 2. Key Test Areas
 
 - **Rule Configuration:** `test_config_loader.py` verifies `SharePointRuleLoader`'s rule-name generation, parser-vs-passthrough classification, half-configured rule skipping, inactive-rule handling, ID coercion, pagination, and list-not-found errors, fully mocked against `requests.get`.
-- **Graph API Tagging:** `test_categorization.py` is a **live** manual script (run it directly with `python`) that searches the real mailbox, applies `sales_report_extracted` to the emails it finds, and reads the categories back to confirm they stuck. Its entry point is `run_test()`, not a `test_*` function, so `pytest` does not collect it.
+- **Graph API Tagging:** covered by `test_graph_client.py` (mocked). The live tagging script that used to sit here has moved to `tools/tag_emails_manually.py` — it asserts nothing and `pytest` never collected it. See `tools/readme.md`; it can silently lose a sales report.
 - **File Processing:** `test_file_processor.py` tests directory setup and deterministic filename generation, including timezone and Sales Day Offset logic.
 - **Dynamic Orchestration:** `test_main.py` validates that routing pulls its rules from the SharePoint loader (not the JSON config) and that already-categorized emails are skipped during fetch.
 - **Failure Resilience:** Specifically, `test_process_email_handles_lookup_failure_and_tags_failed` verifies that mapping errors (e.g., missing lookups) result in the `"sales_report_failed"` tag. Teams alerts are now managed by the orchestrator.
@@ -47,7 +47,7 @@ To ensure the tests run in the exact environment used by production, execute the
 > ```bash
 > pytest tests/ --ignore=tests/test_alert.py --ignore=tests/test_sales_reporting_sharepoint_connection.py --ignore=tests/test_sharepoint_upload.py
 > ```
-> `test_sales_reporting_sharepoint_tree.py` is also live but is not collected (its entry point is `get_sharepoint_tree()`).
+> The two live scripts that were never collected have moved to `tools/` — see `tools/readme.md`.
 
 ### Run the full suite:
 ```bash

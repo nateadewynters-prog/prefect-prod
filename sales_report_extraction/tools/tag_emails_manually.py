@@ -1,3 +1,19 @@
+"""
+Manual tool: tag the latest Malvern emails and read the categories back.
+
+    cd /opt/prefect/prod/code/sales_report_extraction && python tools/tag_emails_manually.py
+
+DANGER - this writes to the real mailbox. graph_client.tag_email overwrites the
+whole categories list with a single entry, so any category already on the email
+is destroyed, and main.py treats "sales_report_extracted" as a permanent skip.
+Point this at an email whose report has not been ingested yet and that report is
+never collected - no error, no alert. Read each message's categories first if you
+intend to put them back.
+
+Lives in tools/ rather than tests/ because it asserts nothing: it is a diagnostic
+that used to sit in the test suite while never being collected by pytest.
+"""
+
 import os
 import requests # Added for verification step
 from src.env_setup import setup_environment
