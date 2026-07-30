@@ -110,7 +110,7 @@ def test_parser_rule_is_shaped_correctly(loader):
     assert len(rules) == 1
     rule = rules[0]
 
-    assert rule["rule_name"] == "JESUS_CHRIST_SUPERSTAR_MANILA"
+    assert rule["rule_name"] == "JESUS_CHRIST_SUPERSTAR_MANILA_ADVANCE"
     assert rule["active"] is True
     assert rule["processing"] == {
         "parser_module": "src.parsers.ticketek_event_settlement_excel_parser",
@@ -147,7 +147,7 @@ def test_passthrough_rule_when_parser_columns_blank(loader):
 
     assert len(rules) == 1
     rule = rules[0]
-    assert rule["rule_name"] == "MAMMA_MIA!_ZURICH"
+    assert rule["rule_name"] == "MAMMA_MIA!_ZURICH_ADVANCE"
     assert rule["processing"] == {"passthrough_only": True}
     # attachment_source is only included when set
     assert rule["match_criteria"]["attachment_source"] == "html_link"
@@ -201,7 +201,7 @@ def test_row_with_missing_show_or_venue_is_skipped(loader):
         _item(good, "1"), _item(blank_venue, "2"), _item(blank_show, "3"),
     ])
     assert len(rules) == 1
-    assert rules[0]["rule_name"] == "GOOD_SHOW_GOOD_VENUE"
+    assert rules[0]["rule_name"] == "GOOD_SHOW_GOOD_VENUE_ADVANCE"
 
 
 def test_duplicate_rule_name_is_skipped(loader):
@@ -346,7 +346,7 @@ def test_pagination_follows_next_link(loader):
         rules = loader.load_rules()
 
     names = {r["rule_name"] for r in rules}
-    assert names == {"SHOW_A_V1", "SHOW_B_V2"}
+    assert names == {"SHOW_A_V1_ADVANCE", "SHOW_B_V2_ADVANCE"}
 
 
 # ---------------------------------------------------------------------------

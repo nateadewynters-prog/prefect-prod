@@ -1,3 +1,14 @@
+"""
+Manual tool: print the folder tree of the Sales Reporting SharePoint library.
+
+    cd /opt/prefect/prod/code/sales_report_extraction && python tools/print_sharepoint_tree.py
+
+Read-only, but it authenticates with the production credentials in .env.
+
+Lives in tools/ rather than tests/ because it asserts nothing: it is a diagnostic
+that used to sit in the test suite while never being collected by pytest.
+"""
+
 import os
 import requests
 import msal
