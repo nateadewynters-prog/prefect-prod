@@ -1,4 +1,4 @@
-import os, pyodbc, threading
+import os, json, sqlite3, pyodbc
 from datetime import datetime
 from flask import Flask, render_template, jsonify
 from dotenv import load_dotenv
@@ -6,12 +6,67 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 
-# --- DOCID CACHE ENGINE ---
-DOCID_CACHE = {
-    "data": [],
-    "last_updated": None
-}
-CACHE_LOCK = threading.Lock()
+# --- DOCID CACHE ENGINE ---------------------------------------------------
+# The cache lives in a small SQLite file, NOT in a Python dict.
+#
+# Why: this app runs under `gunicorn --workers 4`, i.e. four separate OS
+# processes. A module-level dict is private to one process, so "Resync" only
+# ever refreshed whichever worker happened to answer that POST, and the
+# browser's follow-up GET /api/docids could easily land on one of the three
+# workers still holding stale data. One SQLite file is shared by all four, so
+# they always agree.
+#
+# Matches the SQLite pattern already used elsewhere in this repo
+# (powerbi_refresher, powerbi_media_report_dispatcher). Stdlib only.
+#
+# CAVEAT: the file sits inside the container and is NOT bind-mounted, so it is
+# lost on redeploy. That is harmless — an empty cache behaves exactly like an
+# expired one, and the next request refetches from SQL.
+CACHE_TTL_SECONDS = 1800  # 30 minutes (unchanged behaviour)
+
+DB_PATH = os.getenv(
+    "DOCID_CACHE_DB",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "docid_cache.db"),
+)
+
+def get_db_conn():
+    # timeout=10: if another worker is mid-write, wait for it instead of
+    # raising "database is locked".
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    """Create the one-row cache table if it does not exist yet."""
+    with get_db_conn() as conn:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS docid_cache ("
+            "id INTEGER PRIMARY KEY CHECK (id = 1), "  # single row, always id=1
+            "payload TEXT NOT NULL, "                  # the table rows, as JSON
+            "updated_at DATETIME NOT NULL)"
+        )
+
+def read_cache():
+    """Return (rows, updated_at). updated_at is None when nothing is cached."""
+    with get_db_conn() as conn:
+        row = conn.execute(
+            "SELECT payload, updated_at FROM docid_cache WHERE id = 1"
+        ).fetchone()
+    if not row:
+        return [], None
+    return json.loads(row["payload"]), datetime.fromisoformat(row["updated_at"])
+
+def write_cache(rows):
+    """Overwrite the shared cache with a fresh set of rows."""
+    with get_db_conn() as conn:
+        conn.execute(
+            "INSERT INTO docid_cache (id, payload, updated_at) VALUES (1, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "payload = excluded.payload, updated_at = excluded.updated_at",
+            (json.dumps(rows), datetime.now().isoformat(timespec="seconds")),
+        )
+
+init_db()
 
 def update_docid_cache():
     """Fetches data from SQL and keeps only unique (ShowId, TheatreId, DocTypeId) combinations."""

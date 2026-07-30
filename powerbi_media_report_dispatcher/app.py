@@ -28,7 +28,12 @@ The only thing you edit regularly is SHOWS_CONFIG in config.py.
 This module stays thin on purpose: gunicorn imports `app` from here
 (`app:app`), so the only jobs here are creating the Flask app, initialising
 the database, and registering the routes.
+
+Running it directly (`python app.py`) is for local dev only, and debug mode is
+off unless you switch it on with FLASK_DEBUG=1 — see the bottom of this file.
 """
+
+import os
 
 from flask import Flask
 
@@ -49,4 +54,8 @@ app = create_app()
 
 if __name__ == "__main__":
     # Local dev only. In the container gunicorn runs this (see Dockerfile).
-    app.run(host="0.0.0.0", port=8002, debug=True)
+    # Debug mode gives anyone who can reach the port a Python console, so it is
+    # off unless you ask for it:  FLASK_DEBUG=1 python app.py
+    # For the same reason we listen on localhost only, not 0.0.0.0.
+    debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
+    app.run(host="127.0.0.1", port=8002, debug=debug)
