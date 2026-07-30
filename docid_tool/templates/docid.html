@@ -64,6 +64,8 @@
                 </div>
             </div>
 
+            <div id="errorBanner" class="hidden mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800"></div>
+
             <div id="docid-table" class="w-full"></div>
         </div>
     </div>
@@ -72,17 +74,49 @@
     <script>
         let table;
 
+        const DEBOUNCE_MS = 300;
+        const PAGE_SIZE = 50;
+        const TABLE_HEIGHT = "550px";
+
+        // Labels are passed explicitly rather than derived from the element id:
+        // deriving them produced "All docTypes" and lowercased the other two.
+        const FILTERS = [
+            { id: "showFilter",    field: "showName",    label: "All Shows" },
+            { id: "theatreFilter", field: "theatreName", label: "All Theatres" },
+            { id: "docTypeFilter", field: "docName",     label: "All Doc Types" }
+        ];
+
+        function showError(message) {
+            const banner = document.getElementById("errorBanner");
+            banner.textContent = message;
+            banner.classList.remove("hidden");
+        }
+
+        function clearError() {
+            document.getElementById("errorBanner").classList.add("hidden");
+        }
+
         document.addEventListener("DOMContentLoaded", function() {
             table = new Tabulator("#docid-table", {
                 ajaxURL: "/api/docids",
-                height: "550px",
+                height: TABLE_HEIGHT,
                 layout: "fitColumns",
-                pagination: "local",
-                paginationSize: 50,
-                
+                pagination: true,
+                paginationMode: "local",
+                paginationSize: PAGE_SIZE,
+                placeholder: "No DocID records to display.",
+
                 ajaxResponse: function(url, params, response){
-                    // Map the response and populate dropdowns while we're at it
-                    const mappedData = response.map(row => ({
+                    // Guard the shape: an error body (or any non-array) would
+                    // otherwise throw inside Tabulator and leave a blank table
+                    // with no explanation, which reads as "no such mapping".
+                    if (!Array.isArray(response)) {
+                        showError((response && response.error) || "Could not load DocID data.");
+                        return [];
+                    }
+
+                    clearError();
+                    return response.map(row => ({
                         showName: row[0] || "N/A",
                         theatreName: row[1] || "N/A",
                         docName: row[2] || "N/A",
@@ -90,11 +124,18 @@
                         theatreId: row[4],
                         docId: row[5]
                     }));
-                    
-                    populateDropdowns(mappedData);
-                    return mappedData;
                 },
-                
+
+                // Dropdowns are rebuilt here rather than in ajaxResponse, which
+                // is a transform hook and should not touch the DOM.
+                dataLoaded: function(data){
+                    populateDropdowns(data);
+                },
+
+                dataLoadError: function(error){
+                    showError("Could not load DocID data — the service may be unable to reach SQL. Try Resync, and check the service logs if it persists.");
+                },
+
                 columns: [
                     { title: "Show Name", field: "showName", widthGrow: 2 },
                     { title: "Theatre Name", field: "theatreName", widthGrow: 2 },
@@ -133,26 +174,33 @@
             let searchTimeout;
             document.getElementById("searchInput").addEventListener("input", function() {
                 clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(updateFilters, 300);
+                searchTimeout = setTimeout(updateFilters, DEBOUNCE_MS);
             });
 
-            document.getElementById("showFilter").addEventListener("change", updateFilters);
-            document.getElementById("theatreFilter").addEventListener("change", updateFilters);
-            document.getElementById("docTypeFilter").addEventListener("change", updateFilters);
+            FILTERS.forEach(f => {
+                document.getElementById(f.id).addEventListener("change", updateFilters);
+            });
         });
 
         function populateDropdowns(data) {
-            const getUnique = (field) => [...new Set(data.map(item => item[field]))].sort();
-            
-            fillSelect("showFilter", getUnique("showName"));
-            fillSelect("theatreFilter", getUnique("theatreName"));
-            fillSelect("docTypeFilter", getUnique("docName"));
+            const getUnique = (field) => [...new Set(data.map(item => item[field]))]
+                .sort((a, b) => String(a).localeCompare(String(b)));
+
+            FILTERS.forEach(f => fillSelect(f.id, getUnique(f.field), f.label));
         }
 
-        function fillSelect(id, values) {
+        function fillSelect(id, values, label) {
             const select = document.getElementById(id);
-            // Clear existing except "All"
-            select.innerHTML = `<option value="">All ${id.replace('Filter', 's')}</option>`;
+            // Rebuilding drops the current selection while the applied filter
+            // survives in the setFilter closure, so preserve and restore it.
+            const previous = select.value;
+
+            select.innerHTML = "";
+            const allOption = document.createElement("option");
+            allOption.value = "";
+            allOption.textContent = label;
+            select.appendChild(allOption);
+
             values.forEach(val => {
                 if(val && val !== "N/A") {
                     const opt = document.createElement("option");
@@ -161,6 +209,13 @@
                     select.appendChild(opt);
                 }
             });
+
+            select.value = [...select.options].some(o => o.value === previous) ? previous : "";
+        }
+
+        function resetFilters() {
+            document.getElementById("searchInput").value = "";
+            FILTERS.forEach(f => { document.getElementById(f.id).value = ""; });
         }
 
         async function forceRefresh() {
@@ -173,19 +228,21 @@
 
             try {
                 const response = await fetch('/api/docids/refresh', { method: 'POST' });
+                const body = await response.json().catch(() => ({}));
+
                 if (response.ok) {
-                    // Reset all filters and reload
-                    document.getElementById('searchInput').value = "";
-                    document.getElementById('showFilter').value = "";
-                    document.getElementById('theatreFilter').value = "";
-                    document.getElementById('docTypeFilter').value = "";
+                    clearError();
+                    resetFilters();
                     table.clearFilter();
-                    table.setData();
+                    // Awaited: otherwise the spinner stops while the follow-up
+                    // GET is still in flight, and a second click makes
+                    // Tabulator block and drop one of the responses.
+                    await table.setData();
                 } else {
-                    alert("Failed to refresh database.");
+                    showError(body.message || "Failed to refresh the database.");
                 }
             } catch (err) {
-                alert("Network error occurred.");
+                showError("Network error — could not reach the DocID service.");
             } finally {
                 btn.disabled = false;
                 btn.classList.remove('opacity-50');
