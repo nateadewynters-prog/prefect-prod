@@ -143,6 +143,10 @@ class SharePointRuleLoader:
         items = self._fetch_items(list_id)
 
         rules = []
+        # Maps each rule_name we keep to the SharePoint item id that claimed it.
+        # Only active rows claim, so names are unique among active rules only.
+        seen_rule_names = {}
+
         for item in items:
             f = item.get("fields", {})
 
@@ -169,9 +173,49 @@ class SharePointRuleLoader:
                 p for p in (show_name, venue_name, report_type) if p
             ).upper().replace(" ", "_")
 
+            # Only active rows can clash or break a run: main.py skips inactive
+            # ones before it searches, so a parked row must not be skipped for a
+            # blank cell, nor claim a name a live row needs.
+            active = _to_bool(f.get("Active"))
+
+            # Two rows with the same name are indistinguishable downstream: main.py
+            # dedupes on (rule_name, message id), so the second row's email gets
+            # tagged a duplicate and its report is never collected. The name is
+            # uppercased, so rows differing only by letter case collide here too.
+            if active and rule_name in seen_rule_names:
+                logger.error(
+                    f"Skipping SharePoint rule '{rule_name}' (item id "
+                    f"{item.get('id')}): item id {seen_rule_names[rule_name]} "
+                    f"already uses this name."
+                )
+                continue
+
+            subject_keyword = (f.get("SubjectKeyword") or "").strip()
+
+            # main.py wraps this in a Graph $search query. A blank cell makes the
+            # query empty, which returns HTTP 400 and kills the whole fetch task -
+            # every other show's emails included, not just this rule's.
+            if active and not subject_keyword:
+                logger.error(
+                    f"Skipping SharePoint rule '{rule_name}' (item id "
+                    f"{item.get('id')}): SubjectKeyword is blank."
+                )
+                continue
+
+            sender_domain = (f.get("SenderDomain") or "").strip()
+
+            # main.py checks `sender_domain in actual_sender`, and "" is in every
+            # string - a blank cell would match any sender at all.
+            if active and not sender_domain:
+                logger.error(
+                    f"Skipping SharePoint rule '{rule_name}' (item id "
+                    f"{item.get('id')}): SenderDomain is blank."
+                )
+                continue
+
             match_criteria = {
-                "sender_domain": (f.get("SenderDomain") or "").strip(),
-                "subject_keyword": (f.get("SubjectKeyword") or "").strip(),
+                "sender_domain": sender_domain,
+                "subject_keyword": subject_keyword,
                 "attachment_type": (f.get("AttachmentType") or "").strip(),
             }
 
@@ -225,7 +269,7 @@ class SharePointRuleLoader:
             rules.append(
                 {
                     "rule_name": rule_name,
-                    "active": _to_bool(f.get("Active")),
+                    "active": active,
                     "match_criteria": match_criteria,
                     "metadata": metadata,
                     "processing": processing,
@@ -234,6 +278,10 @@ class SharePointRuleLoader:
                     "_sp_item_id": item.get("id"),
                 }
             )
+            # Claim the name only once the row is kept and live, so neither a
+            # skipped row nor a parked one blocks a later valid rule.
+            if active:
+                seen_rule_names[rule_name] = item.get("id")
 
         logger.info(
             f"Loaded {len(rules)} rule(s) from SharePoint list "

@@ -204,6 +204,106 @@ def test_row_with_missing_show_or_venue_is_skipped(loader):
     assert rules[0]["rule_name"] == "GOOD_SHOW_GOOD_VENUE"
 
 
+def test_duplicate_rule_name_is_skipped(loader):
+    """Two rows generating the same rule_name -> keep the first, skip the second."""
+    base = {
+        "VenueName": "Zurich", "SenderDomain": "x@y.com",
+        "SubjectKeyword": "Report", "AttachmentType": ".xlsx",
+        "ReportType": "Advance",
+        "ShowID": 1.0, "VenueID": "2", "DocumentID": 3.0, "Active": True,
+    }
+    # Only the letter case differs, but rule_name is uppercased, so these clash.
+    first = {**base, "Title": "Mamma Mia!"}
+    second = {**base, "Title": "mamma mia!"}
+
+    fake_logger = MagicMock()
+    with patch("src.config_loader.get_universal_logger", return_value=fake_logger):
+        rules = _run_load(loader, [_item(first, "1"), _item(second, "2")])
+
+    assert len(rules) == 1
+    assert rules[0]["_sp_item_id"] == "1"   # the row that got there first wins
+    assert fake_logger.error.called
+
+
+def test_inactive_row_does_not_block_an_active_row_with_the_same_name(loader):
+    """A parked row must not reserve a name: main.py never searches it anyway."""
+    base = {
+        "VenueName": "Zurich", "SenderDomain": "x@y.com",
+        "SubjectKeyword": "Report", "AttachmentType": ".xlsx",
+        "ReportType": "Advance",
+        "ShowID": 1.0, "VenueID": "2", "DocumentID": 3.0,
+        "Title": "Mamma Mia!",
+    }
+    # The old, deactivated row is returned first because it has the lower item id.
+    rules = _run_load(loader, [
+        _item({**base, "Active": False}, "10"),
+        _item({**base, "Active": True}, "42"),
+    ])
+
+    assert [r["_sp_item_id"] for r in rules] == ["10", "42"]
+
+
+# A missing column and a None value take the same path, because the loader reads
+# every field with (f.get(...) or "").strip().
+@pytest.mark.parametrize("blank_value", ["", "   ", None])
+def test_blank_subject_keyword_is_skipped(loader, blank_value):
+    """An empty Graph $search query 400s and would abort the whole fetch task."""
+    fields = {
+        "Title": "Show", "VenueName": "Venue",
+        "SenderDomain": "x@y.com", "AttachmentType": ".xlsx",
+        "ReportType": "Advance",
+        "ShowID": 1.0, "VenueID": "2", "DocumentID": 3.0, "Active": True,
+        "SubjectKeyword": blank_value,
+    }
+
+    fake_logger = MagicMock()
+    with patch("src.config_loader.get_universal_logger", return_value=fake_logger):
+        rules = _run_load(loader, [_item(fields, "7")])
+
+    assert rules == []
+    assert fake_logger.error.called
+    # The message must name the row so ops can find it in SharePoint.
+    assert "item id 7" in fake_logger.error.call_args[0][0]
+
+
+@pytest.mark.parametrize("blank_value", ["", "   ", None])
+def test_blank_sender_domain_is_skipped(loader, blank_value):
+    """A blank domain matches every sender, so the rule must not load at all."""
+    fields = {
+        "Title": "Show", "VenueName": "Venue",
+        "SubjectKeyword": "Report", "AttachmentType": ".xlsx",
+        "ReportType": "Advance",
+        "ShowID": 1.0, "VenueID": "2", "DocumentID": 3.0, "Active": True,
+        "SenderDomain": blank_value,
+    }
+
+    fake_logger = MagicMock()
+    with patch("src.config_loader.get_universal_logger", return_value=fake_logger):
+        rules = _run_load(loader, [_item(fields, "8")])
+
+    assert rules == []
+    assert fake_logger.error.called
+    # The message must name the row so ops can find it in SharePoint.
+    assert "item id 8" in fake_logger.error.call_args[0][0]
+
+
+def test_inactive_row_with_blank_fields_still_loads(loader):
+    """The blank-cell guards only protect a live run, so a parked row is left alone."""
+    fields = {
+        "Title": "Next Season Show", "VenueName": "Venue",
+        "AttachmentType": ".xlsx", "ReportType": "Advance",
+        "ShowID": 1.0, "VenueID": "2", "DocumentID": 3.0,
+        "Active": False,
+        # SubjectKeyword / SenderDomain not filled in yet
+    }
+    rules = _run_load(loader, [_item(fields)])
+
+    assert len(rules) == 1
+    assert rules[0]["active"] is False
+    # The blank cell is carried through untouched rather than rejected.
+    assert rules[0]["match_criteria"]["subject_keyword"] == ""
+
+
 def test_inactive_rule_still_loads_but_marked_inactive(loader):
     """Loader returns all rows; main.py is responsible for skipping inactive ones."""
     fields = {
