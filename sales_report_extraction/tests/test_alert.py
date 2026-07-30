@@ -1,4 +1,6 @@
 import logging
+import os
+import pytest
 from src.env_setup import setup_environment
 from src.notifications import send_teams_notification
 
@@ -6,6 +8,10 @@ from src.notifications import send_teams_notification
 logging.basicConfig(level=logging.DEBUG)
 mock_logger = logging.getLogger("TestAlert")
 
+@pytest.mark.skipif(
+    not os.getenv("RUN_LIVE_TESTS"),
+    reason="posts a real card to the Teams Dev channel; set RUN_LIVE_TESTS=1 to run",
+)
 def test_webhook():
     # 1. Load the .env file so it grabs your TEAMS_WEBHOOK_URL
     setup_environment()

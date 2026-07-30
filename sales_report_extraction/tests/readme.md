@@ -43,11 +43,15 @@ When writing tests, you must mock external dependencies to ensure isolation and 
 
 To ensure the tests run in the exact environment used by production, execute them inside the running container.
 
-> ⚠️ **WARNING — a bare `pytest tests/` fires live integration tests.** Three collected tests carry no pytest markers and use the production `.env` credentials: `test_alert.py` (posts a real card to the Teams Dev channel), `test_sales_reporting_sharepoint_connection.py` (authenticates against real Microsoft Graph) and `test_sharepoint_upload.py` (uploads a real dummy file to SharePoint). To stay fully offline, deselect them:
-> ```bash
-> pytest tests/ --ignore=tests/test_alert.py --ignore=tests/test_sales_reporting_sharepoint_connection.py --ignore=tests/test_sharepoint_upload.py
-> ```
-> The two live scripts that were never collected have moved to `tools/` — see `tools/readme.md`.
+Three tests touch live services with the production `.env` credentials: `test_alert.py` (posts a real card to the Teams Dev channel), `test_sales_reporting_sharepoint_connection.py` (authenticates against real Microsoft Graph) and `test_sharepoint_upload.py` (uploads a real dummy file to SharePoint).
+
+They are **skipped by default**, so a bare `pytest tests/` is offline and side-effect free. Opt in when you actually want them:
+
+```bash
+sudo docker exec -e RUN_LIVE_TESTS=1 -it prefect-sales-extraction pytest tests/
+```
+
+The two live scripts that `pytest` never collected have moved to `tools/` — see `tools/readme.md`.
 
 ### Run the full suite:
 ```bash

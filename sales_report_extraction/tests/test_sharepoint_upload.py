@@ -3,6 +3,10 @@ import pytest
 from src.env_setup import setup_environment
 from src.sharepoint_uploader import SharePointUploader
 
+@pytest.mark.skipif(
+    not os.getenv("RUN_LIVE_TESTS"),
+    reason="uploads a real file to SharePoint; set RUN_LIVE_TESTS=1 to run",
+)
 def test_live_sharepoint_upload():
     """LIVE INTEGRATION TEST: Verifies uploading a dummy file to SharePoint."""
     setup_environment()

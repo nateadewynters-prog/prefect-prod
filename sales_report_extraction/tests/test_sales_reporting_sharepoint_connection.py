@@ -4,6 +4,10 @@ import msal
 import pytest
 from src.env_setup import setup_environment
 
+@pytest.mark.skipif(
+    not os.getenv("RUN_LIVE_TESTS"),
+    reason="authenticates against real Microsoft Graph; set RUN_LIVE_TESTS=1 to run",
+)
 def test_live_sharepoint_connection():
     """
     LIVE INTEGRATION TEST: Verifies real connection to the Dewynters SharePoint site.
