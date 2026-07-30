@@ -195,7 +195,16 @@ except sqlite3.Error:
 
 
 def update_docid_cache() -> tuple[bool, str]:
-    """Fetch from SQL and cache the unique (ShowId, TheatreId, DocTypeId) rows."""
+    """Fetch every row from SQL and cache the distinct ones.
+
+    Rows are deduplicated on the FULL displayed tuple, not on the ID triple.
+    Keying on (ShowId, TheatreId, DocumentTypeId) alone silently dropped every
+    row that shared an ID triple but carried a different ShowName/TheatreName/
+    DocumentName — the common case for a documents-and-venues join — and the
+    survivor was whichever row SQL Server happened to return first, so the name
+    shown against a given ID triple could change between refreshes with no
+    change to the data. Users validate their ID choice by reading that name.
+    """
     write_last_attempt()
 
     missing = [name for name in REQUIRED_ENV_VARS if not os.getenv(name)]
@@ -220,9 +229,13 @@ def update_docid_cache() -> tuple[bool, str]:
             conn.timeout = SQL_QUERY_TIMEOUT_SECONDS
             cursor = conn.cursor()
             # The query remains the same to get all necessary display and ID columns
+            # Total ordering, not just ShowName: a sort on one non-unique
+            # column leaves ties in an order SQL Server does not guarantee, so
+            # the display order shifted between refreshes for no reason.
             cursor.execute(
                 "SELECT ShowName, TheatreName, DocumentName, ShowId, TheatreId, DocumentTypeId "
-                "FROM [dbo].[DocumentsAndVenues] ORDER BY ShowName"
+                "FROM [dbo].[DocumentsAndVenues] "
+                "ORDER BY ShowName, TheatreName, DocumentName, ShowId, TheatreId, DocumentTypeId"
             )
             rows = cursor.fetchall()
     except pyodbc.Error as e:
@@ -233,7 +246,9 @@ def update_docid_cache() -> tuple[bool, str]:
         return False, str(e)
 
     fresh_data = []
-    seen_combos = set()  # Track unique combinations of IDs
+    seen_rows = set()      # Track fully-distinct rows, IDs *and* names
+    seen_combos = set()    # ID triples only — counted for visibility, not used to drop
+    multi_name_triples = set()
     skipped = 0
 
     for r in rows:
@@ -252,20 +267,26 @@ def update_docid_cache() -> tuple[bool, str]:
             )
             continue
 
-        # Create a unique key for this record
-        combo = (show_id, theatre_id, doc_type_id)
+        record = [
+            r[0] if r[0] else "N/A",  # ShowName
+            r[1] if r[1] else "N/A",  # TheatreName
+            r[2] if r[2] else "N/A",  # DocumentName
+            show_id,
+            theatre_id,
+            doc_type_id,
+        ]
 
-        # Only add if we haven't seen this specific ID set yet
-        if combo not in seen_combos:
-            seen_combos.add(combo)
-            fresh_data.append([
-                r[0] if r[0] else "N/A",  # ShowName
-                r[1] if r[1] else "N/A",  # TheatreName
-                r[2] if r[2] else "N/A",  # DocumentName
-                show_id,
-                theatre_id,
-                doc_type_id,
-            ])
+        combo = (show_id, theatre_id, doc_type_id)
+        if combo in seen_combos:
+            multi_name_triples.add(combo)
+        seen_combos.add(combo)
+
+        # Drop only exact repeats — same IDs *and* same names, which carry no
+        # information. Anything that differs in any column is kept.
+        key = tuple(record)
+        if key not in seen_rows:
+            seen_rows.add(key)
+            fresh_data.append(record)
 
     # Refuse to publish an empty result. A successful query returning no rows
     # (permissions change, source mid-reload) would otherwise replace a good
@@ -276,10 +297,12 @@ def update_docid_cache() -> tuple[bool, str]:
         log.error("%s (%d row(s) read, %d skipped)", message, len(rows), skipped)
         return False, message
 
-    dropped = len(rows) - len(fresh_data) - skipped
     log.info(
-        "DocID cache updated: %d row(s) cached, %d duplicate(s) dropped, %d skipped",
-        len(fresh_data), dropped, skipped,
+        "DocID cache updated: %d row(s) cached from %d read "
+        "(%d exact duplicate(s) dropped, %d unparseable skipped); "
+        "%d distinct ID triple(s), %d of which appear under more than one name",
+        len(fresh_data), len(rows), len(rows) - len(fresh_data) - skipped, skipped,
+        len(seen_combos), len(multi_name_triples),
     )
     write_cache(fresh_data)
     return True, "Cache updated successfully."

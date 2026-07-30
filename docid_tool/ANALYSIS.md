@@ -13,9 +13,11 @@ Findings from five parallel reviews (correctness, data integrity, security, code
 
 ### Status (updated 30 July 2026, after the follow-up commit)
 
-**Fixed:** C1 · H2 (tests; the CI gate itself is still outstanding) · H3 · H4 · H5 · H6 · H7 items 1–2 · M2 · M3 · M4 · M5 · M6 · M7 · M8 · M9 · M15 · L1 · L2 · L3 · L4 · L6 · L7 · L8 · L9 · L10 · L13 (gunicorn pin) · L16 · L17
+**Fixed:** C1 · H1 · H2 (tests; the CI gate itself is still outstanding) · H3 · H4 · H5 · H6 · H7 items 1–2 · M2 · M3 · M4 · M5 · M6 · M7 · M8 · M9 · M15 · L1 · L2 · L3 · L4 · L6 · L7 · L8 · L9 · L10 · L13 (gunicorn pin) · L16 · L17
 
-**Still open — needs a decision from you:** C2 · H1 · H7 item 3 (the staleness envelope) · M1 · M10 · M13 · M14 · L5 · L11 · L12 · L14
+H1 was resolved by decision: the tool now shows every distinct source row. Deduplication is on the full displayed tuple, so only exact repeats — identical in all six columns — are dropped; anything differing in any name is kept. The ordering is now total, so display order is reproducible. Each refresh logs rows read vs cached, exact duplicates dropped, and how many ID triples appear under more than one name.
+
+**Still open — needs a decision from you:** C2 (blocked: the confirming `COUNT` against `TicketingDS` was not run — `docker exec` into the production container was denied) · H7 item 3 (the staleness envelope) · M1 · M10 · M13 · M14 · L5 · L11 · L12 · L14
 
 **Still open — outside `docid_tool/`, not actioned:** H8 (`.gitignore`, `docker-compose.yml`) · H2's CI gate (`.github/workflows/deploy.yml`) · M11 · M12
 

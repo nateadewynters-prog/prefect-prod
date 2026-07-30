@@ -68,21 +68,30 @@ def test_warm_cache_does_not_hit_sql_again(client, fake_sql, app_module):
 
 # --- 4. Dedupe --------------------------------------------------------------
 
-def test_identical_id_triples_collapse_to_one_row(client, fake_sql):
+def test_exact_duplicate_rows_collapse_to_one(client, fake_sql):
+    """Identical in every column, so the repeat carries no information."""
     fake_sql([ROW_A, ROW_A])
     assert len(client.get("/api/docids").get_json()) == 1
 
 
-def test_same_triple_different_names_keeps_only_the_first(client, fake_sql):
-    """Pins current behaviour. The dedupe key excludes the display names, so
-    the second row's DocumentName is dropped — see ANALYSIS.md H1, which is
-    pending a decision on whether that is the wanted behaviour."""
+def test_same_id_triple_under_different_names_keeps_both(client, fake_sql):
+    """Regression for ANALYSIS.md H1: keying the dedupe on the ID triple alone
+    silently dropped the second document variant, and which one survived was
+    not reproducible between refreshes."""
     variant = ("Hamilton", "Victoria Palace", "Rider", 1, 10, 100)
     fake_sql([ROW_A, variant])
 
     payload = client.get("/api/docids").get_json()
-    assert len(payload) == 1
-    assert payload[0][2] == "Contract"
+    assert len(payload) == 2
+    assert sorted(row[2] for row in payload) == ["Contract", "Rider"]
+
+
+def test_same_id_triple_under_different_theatre_names_keeps_both(client, fake_sql):
+    """A venue rebrand must not make one of the rows disappear."""
+    renamed = ("Hamilton", "Victoria Palace Theatre", "Contract", 1, 10, 100)
+    fake_sql([ROW_A, renamed])
+
+    assert len(client.get("/api/docids").get_json()) == 2
 
 
 def test_distinct_triples_are_all_kept(client, fake_sql):
