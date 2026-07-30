@@ -186,9 +186,24 @@ class SharePointRuleLoader:
                 )
                 continue
 
+            subject_keyword = (f.get("SubjectKeyword") or "").strip()
+
+            # main.py searches Graph with '"<subject_keyword>"'. A blank cell makes
+            # that an empty $search query, which Graph rejects with HTTP 400. The
+            # error is raised inside the fetch task, so it does not merely lose this
+            # rule - it aborts the entire run, and every other show's emails go
+            # unprocessed until someone fills the cell in.
+            if not subject_keyword:
+                logger.error(
+                    f"Skipping SharePoint rule '{rule_name}' (item id "
+                    f"{item.get('id')}): SubjectKeyword is blank, and an empty "
+                    f"email search would fail the whole run."
+                )
+                continue
+
             match_criteria = {
                 "sender_domain": (f.get("SenderDomain") or "").strip(),
-                "subject_keyword": (f.get("SubjectKeyword") or "").strip(),
+                "subject_keyword": subject_keyword,
                 "attachment_type": (f.get("AttachmentType") or "").strip(),
             }
 
