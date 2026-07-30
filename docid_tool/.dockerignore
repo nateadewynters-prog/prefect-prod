@@ -1,0 +1,15 @@
+# Never bake runtime state or secrets into the image.
+# *.db in particular: a developer running `python app.py` locally creates
+# docid_cache.db here, and COPY . . would otherwise ship their cache as
+# production reference data.
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+.git
+tests/
+requirements-dev.txt
+ANALYSIS.md

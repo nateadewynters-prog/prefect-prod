@@ -11,6 +11,16 @@ Findings from five parallel reviews (correctness, data integrity, security, code
 
 **Totals:** 2 critical · 8 high · 15 medium · 17 low = **42 findings**
 
+### Status (updated 30 July 2026, after the follow-up commit)
+
+**Fixed:** C1 · H2 (tests; the CI gate itself is still outstanding) · H3 · H4 · H5 · H6 · H7 items 1–2 · M2 · M3 · M4 · M5 · M6 · M7 · M8 · M9 · M15 · L1 · L2 · L3 · L4 · L6 · L7 · L8 · L9 · L10 · L13 (gunicorn pin) · L16 · L17
+
+**Still open — needs a decision from you:** C2 · H1 · H7 item 3 (the staleness envelope) · M1 · M10 · M13 · M14 · L5 · L11 · L12 · L14
+
+**Still open — outside `docid_tool/`, not actioned:** H8 (`.gitignore`, `docker-compose.yml`) · H2's CI gate (`.github/workflows/deploy.yml`) · M11 · M12
+
+`app.py` is pyflakes-clean. 31 tests pass; 26 of them fail against the pre-fix `app.py`, so the suite reproduces the outage.
+
 Fixes marked **[D]** need a decision from you before implementation; **[S]** are safe, mechanical changes. Fixes marked **[X]** require edits outside `docid_tool/` (`docker-compose.yml`, `.gitignore`, `.github/workflows/deploy.yml`) and are therefore out of the agreed scope — flagged for your call.
 
 ---
