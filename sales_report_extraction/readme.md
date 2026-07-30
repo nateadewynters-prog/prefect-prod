@@ -41,7 +41,7 @@ Routing rules (sender/subject matching, per-venue timezones, offset hours, and p
 ### 🏷️ Server-Side Idempotency (Graph API & Fingerprinting)
 This system uses a dual-layer approach to ensure no report is processed twice:
 1. **Category Filtering:** The fetch task filters for emails *without* `"sales_report_extracted"`, `"sales_report_failed"`, or `"sales_report_duplicate"` tags.
-2. **`internetMessageId` Deduplication:** The orchestrator tracks the unique `internetMessageId` (fingerprint) of every email in the `days_back` window. If a duplicate is detected, it is immediately tagged as `"sales_report_duplicate"` and skipped.
+2. **`internetMessageId` Deduplication:** The orchestrator tracks the unique `internetMessageId` (fingerprint) of every email in the `days_back` window, **per rule**. If the same rule sees the same email twice, it is immediately tagged as `"sales_report_duplicate"` and skipped — but two different rules can each still claim one email when it carries an attachment for each of them (see `FileNameKeyword`).
 3. **Tagging:** Once processed, the `"sales_report_extracted"` tag is applied.
 4. **Robustness:** Includes HTTP 409/412 retry logic to handle Exchange server concurrency conflicts during tagging operations.
 

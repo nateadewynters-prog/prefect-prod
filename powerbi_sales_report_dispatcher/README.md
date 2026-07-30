@@ -21,9 +21,10 @@ The **Power BI Sales Report Dispatcher** is an interactive automation tool desig
 ### Key Features
 
 - **Live Terminal (SSE):** Provides real-time, terminal-style feedback to the user as each step of the pipeline executes.
-- **Batch Processing:** Ability to run all configured reports in sequence with a single click.
+- **Global Lock:** Only one report can be dispatched at a time; requests for other shows are rejected while a dispatch is in progress.
+- **Dispatch History:** Run timings and PDF sizes are persisted to a SQLite state database (`locks`, `logs`, `dispatch_history` tables) and surfaced in the UI.
 - **Hybrid Data:** Combines the visual depth of Power BI exports with the raw precision of direct SQL metrics in the email body.
-- **Auth Integration:** Uses `msal` for secure, certificate-based authentication with Azure AD.
+- **Auth Integration:** Uses `msal` for secure, client-secret authentication with Azure AD.
 
 ---
 
@@ -46,11 +47,12 @@ The service requires the following environment variables to be mapped via the ce
 AZURE_TENANT_ID=your_tenant_id
 AZURE_CLIENT_ID=your_client_id
 AZURE_CLIENT_SECRET=your_client_secret
+BUSINESS_INTELLIGENCE_INBOX_ADDRESS=sender_mailbox_address
 
 # Database Access
 SQL_SERVER=your_server_address
-SQL_USERNAME=your_username
-SQL_PASSWORD=your_password
+SQL_USERNAME_BILOGIN=your_username
+SQL_PASSWORD_BILOGIN=your_password
 ```
 
 ### Show Configuration
@@ -70,6 +72,7 @@ The service is managed via the root `docker-compose.yml`.
 
 ### Volume Mounts
 - `/opt/prefect/prod/.env` -> `/app/.env:ro` (Read-only access to global secrets)
+- `./data` -> `/app/data` (Persists the SQLite state database; `DB_PATH=/app/data/dispatcher_state.db` is set in the compose `environment` block)
 
 ---
 
@@ -78,12 +81,12 @@ The service is managed via the root `docker-compose.yml`.
 ### Adding New Shows
 To add a new show to the dispatcher:
 1. Locate `SHOWS_CONFIG` in `app.py`.
-2. Add a new dictionary with the required `pbi_workspace_id`, `pbi_report_id`, and `pbi_dataset_id`.
+2. Add a new dictionary with the required `id`, `show_name`, `show_id`, `db_type` (`Legacy` or `TransactLive`), `pbi_workspace_id`, `pbi_report_id`, `pbi_dataset_id`, `dashboard_url` and `recipients`.
 3. Rebuild the container.
 
 ### Local Rebuild
 ```bash
-docker-compose up -d --build powerbi-sales-report-dispatcher
+docker compose up -d --build powerbi-sales-report-dispatcher
 ```
 
 ### Logs

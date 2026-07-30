@@ -21,8 +21,8 @@ This pipeline is strictly **pure API-to-Database**. There is no Docker volume ma
 
 ### 🎯 Granular Prefect Task Routing
 The logic is decomposed into distinct Prefect `@tasks` to ensure high resilience and efficient retries.
-- **Task-Level Retries:** If a transient API or SQL error occurs, Prefect retries **only that specific task** (e.g., `stage_data` has 3 retries), preventing full pipeline restarts.
-- **Isolated Failure:** A failure in `sync_settled_data` will not trigger a re-run of the expensive 90-day `sync_post_metrics` sweep.
+- **Task-Level Retries:** If a transient API or SQL error occurs, Prefect retries **only that specific task** (e.g., `stage_data` has 3 retries), preventing full pipeline restarts. Note that Insight payloads are staged from inside `poll_insight` via a direct `insert_raw_json` call, bypassing `stage_data` — a SQL failure there is not retried in isolation and instead bubbles up to the parent task's 2 retries.
+- **Isolated Failure:** A failure in `sync_settled_data` will not trigger a re-run of the expensive `sync_post_metrics` sweep.
 - **Concurrency Control:** Configured with `limit=1` to prevent overlapping runs and API rate-limit collisions.
 
 ---
@@ -32,7 +32,7 @@ The logic is decomposed into distinct Prefect `@tasks` to ensure high resilience
 ### 🔄 Data Journey
 1.  **Trigger**: Prefect Cron initiates the flow at **8:30 AM** daily.
 2.  **Discovery**: `sync_channels` fetches active channel UUIDs.
-3.  **Metadata Acquisition**: `sync_post_metrics` performs a 90-day sweep of `/publish/items` to capture evolving engagement metrics.
+3.  **Metadata Acquisition**: `sync_post_metrics` sweeps **T-82 → T-2** in 10-day windows against `/publish/items` to capture evolving engagement metrics. (The Prefect task is still named "90-Day Sweep" for historical reasons.)
 4.  **Async Polling**: The `BrandwatchClient` initiates asynchronous Insight requests and polls until `READY`.
 5.  **Streaming Ingestion**: Large CSV payloads are parsed as a line-generator and inserted in batches of **500 rows**.
 6.  **Landing**: All data is committed to the unified staging table `dbo.stg_bw_raw_json`.
@@ -42,7 +42,7 @@ The logic is decomposed into distinct Prefect `@tasks` to ensure high resilience
 graph TD
     A[Prefect Cron 08:30] --> B{main.py Flow}
     B --> C[task: sync_channels]
-    C --> D[task: sync_post_metrics 90-Day]
+    C --> D[task: sync_post_metrics T-82 to T-2]
     D --> E[task: sync_settled_data T-2]
     E --> F[API Async Job Polling]
     F --> G[CSV Streaming / JSON Batching]
@@ -65,12 +65,19 @@ Integrated with **Microsoft Teams** via Adaptive Cards. The system features proa
 
 ## 5. Operations
 
+### 🔑 Environment Variables
+All config is read from the centralised `/opt/prefect/prod/.env`, mounted read-only into the container.
+- `BRANDWATCH_API_KEY*` — any number of prefix-matched keys, rotated round-robin on every request.
+- `SQL_SERVER`, `SQL_ORGANICSOCIAL_DATABASE`
+- `SQL_USERNAME_INSIGHTLOGIN`, `SQL_PASSWORD_INSIGHTLOGIN` — ⚠️ this pipeline uses the **INSIGHTLOGIN** credentials, **not** the `*_BILOGIN` pair used by the sales/ticketing components.
+- `TEAMS_WEBHOOK_OPS`, `TEAMS_WEBHOOK_DEV`, `PREFECT_UI_URL`
+
 ### Build & Deploy
 ```bash
-docker-compose up -d --build brandwatch-extraction
+docker compose up -d --build brandwatch-extraction
 ```
 
 ### Monitoring Logs
 ```bash
-docker-compose logs -f brandwatch-extraction
+docker compose logs -f brandwatch-extraction
 ```

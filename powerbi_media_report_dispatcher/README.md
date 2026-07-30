@@ -51,10 +51,11 @@ The behaviour is unchanged — same routes, same JSON, same SSE format.
 `SHOWS_CONFIG` in `config.py` — one entry per show. To add a show, copy an entry
 and change `code`, `show_name`, `gbq_name`, the Power BI IDs, and `recipients`.
 
-**The Devil Wears Prada is left unconfigured on purpose** — its uploaded script
-still had `xxxx` placeholder IDs. Its card shows "Not configured yet" and the
-Dispatch button is disabled until you fill in `workspace_id`, `report_id` and
-`dashboard_url`.
+**The Devil Wears Prada is now configured** — it has real `workspace_id`,
+`report_id` and `dashboard_url` values; only its `recipients` list is still
+narrowed to `a.cameron@dewynters.com`. Any show left with empty Power BI IDs
+shows "Not configured yet" on its card and its Dispatch button stays disabled
+until you fill in `workspace_id` and `report_id`.
 
 ## Ports
 
@@ -106,10 +107,12 @@ Then: `docker compose up -d --build powerbi-media-report-dispatcher`
 2. **Azure secrets come from the shared `.env`** (`/opt/prefect/prod/.env`),
    mounted read-only, exactly like the sales dispatcher.
 
-3. **ROAS is shown as `3.42x`, not `£3.42`.** The per-show scripts printed
-   `£{roas}`, which was a copy/paste leftover from the spend/revenue lines —
-   ROAS is a ratio. If recipients are used to seeing the `£`, revert the two
-   ROAS lines in `build_email_html` / `/metrics`.
+3. **ROAS is shown as `£3.42`, not `3.42x`.** `build_email_html` and `/metrics`
+   both print `£{roas}`, kept from the per-show scripts to match what recipients
+   are used to seeing — even though ROAS is a ratio, not an amount. The live SSE
+   log in `pipeline.py` is the one place it reads `3.42x`. If you want the `x`
+   form everywhere, change the two ROAS lines in `build_email_html` / `/metrics`
+   (and the History modal in `dispatcher.html`).
 
 4. **Global lock, one at a time.** Power BI limits concurrent exports, so the
    tool refuses to start a second dispatch while one is running (same as sales).
@@ -120,7 +123,9 @@ Then: `docker compose up -d --build powerbi-media-report-dispatcher`
    history"), and the shared `locks`/`logs` tables would make the two tools
    block each other. Keep the two `DB_PATH` values distinct.
 
-6. **DWP will stay disabled** until you add its Power BI IDs.
+6. **DWP emails one person.** Its Power BI IDs are filled in, but unlike the
+   other shows its `recipients` list doesn't include `BASE_RECIPIENTS` — widen it
+   in `config.py` when it should go to the full list.
 
 ## Running locally (without Docker)
 

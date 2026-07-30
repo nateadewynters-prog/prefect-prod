@@ -2,9 +2,9 @@
 
 **Host:** `dew-insights01`  
 **OS:** Linux/Ubuntu  
-**Python Version:** `3.13.5` (`/usr/bin/python3`)  
-**Service Manager:** Docker Compose  
-**Virtual Environment:** `/opt/prefect/prod/venv`  
+**Python Version (host):** `3.12.3` (`/usr/bin/python3`) — containers pin their own: `3.13` (Prefect ETL flows), `3.11-slim-bookworm` (Flask tools)  
+**Service Manager:** Docker Compose (v2, `docker compose`)  
+**Virtual Environment:** None on the host — all Python executes inside containers  
 
 ---
 
@@ -28,7 +28,7 @@ This server hosts automated data pipelines orchestrated by **Prefect 3.0**. The 
 /opt/prefect/prod/code/
 ├── readme.md                     <-- Master System Documentation (This File)
 ├── docker-compose.yml            <-- Orchestration configuration
-├── .env                          <-- Centralized Secrets & API Keys
+├── data/                         <-- Live SQLite dispatcher state (git-ignored)
 ├── homepage/
 │   ├── Dockerfile                <-- Nginx Build Context
 │   └── index.html                <-- Service Routing Hub
@@ -39,6 +39,14 @@ This server hosts automated data pipelines orchestrated by **Prefect 3.0**. The 
 ├── powerbi_sales_report_dispatcher/
 │   ├── Dockerfile                <-- Flask + MSAL Build Context
 │   ├── app.py                    <-- PBI/Graph Dispatch Logic
+│   └── templates/                # 🎨 Frontend (SSE Terminal)
+├── powerbi_media_report_dispatcher/
+│   ├── Dockerfile                <-- Flask + MSAL + BigQuery Build Context
+│   ├── app.py                    <-- Media Report Dispatch Logic
+│   └── templates/                # 🎨 Frontend (SSE Terminal)
+├── powerbi_refresher/
+│   ├── Dockerfile                <-- Flask + MSAL Build Context
+│   ├── app.py                    <-- On-Demand Dataset Refresh Logic
 │   └── templates/                # 🎨 Frontend (SSE Terminal)
 ├── sales_report_extraction/           
 │   ├── readme.md                 <-- Email Extraction Project Documentation
@@ -74,7 +82,9 @@ All flows and UI tools run continuously using **Docker Compose**.
 |--------------------------------|------------|---------------------------------|-----------------------------------|
 | `homepage`                     | `80`       | `/homepage`                     | Lightweight Service Hub (Nginx)   |
 | `docid-tool`                   | `8003`     | `/docid_tool`                   | SQL DocID Reference (Flask)       |
-| `powerbi-dispatcher`           | `8002`     | `/powerbi_sales_report_dispatcher` | PBI Refresher & Emailer (Flask)  |
+| `powerbi-sales-report-dispatcher` | `8002`  | `/powerbi_sales_report_dispatcher` | PBI Refresher & Emailer (Flask)  |
+| `powerbi-refresher`            | `8004`     | `/powerbi_refresher`            | On-Demand PBI Dataset Refresh (Flask) |
+| `powerbi-media-report-dispatcher` | `8005`  | `/powerbi_media_report_dispatcher` | Media Report Emailer (Flask)     |
 | `prefect-server`               | `4200`     | `/`                             | Prefect 3.0 Orchestration Brain   |
 | `portainer`                    | `9000`     | `n/a`                           | Container Management GUI          |
 | `sales-report-extraction`      | `n/a`      | `/sales_report_extraction`      | Background Email ETL (Prefect)    |
@@ -90,12 +100,12 @@ Rebuild and restart services after updating scripts, `.env`, or configurations:
 
 ```bash
 # Restart a specific service
-docker-compose up -d --build powerbi-sales-report-dispatcher
-docker-compose up -d --build docid-tool
-docker-compose up -d --build homepage
+docker compose up -d --build powerbi-sales-report-dispatcher
+docker compose up -d --build docid-tool
+docker compose up -d --build homepage
 
 # Restart all services
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ### Dashboard Access
@@ -113,6 +123,9 @@ docker-compose up -d --build
 
 📊 **Power BI Dispatcher**  
 `.../powerbi_sales_report_dispatcher/README.md`
+
+📈 **Power BI Media Report Dispatcher**  
+`.../powerbi_media_report_dispatcher/README.md`
 
 🏠 **Service Homepage**  
 `.../homepage/README.md`
@@ -133,9 +146,9 @@ docker-compose up -d --build
 
 **Execution Logic:**
 1. The runner navigates to `/opt/prefect/prod/code/`.
-2. It executes `git fetch` and `git reset --hard origin main` to ensure the local filesystem perfectly matches the repository.
+2. It executes `git fetch --all`, `git clean -fd` and `git reset --hard origin/main` to ensure the local filesystem perfectly matches the repository.
 3. It runs `docker compose up -d --build --remove-orphans` to rebuild only the modified services.
-4. It executes `docker image prune -f` to maintain disk health on the 4GB RAM VM.
+4. It executes `docker image prune -f` to maintain disk health on the 8GB RAM VM.
 
 ---
 

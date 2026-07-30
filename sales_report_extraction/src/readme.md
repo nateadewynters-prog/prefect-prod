@@ -14,17 +14,17 @@ This directory contains the application logic, decoupled from the orchestration 
 ## 2. Component Layout
 
 ### 📡 API & External Clients
-- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading, and **category tagging** for state management. Features `tag_email` and `untag_email` methods with HTTP 409/412 retry logic to handle Exchange server conflicts. Now includes `internetMessageId` extraction for fingerprint-based deduplication.
+- **`graph_client.py`**: Specialized client for Microsoft Graph API. Handles OIDC/MSAL authentication, **subject-only keyword searching**, attachment downloading (optionally picking one of several attachments via `filename_keyword`), and **category tagging** for state management. Features `tag_email` and `untag_email` methods with HTTP 409/412 retry logic to handle Exchange server conflicts. Now includes `internetMessageId` extraction for fingerprint-based deduplication.
 - **`link_extractor.py`**: Extracts and downloads files from HTML links within email bodies, used primarily for Ticketmaster-based reports where attachments are hosted externally.
 - **`sftp_client.py`**: A `paramiko`-based client for delivering processed CSVs or raw passthrough files. It logs file size (KB) and utilizes centralized environment variables. Notifications have been removed; exceptions now bubble up to the orchestrator.
 - **`sharepoint_uploader.py`**: Handles file uploads to the Medallion SharePoint site. Notifications have been removed; exceptions bubble up to the orchestrator.
-- **`config_loader.py`**: The `SharePointRuleLoader` class. Fetches every routing rule fresh from a SharePoint List via the Graph API at the start of each flow run, reshaping list items into the rule dicts the pipeline expects.
+- **`config_loader.py`**: The `SharePointRuleLoader` class. Fetches every routing rule fresh from a SharePoint List via the Graph API at the start of each flow run, reshaping list items into the rule dicts the pipeline expects. Also provides `update_last_run`, which stamps the `LastRun` column on a rule's row after a successful extraction (best-effort — failures are logged, not raised).
 
 ### 🧠 Core Engine
 - **`file_processor.py`**: The `ProcessingEngine` class. Manages the full file lifecycle:
     - **Deterministic Report Dating:** Converts UTC to local venue time via `pytz` and standardizes dates, incorporating **Sales Day Offset** logic for late-night reports.
     - **Medallion I/O:** Standardizes filenames and moves files across zones (`inbox` -> `archive`/`processed`/`failed`).
-    - **Dynamic Parser Invocation:** Uses `importlib` to route files to specialized parsers.
+    - **Dynamic Parser Invocation:** Uses `importlib` to route files to specialized parsers. The processed file's format follows the parser's optional `OUTPUT_EXT` constant (e.g. `.xlsx`), defaulting to `.csv`.
     - **Passthrough Logic:** Routes raw attachments directly for rules where the SharePoint List's `ParserModule`/`ParserFunction` columns are left blank.
     - **Failure Handling:** Moves problematic files to the `failed/` zone. Notifications have been removed; exceptions bubble up.
 - **`naming.py`**: Centralized logic for generating standardized, deterministic filenames based on show/venue metadata and reporting dates.
@@ -32,7 +32,7 @@ This directory contains the application logic, decoupled from the orchestration 
 
 ### 🧱 Shared Models & Utilities
 - **`models.py`**: Unified Data Contracts (e.g., `ValidationResult`).
-- **`database.py`**: Shared logic for internal databases.
+- **`database.py`**: SQL Server connection helper (`pyodbc`, `SQL_*` env vars). ⚠️ **Currently unused** — no module in this component imports it.
 - **`error_db_client.py`**: Specialized client for logging mapping and lookup failures to the central `dataops_tracking.db` for later review.
 - **`env_setup.py`**: Centralized environment variable loader. Includes **`get_universal_logger`** with an automatic fallback to standard Python logging for local testing.
 - **`notifications.py`**: Microsoft Teams Adaptive Card logic for alerting. Features **Dual-Channel Routing** (Ops vs. Dev) via `TEAMS_WEBHOOK_OPS` and `TEAMS_WEBHOOK_DEV` environment variables. Includes a `disable_notifications` toggle for silent runs.

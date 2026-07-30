@@ -19,6 +19,7 @@ The following parsers are currently implemented and active:
 - **`malvern_theatre_contractual_report_pdf_parser.py`**: Extracts contractual data from Malvern Theatre PDF reports.
 - **`nederlandaer_devil_wears_prada_cumulative_extraction_pdf.py`**: Specialized cumulative extractor for "The Devil Wears Prada" reports from Nederlandaer.
 - **`taiwan_jesus_christ_superstar_xlsx_parser.py`**: Specialized bilingual (English/Mandarin) parser for Taiwan's Jesus Christ Superstar XLSX reports, validated against the 合計 grand-total row.
+- **`the_bodyguard_bulgaria_parser.py`**: Parser for The Bodyguard (Bulgaria) `play_details` exports, which arrive as `.xls` but are really HTML tables (read via `read_html`). Declares `OUTPUT_EXT = ".xlsx"`.
 - **`ticketek_event_settlement_excel_parser.py`**: Robust Excel parser for Ticketek settlement reports, supporting complex lookups.
 
 ---
@@ -32,6 +33,8 @@ return extracted_rows, validation_result
 
 - `extracted_rows`: A List of Dictionaries or a Pandas DataFrame.
 - `validation_result`: A `ValidationResult` object (defined in `src.models`).
+
+A parser module may also declare an optional module-level `OUTPUT_EXT` constant (e.g. `".xlsx"`) when the contractor needs a specific processed-file format. Parsers that omit it still get a `.csv`.
 
 ### Contract Status Levels
 - `PASSED`: Data is verified and ready for delivery.

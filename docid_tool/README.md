@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-The **DocID Tool** is a high-performance reference table used by the data operations team to quickly look up `ShowId`, `TheatreId`, and `DocumentTypeId` mappings from the SQL Server `TicketingDS` database. 
+The **DocID Tool** is a high-performance reference table used by the data operations team to quickly look up `ShowId`, `TheatreId`, and `DocumentTypeId` mappings from the `[dbo].[DocumentsAndVenues]` table in the SQL Server `TicketingDS` database. 
 
 It replaces slow, manual SQL queries with a lightning-fast, searchable web interface that utilizes **Server-Side Caching** and **Virtual DOM rendering**.
 
@@ -18,13 +18,13 @@ It replaces slow, manual SQL queries with a lightning-fast, searchable web inter
 - **30-Minute Memory Cache:** Data is fetched from SQL once every 30 minutes and stored in memory to ensure sub-millisecond response times.
 - **Ultra-Fast Search:** Uses Tabulator's virtual DOM to filter through thousands of records instantly without page reloads.
 - **Manual Resync:** Includes a "Resync" button to force an immediate refresh of the SQL data cache.
-- **Debounced Input:** Search queries are debounced (500ms) to prevent UI lag during intensive filtering.
+- **Debounced Input:** Search queries are debounced (300ms) to prevent UI lag during intensive filtering.
 
 ---
 
 ## 2. Technical Stack
 
-- **Backend:** Python 3.11, Flask
+- **Backend:** Python 3.11, Flask (served by Gunicorn, 4 workers — the cache is per-worker)
 - **Database:** `pyodbc` (Microsoft ODBC Driver 18)
 - **Frontend:** Tailwind CSS, Tabulator.js (Semantic UI Theme)
 - **Deployment:** Docker (Debian Bookworm Slim)
@@ -37,8 +37,8 @@ The service requires the following environment variables to be mapped via the ce
 
 ```env
 SQL_SERVER=your_server_address
-SQL_USERNAME=your_username
-SQL_PASSWORD=your_password
+SQL_USERNAME_BILOGIN=your_username
+SQL_PASSWORD_BILOGIN=your_password
 ```
 
 ---
@@ -65,7 +65,7 @@ The caching logic is located in `app.py` under the `DOCID_CACHE` dictionary and 
 
 ### Local Rebuild
 ```bash
-docker-compose up -d --build docid-tool
+docker compose up -d --build docid-tool
 ```
 
 ### Logs
