@@ -201,8 +201,23 @@ class SharePointRuleLoader:
                 )
                 continue
 
+            sender_domain = (f.get("SenderDomain") or "").strip()
+
+            # main.py checks the sender with `sender_domain in actual_sender`, and
+            # an empty string is "in" every string. A blank cell would therefore
+            # match any sender at all, so anyone who happened to send an email
+            # matching the subject keyword could get their attachment parsed and
+            # pushed to the contractor's SFTP drop.
+            if not sender_domain:
+                logger.error(
+                    f"Skipping SharePoint rule '{rule_name}' (item id "
+                    f"{item.get('id')}): SenderDomain is blank, which would "
+                    f"accept an email from any sender."
+                )
+                continue
+
             match_criteria = {
-                "sender_domain": (f.get("SenderDomain") or "").strip(),
+                "sender_domain": sender_domain,
                 "subject_keyword": subject_keyword,
                 "attachment_type": (f.get("AttachmentType") or "").strip(),
             }

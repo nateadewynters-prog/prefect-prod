@@ -248,6 +248,27 @@ def test_blank_subject_keyword_is_skipped(loader, blank_value):
     assert "7" in str(fake_logger.error.call_args)
 
 
+@pytest.mark.parametrize("blank_value", ["", "   ", None])
+def test_blank_sender_domain_is_skipped(loader, blank_value):
+    """A blank domain matches every sender, so the rule must not load at all."""
+    fields = {
+        "Title": "Show", "VenueName": "Venue",
+        "SubjectKeyword": "Report", "AttachmentType": ".xlsx",
+        "ReportType": "Advance",
+        "ShowID": 1.0, "VenueID": "2", "DocumentID": 3.0, "Active": True,
+        "SenderDomain": blank_value,
+    }
+
+    fake_logger = MagicMock()
+    with patch("src.config_loader.get_universal_logger", return_value=fake_logger):
+        rules = _run_load(loader, [_item(fields, "8")])
+
+    assert rules == []
+    assert fake_logger.error.called
+    # The message must name the row so ops can find it in SharePoint.
+    assert "8" in str(fake_logger.error.call_args)
+
+
 def test_inactive_rule_still_loads_but_marked_inactive(loader):
     """Loader returns all rows; main.py is responsible for skipping inactive ones."""
     fields = {
