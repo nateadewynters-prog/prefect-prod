@@ -16,8 +16,8 @@ This directory provides the storage layer for the pipeline. It follows the **Med
 ### 📥 1. Inbox (Landing Zone)
 Temporary landing zone for raw attachments downloaded from the Graph API. Files are standardized using **deterministic timezone logic** (converting UTC to local venue time and incorporating **Sales Day Offset** for late-night reports) before processing.
 
-### ✅ 2. Processed (Curated CSVs & Raw Passthrough)
-The final extraction output. All files in this directory are subsequently uploaded to the Sales Database via **SFTP delivery**.
+### ✅ 2. Processed (Curated Parser Output)
+The final extraction output for **parser** rules only, written in the format the parser asks for (`.csv`, or whatever its `OUTPUT_EXT` declares). Files here are uploaded to the SharePoint `Processed` folder and delivered to the Sales Database via **SFTP delivery**. Passthrough rules never write here — their unmodified attachment goes to `archive/` and is delivered from there.
 
 ### 📦 3. Archive (Historical Raw)
 Raw files are moved here after successful extraction for long-term retention. Passthrough rules also land their unmodified attachment here — for those rules, this is the copy delivered to SFTP. 

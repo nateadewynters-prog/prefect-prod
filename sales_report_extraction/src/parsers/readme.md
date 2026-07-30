@@ -15,11 +15,13 @@ This directory contains specialized extraction modules. The orchestrator dynamic
 
 The following parsers are currently implemented and active:
 
+- **`chicago_tour_lugano_parser.py`**: Parser for Chicago Tour 2025 (LAC — Sala Teatro, Lugano) XLSX reports in Italian locale, terminated by a `Totale` row. Locates the header row by name and reads every column through a name-to-index map, so the table can move down the sheet or have its columns reordered without breaking. Maps `Tickets Sold` from Paid Tickets rather than Total Tickets, because the source defines Total as Paid + Comps and comps are emitted separately.
 - **`gmg_hk_jesus_christ_superstar_xlsx_parser.py`**: Specialized parser for GMG Hong Kong reports (XLSX inside ZIP).
 - **`malvern_theatre_contractual_report_pdf_parser.py`**: Extracts contractual data from Malvern Theatre PDF reports.
 - **`nederlandaer_devil_wears_prada_cumulative_extraction_pdf.py`**: Specialized cumulative extractor for "The Devil Wears Prada" reports from Nederlandaer.
 - **`taiwan_jesus_christ_superstar_xlsx_parser.py`**: Specialized bilingual (English/Mandarin) parser for Taiwan's Jesus Christ Superstar XLSX reports, validated against the 合計 grand-total row.
 - **`the_bodyguard_bulgaria_parser.py`**: Parser for The Bodyguard (Bulgaria) `play_details` exports, which arrive as `.xls` but are really HTML tables (read via `read_html`). Declares `OUTPUT_EXT = ".xlsx"`.
+- **`the_bodyguard_tour_bulgaria_sofia.py`**: Parser for The Bodyguard 2025 (Sofia) reports. Also an HTML table saved with an `.xls` extension, but parsed directly with BeautifulSoup (`html.parser`, matching `link_extractor.py`) because `openpyxl` and `xlrd` both reject the file. Flattens the two-tier header into combined names (`Sales tickets`, `Reservations Price`, …) and reads every value by name; totals are marked `Σύνολα`.
 - **`ticketek_event_settlement_excel_parser.py`**: Robust Excel parser for Ticketek settlement reports, supporting complex lookups.
 
 ---

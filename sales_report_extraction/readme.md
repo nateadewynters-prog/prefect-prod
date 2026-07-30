@@ -24,6 +24,8 @@ The system is **Stateless Locally**: It tracks processed state directly on the E
 ├── architecture_flow.md      # 🗺️ DOCUMENTATION: High-level system diagram
 ├── config/                   # ⚙️ CONFIG: Global settings & paths (rules live in SharePoint)
 ├── data/                     # 💾 STORAGE: Medallion data (Inbox, Processed, Archive)
+├── tests/                    # 🧪 QA: Mocked unit tests (live ones opt-in only)
+├── tools/                    # 🔧 DIAGNOSTICS: Manual scripts, run by hand
 └── src/                      # 🛠️ APPLICATION: Core logic
     ├── graph_client.py       # MS Graph API (Searching, Downloading, Tagging)
     ├── file_processor.py     # Processing Engine (Timezone logic, Medallion flow)
@@ -37,6 +39,8 @@ The system is **Stateless Locally**: It tracks processed state directly on the E
 
 ### 🗂️ Dynamic Rule Configuration (SharePoint-Driven)
 Routing rules (sender/subject matching, per-venue timezones, offset hours, and parser assignment) are no longer static JSON — `SharePointRuleLoader` (`src/config_loader.py`) loads them fresh from a SharePoint List at the start of every flow run, controlled by the `SHAREPOINT_RULES_LIST_NAME` env var. `config/show_reporting_rules.json` now holds only `global_settings` (base directory and Medallion folder paths).
+
+Because ops staff edit the list directly, the loader validates each row and skips the ones it cannot safely run — a blank `SubjectKeyword` or `SenderDomain`, or a `rule_name` duplicating another active row. `config/readme.md` has the full table of which columns are required and what happens when one is left blank.
 
 ### 🏷️ Server-Side Idempotency (Graph API & Fingerprinting)
 This system uses a dual-layer approach to ensure no report is processed twice:
@@ -88,6 +92,12 @@ Processed files are delivered to the Sales Database via a dedicated SFTP client:
 To run the tests inside the production container:
 ```bash
 sudo docker exec -it prefect-sales-extraction pytest tests/
+# 40 passed, 3 skipped
 ```
 
-For more details on writing and mocking tests, see `tests/readme.md`.
+The three skipped tests write to live services (Teams, SharePoint, Graph). They are opt-in, so the default run is offline and side-effect free:
+```bash
+sudo docker exec -e RUN_LIVE_TESTS=1 -it prefect-sales-extraction pytest tests/
+```
+
+For more details on writing and mocking tests, see `tests/readme.md`. Manual diagnostic scripts live in `tools/` — one of them can silently strand a sales report, so read `tools/readme.md` before running it.
