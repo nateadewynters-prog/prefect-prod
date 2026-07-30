@@ -24,7 +24,7 @@ def get_gbq_metrics(gbq_name: str) -> dict:
         FROM `{GBQ_TABLE}`
         WHERE MAD_Show_Name = @show
           AND MAD_Media_Source IN ('Meta', 'Google Ads', 'Programmatic Spend',
-                                    'Programmatic', 'TikTok')
+                                    'Programmatic', 'TikTok', 'Pinterest')
           AND Date >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY)), INTERVAL 1 WEEK)
           AND Date <= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY)), INTERVAL 1 DAY)
         GROUP BY MAD_Media_Source
