@@ -7,13 +7,15 @@
 
 ## 1. Overview
 
-This suite verifies client authentication, file processing logic, server-side tagging, and **dynamic backfill parameters**. Most tests use extensive mocking and touch nothing external — but a handful are **live integration tests**, see the warning in section 4 before running the suite.
+This suite verifies client authentication, file processing logic, server-side tagging, and **dynamic backfill parameters**. Every collected test is fully mocked and touches nothing external; the three **live integration tests** are skipped unless you opt in, see section 4.
+
+A clean run is **40 passed, 3 skipped**.
 
 ---
 
 ## 2. Key Test Areas
 
-- **Rule Configuration:** `test_config_loader.py` verifies `SharePointRuleLoader`'s rule-name generation, parser-vs-passthrough classification, half-configured rule skipping, inactive-rule handling, ID coercion, pagination, and list-not-found errors, fully mocked against `requests.get`.
+- **Rule Configuration:** `test_config_loader.py` verifies `SharePointRuleLoader`'s rule-name generation, parser-vs-passthrough classification, half-configured rule skipping, inactive-rule handling, ID coercion, pagination, and list-not-found errors, fully mocked against `requests.get`. It also covers the row-validation guards: duplicate `rule_name` (including a case-only clash), blank `SubjectKeyword` and blank `SenderDomain`, plus the two cases that prove those guards apply to active rows only — a parked row must not reserve a name a live row needs, and a half-filled parked row must still load.
 - **Graph API Tagging:** covered by `test_graph_client.py` (mocked). The live tagging script that used to sit here has moved to `tools/tag_emails_manually.py` — it asserts nothing and `pytest` never collected it. See `tools/readme.md`; it can silently lose a sales report.
 - **File Processing:** `test_file_processor.py` tests directory setup and deterministic filename generation, including timezone and Sales Day Offset logic.
 - **Dynamic Orchestration:** `test_main.py` validates that routing pulls its rules from the SharePoint loader (not the JSON config) and that already-categorized emails are skipped during fetch.
@@ -56,7 +58,10 @@ The two live scripts that `pytest` never collected have moved to `tools/` — se
 ### Run the full suite:
 ```bash
 sudo docker exec -it prefect-sales-extraction pytest tests/
+# 40 passed, 3 skipped
 ```
+
+> **Note:** `tests/` is not bind-mounted into the container — only `config/` and `data/` are, and the rest of the tree is baked in by `COPY . .`. `docker exec` therefore runs the tests **as of the last image build**. To exercise uncommitted test changes, either rebuild or run them on the host.
 
 ### Run a specific test file:
 ```bash

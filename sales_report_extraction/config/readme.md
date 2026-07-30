@@ -15,23 +15,38 @@ This directory contains the central configuration layer. All email routing, meda
 
 Each row in the SharePoint List controls one unique data flow. Rows are pulled live via Microsoft Graph and reshaped into the same nested rule dict (`match_criteria` / `metadata` / `processing`) the rest of the pipeline already understands.
 
-The list's display name is read from the `SHAREPOINT_RULES_LIST_NAME` environment variable (defaults to `Sales Reporting - Master List - Automation - Python`). Each rule is auto-named as `{Show Name}_{VenueName}_{ReportType}`, uppercased with spaces replaced by underscores and empty parts dropped (e.g. `JESUS_CHRIST_SUPERSTAR_MANILA_ADVANCE`) — this `rule_name` is the value used for the flow's `target_rule_name` parameter. Including the report type lets one show and venue carry more than one rule (e.g. an Advance and a Cumulative report) without the names colliding. Rows missing a show name (`Title`) or `VenueName` are skipped with a warning, and inactive rows (`Active` unticked or blank) are still loaded but skipped by the pipeline. After each successful extraction the pipeline stamps that row's `LastRun` column with the UK time of the run. The live matrix of active shows and venues is managed directly in the SharePoint List, not duplicated here.
+The list's display name is read from the `SHAREPOINT_RULES_LIST_NAME` environment variable (defaults to `Sales Reporting - Master List - Automation - Python`). Each rule is auto-named as `{Show Name}_{VenueName}_{ReportType}`, uppercased with spaces replaced by underscores and empty parts dropped (e.g. `JESUS_CHRIST_SUPERSTAR_MANILA_ADVANCE`) — this `rule_name` is the value used for the flow's `target_rule_name` parameter. Including the report type lets one show and venue carry more than one rule (e.g. an Advance and a Cumulative report) without the names colliding. After each successful extraction the pipeline stamps that row's `LastRun` column with the UK time of the run. The live matrix of active shows and venues is managed directly in the SharePoint List, not duplicated here.
+
+### 🚦 When a Row Is Skipped
+
+The loader validates each row rather than letting a half-filled cell surface later as a broken run. A skipped row is logged and the rest of the list still loads:
+
+| Condition | Behaviour |
+|---|---|
+| `Title` (Show Name) or `VenueName` blank | Skipped with a warning — no usable rule name can be built. |
+| `SubjectKeyword` blank | Skipped with an error. An empty Graph `$search` query returns HTTP 400, which would otherwise abort the whole fetch task and every other show with it. |
+| `SenderDomain` blank | Skipped with an error. The pipeline checks `sender_domain in actual_sender`, and an empty string matches every sender, so a blank cell would accept an email from anyone. |
+| `rule_name` duplicates an earlier row | The later row is skipped with an error naming both SharePoint item IDs. Two rows sharing a name cannot be told apart downstream, and the second row's report would be tagged a duplicate and never collected. |
+| Only one of `ParserModule` / `ParserFunction` filled | Skipped with a warning — see **Processing Logic** below. |
+| `Active` unticked or blank | Loaded, then skipped by the pipeline. Parked rows are exempt from the three checks that only matter to a live run — blank `SubjectKeyword`, blank `SenderDomain` and duplicate `rule_name` — so a row being prepared for next season can sit in the list half-filled without generating errors. The show/venue and parser-column checks still apply to every row. |
+
+The duplicate-name check deliberately ignores parked rows: deactivating an old row and copying it to make a revision is a normal edit, and the parked copy must not reserve the name its live replacement needs.
 
 ### 📡 Match Criteria
-- **`SenderDomain`**: The verified source domain of the email.
-- **`SubjectKeyword`**: String used for simplified, robust subject-only keyword search in the Graph API.
+- **`SenderDomain`**: The verified source domain of the email. **Required** — a blank cell would match every sender, so the row is skipped.
+- **`SubjectKeyword`**: String used for simplified, robust subject-only keyword search in the Graph API. **Required** — a blank cell would make the search query empty, so the row is skipped.
 - **`AttachmentType`**: Strict extension enforcement (e.g., `.pdf`, `.xls`).
 - **`AttachmentSource`**: Optional. Left blank for a standard physical email attachment (the pipeline defaults to `physical`); set to `html_link` for link-based reports.
 - **`FileNameKeyword`**: Optional. When one email carries attachments for several venues, this fragment picks the right one by file name (e.g. `MRSH` vs `MRGZ`). Left blank, the first attachment matching `AttachmentType` wins.
 
 ### 🏷️ Metadata Mapping (Medallion)
-- **`Title`** (shown as "Show Name" in the SharePoint UI), **`VenueName`**, **`ReportType`**: Used for standard filename generation. `ReportType` is required — filename generation raises a `KeyError` without it.
-- **`ShowID`**, **`VenueID`**, **`DocumentID`**: Identifiers for downstream systems. Values are coerced to clean ID strings (trailing `.0` from Number columns is stripped).
-- **`Timezone`**: The exact IANA Time Zone (e.g., `Asia/Singapore`, `Europe/London`). Defaults to `UTC` if left blank.
+- **`Title`** (shown as "Show Name" in the SharePoint UI), **`VenueName`**, **`ReportType`**: Used for standard filename generation. ⚠️ `ReportType` is **not** currently validated — the loader always supplies the key, so a blank cell does not raise, it silently produces a shorter `rule_name` and a filename with an empty segment. Fill it in.
+- **`ShowID`**, **`VenueID`**, **`DocumentID`**: Identifiers for downstream systems. Values are coerced to clean ID strings (trailing `.0` from Number columns is stripped). ⚠️ Also unvalidated — a blank or mistyped ID produces a filename with an empty or wrong segment and no warning.
+- **`Timezone`**: The exact IANA Time Zone (e.g., `Asia/Singapore`, `Europe/London`). Defaults to `UTC` if left blank — ⚠️ silently, with no log line, which shifts the reporting date by a day for any venue that is not on UK time.
 
 ### 🌐 Deterministic Timezone Logic & Sales Day Offset
 The engine uses the `Timezone` and optional `SalesDayOffsetHours` columns to perfectly align the UTC email receipt time with the venue's local reporting date:
-1. **Sales Day Offset:** For venues with late-night performances, `SalesDayOffsetHours` (e.g., `2`) is added to the arrival time. This pushes emails received in the early morning hours (e.g., 1 AM) into the "effective" next day before the date calculation. Defaults to `0` if left blank.
+1. **Sales Day Offset:** For venues with late-night performances, `SalesDayOffsetHours` (e.g., `2`) is added to the arrival time. This pushes emails received in the early morning hours (e.g., 1 AM) into the "effective" next day before the date calculation. Defaults to `0` if left blank. ⚠️ Keep it a whole number: a decimal is silently truncated (`1.5` becomes `1`), and any non-numeric text aborts the **entire** rule load, not just that row.
 2. **Local Conversion:** The (offset) UTC time is converted to the venue's local time (e.g., `Asia/Singapore`) using `pytz`.
 3. **Standardization:** The system subtracts **1 day** from the local time because reports received today reflect yesterday's business.
 4. **Consistency:** This ensures that reports from Singapore, London, and New York are all dated accurately relative to their own business days, regardless of the UTC offset or late-night arrival.
