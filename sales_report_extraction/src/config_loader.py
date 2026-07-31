@@ -270,6 +270,10 @@ class SharePointRuleLoader:
                 {
                     "rule_name": rule_name,
                     "active": active,
+                    # A test rule runs exactly like a live one, but delivers to
+                    # the test SFTP account under a TEST. filename prefix.
+                    # Blank/missing cell -> False, i.e. a normal live rule.
+                    "test": _to_bool(f.get("Test")),
                     "match_criteria": match_criteria,
                     "metadata": metadata,
                     "processing": processing,
