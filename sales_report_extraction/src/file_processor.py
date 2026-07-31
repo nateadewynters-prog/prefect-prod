@@ -30,9 +30,9 @@ class ProcessingEngine:
         for relative_path in self.dirs.values(): 
             os.makedirs(os.path.join(self.base_dir, relative_path), exist_ok=True) 
 
-    def generate_filename(self, metadata: dict, date_str: str, ext: str) -> str:
+    def generate_filename(self, metadata: dict, date_str: str, ext: str, test_mode: bool = False) -> str:
         """Wrapper for standard naming utility."""
-        return generate_standard_filename(metadata, date_str, ext)
+        return generate_standard_filename(metadata, date_str, ext, test_mode)
 
     def process_file(self, temp_path: str, rule: dict) -> tuple:
         """Main orchestrator: loads parsers, manages flow, and saves files."""
