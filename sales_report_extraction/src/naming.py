@@ -2,7 +2,7 @@ import pytz
 from datetime import timezone, timedelta
 from dateutil import parser as date_parser
 
-def generate_standard_filename(metadata: dict, date_str: str, ext: str) -> str:
+def generate_standard_filename(metadata: dict, date_str: str, ext: str, test_mode: bool = False) -> str:
     """Calculates the deterministic venue timezone and formats the standard filename."""
     utc_dt = date_parser.parse(date_str).astimezone(timezone.utc)
     venue_tz = pytz.timezone(metadata.get('timezone', 'UTC'))
@@ -14,6 +14,10 @@ def generate_standard_filename(metadata: dict, date_str: str, ext: str) -> str:
     # 🚀 Strict Extraction: Deliberately throws a KeyError if 'report_type' is missing
     name = f"{metadata['show_name']}.{metadata['venue_name']}.{metadata['report_type']}_{metadata['show_id']}_{metadata['venue_id']}_{metadata['document_id']}_{fmt_date}{ext}" 
     
+    # 🧪 Test rules are prefixed so the contractor can spot and ignore them.
+    if test_mode:
+        name = f"TEST.{name}"
+
     return name.replace(" ", "-").replace("/", "-")
 
 def get_medallion_folders(base_dir: str, dirs: dict, metadata: dict) -> tuple:
