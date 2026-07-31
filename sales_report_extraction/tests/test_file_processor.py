@@ -39,6 +39,49 @@ def test_generate_filename(mock_engine):
     expected_filename = "Phantom.West-End.Daily_100_200_300_26_02_2026.pdf"
     assert filename == expected_filename
 
+def test_generate_filename_test_mode_prepends_prefix(mock_engine):
+    """A test rule gains a TEST. prefix; nothing else about the name changes."""
+    metadata = {
+        "show_name": "Mamma Mia!",
+        "venue_name": "Zurich",
+        "show_id": "234",
+        "venue_id": "100",
+        "document_id": "486",
+        "report_type": "Advance",
+        "timezone": "Europe/Zurich"
+    }
+
+    received_date = "2026-07-16T08:00:00Z"
+
+    live_name = mock_engine.generate_filename(metadata, received_date, ".xlsx")
+    test_name = mock_engine.generate_filename(metadata, received_date, ".xlsx", True)
+
+    assert live_name == "Mamma-Mia!.Zurich.Advance_234_100_486_15_07_2026.xlsx"
+    assert test_name == "TEST.Mamma-Mia!.Zurich.Advance_234_100_486_15_07_2026.xlsx"
+    # The prefix is the only difference between the two.
+    assert test_name == f"TEST.{live_name}"
+
+
+def test_generate_filename_defaults_to_live_name(mock_engine):
+    """Omitting test_mode must produce the identical name it does today."""
+    metadata = {
+        "show_name": "Phantom",
+        "venue_name": "West End",
+        "show_id": "100",
+        "venue_id": "200",
+        "document_id": "300",
+        "report_type": "Daily"
+    }
+
+    received_date = "2026-02-27T14:00:00Z"
+
+    implicit = mock_engine.generate_filename(metadata, received_date, ".pdf")
+    explicit = mock_engine.generate_filename(metadata, received_date, ".pdf", False)
+
+    assert implicit == explicit == "Phantom.West-End.Daily_100_200_300_26_02_2026.pdf"
+    assert not implicit.startswith("TEST.")
+
+
 def test_generate_filename_with_deterministic_timezones(mock_engine):
     received_date_utc = "2026-03-08T17:00:00Z"
     

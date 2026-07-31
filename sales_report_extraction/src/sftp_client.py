@@ -2,14 +2,20 @@ import os
 import paramiko
 from src.env_setup import get_universal_logger
 
-def upload_to_sftp(local_file_path: str, filename: str):
+def upload_to_sftp(local_file_path: str, filename: str, test_mode: bool = False):
     """Uploads a local file to the root directory of the configured SFTP server."""
     logger = get_universal_logger(__name__)
     
     host = os.getenv("SFTP_SALES_DB_HOST")
     port = int(os.getenv("SFTP_SALES_DB_PORT", 22))
-    username = os.getenv("SFTP_LEGACY_SALES_DB_USERNAME")
-    password = os.getenv("SFTP_LEGACY_SALES_DB_PASSWORD")
+
+    # 🧪 Test rules land on the same host/port under a separate account.
+    if test_mode:
+        username = os.getenv("SFTP_TEST_LEGACY_SALES_DB_USERNAME")
+        password = os.getenv("SFTP_TEST_LEGACY_SALES_DB_PASSWORD")
+    else:
+        username = os.getenv("SFTP_LEGACY_SALES_DB_USERNAME")
+        password = os.getenv("SFTP_LEGACY_SALES_DB_PASSWORD")
 
     if not all([host, username, password]):
         raise ValueError("Missing SFTP credentials in environment variables.")

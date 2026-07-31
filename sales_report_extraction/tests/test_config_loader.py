@@ -153,6 +153,41 @@ def test_passthrough_rule_when_parser_columns_blank(loader):
     assert rule["match_criteria"]["attachment_source"] == "html_link"
 
 
+# ---------------------------------------------------------------------------
+# load_rules: the Test column
+# ---------------------------------------------------------------------------
+def _test_column_fields(**overrides):
+    fields = {
+        "Title": "Mamma Mia!", "VenueName": "Zurich",
+        "SenderDomain": "x@y.com", "SubjectKeyword": "Report",
+        "AttachmentType": ".xlsx", "ReportType": "Advance",
+        "ShowID": 234.0, "VenueID": "100", "DocumentID": 486.0,
+        "Active": True,
+    }
+    fields.update(overrides)
+    return fields
+
+
+def test_test_flag_is_read_when_ticked(loader):
+    rules = _run_load(loader, [_item(_test_column_fields(Test=True))])
+    assert rules[0]["test"] is True
+
+
+# A missing column, a None value and an unticked box must all mean "live".
+@pytest.mark.parametrize("value", [False, None, "", "   ", "No", "false"])
+def test_test_flag_defaults_to_false(loader, value):
+    rules = _run_load(loader, [_item(_test_column_fields(Test=value))])
+    assert rules[0]["test"] is False
+
+
+def test_test_flag_absent_column_defaults_to_false(loader):
+    """The 19 live rules predate this column, so their rows have no Test key."""
+    fields = _test_column_fields()          # Test deliberately absent
+    assert "Test" not in fields
+    rules = _run_load(loader, [_item(fields)])
+    assert rules[0]["test"] is False
+
+
 def test_attachment_source_omitted_when_blank(loader):
     fields = {
         "Title": "Show", "VenueName": "Venue",

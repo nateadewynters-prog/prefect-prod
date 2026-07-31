@@ -109,6 +109,10 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
     show_name = rule['metadata'].get('show_name', 'Unknown')
     venue_name = rule['metadata'].get('venue_name', 'Unknown')
 
+    # 🧪 Test rules keep every normal step, but the filename gains a TEST.
+    # prefix and delivery goes to the test SFTP account.
+    test_mode = rule.get('test', False)
+
     logger.info(f"🚀 Processing Rule: {r_name} | Subject: {email['subject']}")
     
     try:
@@ -119,7 +123,7 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
         effective_dt_str = effective_dt.isoformat()
         
         # Calculate standard path FIRST
-        std_name = engine.generate_filename(rule['metadata'], effective_dt_str, expected_ext)
+        std_name = engine.generate_filename(rule['metadata'], effective_dt_str, expected_ext, test_mode)
         temp_path = os.path.join(engine.base_dir, engine.dirs['inbox'], std_name)
         
         attachment_source = rule['match_criteria'].get('attachment_source', 'physical')
@@ -152,7 +156,7 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
                 processed_url = sp_uploader.upload_file(csv_path, csv_filename, show_name, venue_name, "Processed")
             
             # Passthrough files AND parsed CSVs both go to the contractor via SFTP
-            upload_to_sftp(local_file_path=csv_path, filename=csv_filename)
+            upload_to_sftp(local_file_path=csv_path, filename=csv_filename, test_mode=test_mode)
 
         md_table = f"## Validation Result: {validation_result.status}\n\n**Message:** {validation_result.message}\n\n| Metric | Value |\n|---|---|\n"
         for k, v in validation_result.metrics.items(): 
