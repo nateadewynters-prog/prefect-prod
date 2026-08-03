@@ -4,7 +4,12 @@ import importlib
 import pandas as pd
 from prefect import get_run_logger
 from src.models import ValidationResult
-from src.naming import generate_standard_filename, get_medallion_folders
+from src.naming import (
+    generate_standard_filename,
+    get_medallion_folders,
+    RAW_PREFIX,
+    PROCESSED_PREFIX,
+)
 from src.mapping import apply_event_lookups
 
 # Excel rejects these characters in a sheet name and caps the name at 31 chars.
@@ -82,7 +87,10 @@ class ProcessingEngine:
         # a specific format. Parsers that don't declare one still get a .csv, so
         # this stays backwards compatible with every existing rule.
         output_ext = getattr(parser_module, 'OUTPUT_EXT', '.csv')
-        output_path = os.path.join(proc_dir, f"{os.path.splitext(filename)[0]}{output_ext}")
+        # The parsed output leaves the raw zone, so the stage marker moves with it.
+        # Count of 1 keeps any TEST. prefix in front: TEST.RAW.x -> TEST.PROCESSED.x
+        output_name = filename.replace(RAW_PREFIX, PROCESSED_PREFIX, 1)
+        output_path = os.path.join(proc_dir, f"{os.path.splitext(output_name)[0]}{output_ext}")
 
         logger.info(f"💾 Saving {len(df)} rows to processed file: {output_path}")
         if output_ext == '.xlsx':

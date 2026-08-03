@@ -2,6 +2,11 @@ import pytz
 from datetime import timezone, timedelta
 from dateutil import parser as date_parser
 
+# Stage markers. Every file is generated as RAW.; file_processor swaps in
+# PROCESSED. when a parser writes its output to the processed zone.
+RAW_PREFIX = "RAW."
+PROCESSED_PREFIX = "PROCESSED."
+
 def generate_standard_filename(metadata: dict, date_str: str, ext: str, test_mode: bool = False) -> str:
     """Calculates the deterministic venue timezone and formats the standard filename."""
     utc_dt = date_parser.parse(date_str).astimezone(timezone.utc)
@@ -14,6 +19,8 @@ def generate_standard_filename(metadata: dict, date_str: str, ext: str, test_mod
     # 🚀 Strict Extraction: Deliberately throws a KeyError if 'report_type' is missing
     name = f"{metadata['show_name']}.{metadata['venue_name']}.{metadata['report_type']}_{metadata['show_id']}_{metadata['venue_id']}_{metadata['document_id']}_{fmt_date}{ext}" 
     
+    name = f"{RAW_PREFIX}{name}"
+
     # 🧪 Test rules are prefixed so the contractor can spot and ignore them.
     if test_mode:
         name = f"TEST.{name}"
