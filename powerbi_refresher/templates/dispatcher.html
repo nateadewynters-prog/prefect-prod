@@ -53,6 +53,8 @@
         @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.75)}}
         .status-items{display:flex;flex-wrap:wrap;gap:4px;flex:1}
         .status-tag{background:#fef3c7;border:0.5px solid #fde68a;border-radius:6px;padding:2px 8px;color:#92400e;font-weight:500}
+        .stale{display:none;align-items:center;gap:8px;background:#fef2f2;border:0.5px solid #fca5a5;border-radius:8px;padding:8px 12px;margin-bottom:1rem;font-size:12px;color:#991b1b}
+        .stale.visible{display:flex}
     </style>
 </head>
 <body>
@@ -66,7 +68,8 @@
                 <span class="h-title">Power BI Dataset Refresher</span>
                 <span class="h-meta">
                     <span class="dot"></span>
-                    Synced <span id="synced-at">{{ synced_at }}</span> &nbsp;·&nbsp; next sync at midnight
+                    <!-- The server sends UTC ISO-8601; the browser formats it in local time. -->
+                    Synced <span id="synced-at" data-iso="{{ synced_at }}">never</span> &nbsp;·&nbsp; next sync at midnight
                 </span>
             </div>
             <div class="h-actions">
@@ -79,6 +82,11 @@
         <div class="search">
             <i class="ti ti-search"></i>
             <input type="text" id="searchInput" placeholder="Search by report or workspace…">
+        </div>
+
+        <div id="stale-bar" class="stale">
+            <i class="ti ti-alert-triangle" style="font-size:14px;flex-shrink:0"></i>
+            <span>The last report sync failed, so this list may be out of date. <span id="stale-detail"></span></span>
         </div>
 
         <div id="status-bar" class="status-bar">
@@ -99,8 +107,10 @@
                 <div class="card" data-name="{{ report.report_name|lower }}" data-ws="{{ report.workspace_name|lower }}">
                     <div>
                         <div class="card-name">{{ report.report_name }}</div>
-                        <div class="card-ds">{{ report.dataset_id[:8] if report.dataset_id else 'no dataset' }}…</div>
-                        <div class="card-refreshed" id="refreshed-{{ report.dataset_id }}">—</div>
+                        <div class="card-ds" title="Dataset {{ report.dataset_id }}">{{ report.dataset_id[:8] }}…</div>
+                        <!-- Keyed by data attribute, not id: two reports can share one dataset,
+                             and duplicate element ids would silently update only the first. -->
+                        <div class="card-refreshed" data-refreshed-for="{{ report.dataset_id }}">—</div>
                     </div>
                     <div class="card-actions">
                         <a href="{{ report.dashboard_url }}" target="_blank" class="btn-view">
@@ -108,9 +118,9 @@
                         </a>
                         <button
                             class="btn-refresh"
-                            id="btn-{{ report.id }}"
+                            id="btn-{{ report.report_id }}"
                             data-dataset="{{ report.dataset_id }}"
-                            onclick="runRefresh('{{ report.id }}')">
+                            onclick="runRefresh('{{ report.report_id }}')">
                             <i class="ti ti-refresh" style="font-size:13px"></i> Refresh
                         </button>
                     </div>
@@ -162,41 +172,70 @@
             if (btn) btn.disabled = false;
         }
 
+        // --- TIMESTAMPS ---
+        // The server sends UTC ISO-8601 (e.g. "2026-08-04T09:15:00Z") and the
+        // browser renders it in the viewer's own timezone, so BST is handled
+        // for us. Storing local time server-side would break twice a year.
+        function formatTimestamp(iso) {
+            if (!iso) return null;
+            const d = new Date(iso);
+            if (isNaN(d)) return null;
+            return d.toLocaleDateString('en-GB', {day:'2-digit',month:'short'})
+                + ' ' + d.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+        }
+
+        function renderSyncedAt(iso) {
+            const el = document.getElementById('synced-at');
+            el.textContent = formatTimestamp(iso) || 'never';
+        }
+        renderSyncedAt(document.getElementById('synced-at').dataset.iso);
+
         // --- STATE POLLING ---
         function pollSharedState() {
             fetch('/api/state')
                 .then(r => r.json())
                 .then(data => {
-                    if (data.synced_at) document.getElementById('synced-at').textContent = data.synced_at;
+                    if (data.synced_at) renderSyncedAt(data.synced_at);
+
+                    // Warn when the list on screen might be out of date.
+                    const staleBar = document.getElementById('stale-bar');
+                    if (data.sync_error) {
+                        document.getElementById('stale-detail').textContent = data.sync_error;
+                        staleBar.classList.add('visible');
+                    } else {
+                        staleBar.classList.remove('visible');
+                    }
 
                     if (data.last_refreshes) {
                         Object.entries(data.last_refreshes).forEach(([dsId, ts]) => {
-                            const el = document.getElementById('refreshed-' + dsId);
-                            if (!el) return;
-                            const d = new Date(ts);
-                            const formatted = d.toLocaleDateString('en-GB', {day:'2-digit',month:'short'})
-                                + ' ' + d.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
-                            el.textContent = 'Last refreshed ' + formatted;
+                            const formatted = formatTimestamp(ts);
+                            if (!formatted) return;
+                            document.querySelectorAll(`[data-refreshed-for="${dsId}"]`).forEach(el => {
+                                el.textContent = 'Last refreshed ' + formatted;
+                            });
                         });
                     }
 
                     // --- STATUS BAR ---
                     const statusBar = document.getElementById('status-bar');
                     const statusItems = document.getElementById('status-items');
+                    statusItems.replaceChildren();
                     if (data.locks && data.locks.length > 0) {
-                        const names = data.locks.map(dsId => {
+                        data.locks.forEach(dsId => {
                             const btn = document.querySelector(`.btn-refresh[data-dataset="${dsId}"]`);
-                            if (btn) {
-                                const card = btn.closest('.card');
-                                if (card) return card.querySelector('.card-name').textContent.trim();
-                            }
-                            return dsId.slice(0, 8) + '…';
+                            const card = btn ? btn.closest('.card') : null;
+                            const name = card ? card.querySelector('.card-name').textContent.trim()
+                                              : dsId.slice(0, 8) + '…';
+                            // createElement + textContent, never innerHTML: a report
+                            // name is data from Power BI, not markup we control.
+                            const tag = document.createElement('span');
+                            tag.className = 'status-tag';
+                            tag.textContent = name;
+                            statusItems.appendChild(tag);
                         });
-                        statusItems.innerHTML = names.map(n => `<span class="status-tag">${n}</span>`).join('');
                         statusBar.classList.add('visible');
                     } else {
                         statusBar.classList.remove('visible');
-                        statusItems.innerHTML = '';
                     }
 
                     const busy = data.locks.length > 0;
