@@ -23,6 +23,41 @@ def _safe_sheet_name(name: str) -> str:
     return name.strip().upper()[:31] or "SHEET1"
 
 
+def _check_passthrough_is_deliverable(temp_path: str, filename: str) -> int:
+    """
+    Sanity-check a passthrough file, and return its size in bytes.
+
+    Passthrough rules never parse the file, so this is the only point at which
+    anything looks at it before the contractor receives it. A link-based report
+    whose download link has expired comes back as a login or "report not ready"
+    page with HTTP 200, and without this check it is archived, declared PASSED
+    and delivered as the day's sales figures.
+
+    Deliberately narrow, because some suppliers legitimately export an HTML
+    table saved as .xls: a file is only rejected if it opens like a web page
+    *and* contains no table at all, which is what a login/error page looks like.
+    """
+    size = os.path.getsize(temp_path)
+    if size == 0:
+        raise ValueError(f"Passthrough file {filename} is 0 bytes; refusing to deliver it.")
+
+    with open(temp_path, 'rb') as fh:
+        head = fh.read(512).lstrip().lower()
+
+    if head.startswith((b'<!doctype', b'<html')):
+        # Only markup gets this far, so reading it whole is cheap and avoids
+        # missing a <table> that sits past a long <head> or <style> block.
+        with open(temp_path, 'rb') as fh:
+            if b'<table' not in fh.read().lower():
+                raise ValueError(
+                    f"Passthrough file {filename} is a web page with no data table - "
+                    f"the download link has probably expired or returned a login "
+                    f"page. Refusing to deliver it."
+                )
+
+    return size
+
+
 class ProcessingEngine:
     def __init__(self, global_config: dict, config_path: str):
         self.base_dir = global_config['base_dir'] 
@@ -53,14 +88,19 @@ class ProcessingEngine:
         # 2. Handle Passthrough Files (No parsing needed)
         if proc_config.get('passthrough_only', False):
             logger.info(f"⏩ Passthrough mode: Archiving {filename} and sending directly to SFTP.")
-            
+
+            # Check before the move, so a rejected file stays in the inbox for
+            # handle_failure to quarantine rather than landing in the archive
+            # zone looking like it was delivered.
+            file_size = _check_passthrough_is_deliverable(temp_path, filename)
+
             # 🚀 THE FIX: Use arch_dir instead of proc_dir
-            final_path = os.path.join(arch_dir, filename) 
+            final_path = os.path.join(arch_dir, filename)
             shutil.move(temp_path, final_path)
-            
+
             val_res = ValidationResult(
-                status="PASSED", message="File passed through and archived.", 
-                metrics={"action": "passthrough"}
+                status="PASSED", message="File passed through and archived.",
+                metrics={"action": "passthrough", "bytes": file_size}
             )
             
             # We still return final_path so main.py knows where to find it for the SFTP upload

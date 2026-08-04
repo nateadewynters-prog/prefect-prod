@@ -190,3 +190,70 @@ def test_passthrough_keeps_the_raw_marker(mock_engine):
         _, _, final_path = mock_engine.process_file(temp_path, rule)
 
     assert os.path.basename(final_path) == raw_name
+
+
+# ---------------------------------------------------------------------------
+# Passthrough files are the only ones nothing ever looks inside
+# ---------------------------------------------------------------------------
+def _passthrough_rule():
+    return {
+        "processing": {"passthrough_only": True},
+        "metadata": {"show_name": "Mamma Mia!", "venue_name": "Zurich"},
+    }
+
+
+def _write_bytes(engine, name, payload: bytes):
+    path = os.path.join(engine.base_dir, engine.dirs['inbox'], name)
+    with open(path, 'wb') as f:
+        f.write(payload)
+    return path
+
+
+LOGIN_PAGE = b"<!DOCTYPE html><html><head><title>Sign in</title></head><body>Session expired</body></html>"
+# Some suppliers genuinely export an HTML table saved as .xls - this must pass.
+HTML_TABLE_EXPORT = b"<html><head><style>td{}</style></head><body><table><tr><td>1</td></tr></table></body></html>"
+
+
+def test_passthrough_rejects_an_expired_link_login_page(mock_engine):
+    """An HTML page with no table is a login/error page, not a report."""
+    temp_path = _write_bytes(mock_engine, "RAW.Mamma-Mia!.Zurich.Advance_1_2_3_15_07_2026.xlsx", LOGIN_PAGE)
+
+    with patch('src.file_processor.get_run_logger'):
+        with pytest.raises(ValueError, match="web page with no data table"):
+            mock_engine.process_file(temp_path, _passthrough_rule())
+
+    # Left in the inbox so handle_failure can quarantine it, not moved to archive.
+    assert os.path.exists(temp_path)
+
+
+def test_passthrough_rejects_a_zero_byte_file(mock_engine):
+    temp_path = _write_bytes(mock_engine, "RAW.Mamma-Mia!.Zurich.Advance_1_2_3_15_07_2026.xlsx", b"")
+
+    with patch('src.file_processor.get_run_logger'):
+        with pytest.raises(ValueError, match="0 bytes"):
+            mock_engine.process_file(temp_path, _passthrough_rule())
+
+
+def test_passthrough_allows_an_html_table_export(mock_engine):
+    """Guard must not reject the HTML-table-as-.xls exports some feeds send."""
+    name = "RAW.Mamma-Mia!.Zurich.Advance_1_2_3_15_07_2026.xls"
+    temp_path = _write_bytes(mock_engine, name, HTML_TABLE_EXPORT)
+
+    with patch('src.file_processor.get_run_logger'):
+        _, val_res, final_path = mock_engine.process_file(temp_path, _passthrough_rule())
+
+    assert val_res.status == "PASSED"
+    assert os.path.basename(final_path) == name
+    assert val_res.metrics["bytes"] == len(HTML_TABLE_EXPORT)
+
+
+def test_passthrough_allows_a_real_binary_workbook(mock_engine):
+    """A real .xlsx is a zip; it must sail through untouched."""
+    name = "RAW.Mamma-Mia!.Zurich.Advance_1_2_3_15_07_2026.xlsx"
+    temp_path = _write_bytes(mock_engine, name, b"PK\x03\x04" + b"\x00" * 100)
+
+    with patch('src.file_processor.get_run_logger'):
+        _, val_res, final_path = mock_engine.process_file(temp_path, _passthrough_rule())
+
+    assert val_res.status == "PASSED"
+    assert os.path.basename(final_path) == name
