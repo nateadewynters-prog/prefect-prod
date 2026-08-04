@@ -24,7 +24,11 @@
         .search i{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:15px;color:#9ca3af;pointer-events:none}
         .search input{width:100%;padding:7px 10px 7px 30px;border-radius:8px;border:0.5px solid #e5e7eb;background:#fff;color:#111;font-size:13px;outline:none}
         .search input:focus{border-color:#d1d5db}
-        .ws-label{font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:#9ca3af;margin:1rem 0 0.5rem;padding-bottom:4px;border-bottom:0.5px solid #f3f4f6}
+        /* .section-label shares the look of .ws-label but is deliberately a
+           different class: the search filter selects .ws-label to show/hide
+           workspace groups, and the recent panel must not be caught by that. */
+        .ws-label,.section-label{font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:#9ca3af;margin:1rem 0 0.5rem;padding-bottom:4px;border-bottom:0.5px solid #f3f4f6}
+        .section-label:first-of-type{margin-top:0}
         .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
         .card{background:#fff;border:0.5px solid #e5e7eb;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;transition:border-color 0.15s}
         .card:hover{border-color:#d1d5db}
@@ -55,6 +59,16 @@
         .status-tag{background:#fef3c7;border:0.5px solid #fde68a;border-radius:6px;padding:2px 8px;color:#92400e;font-weight:500}
         .stale{display:none;align-items:center;gap:8px;background:#fef2f2;border:0.5px solid #fca5a5;border-radius:8px;padding:8px 12px;margin-bottom:1rem;font-size:12px;color:#991b1b}
         .stale.visible{display:flex}
+        .recent-list{display:flex;flex-direction:column;gap:4px;margin-bottom:1.25rem}
+        .recent-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border:0.5px solid #e5e7eb;border-radius:8px;background:#fff;min-width:0}
+        .recent-row:hover{border-color:#d1d5db}
+        .recent-num{font-size:11px;color:#d1d5db;width:14px;flex-shrink:0;font-variant-numeric:tabular-nums}
+        .recent-name{font-size:13px;font-weight:500;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1}
+        .recent-ws{font-size:11px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:2}
+        .recent-time{font-size:11px;color:#6b7280;margin-left:auto;white-space:nowrap;flex-shrink:0}
+        .recent-link{color:#d1d5db;flex-shrink:0;display:flex;align-items:center}
+        .recent-link:hover{color:#111}
+        .recent-empty{font-size:12px;color:#9ca3af;padding:8px 10px}
     </style>
 </head>
 <body>
@@ -77,6 +91,12 @@
                     <i class="ti ti-refresh" style="font-size:13px"></i> Sync reports
                 </button>
             </div>
+        </div>
+
+        <!-- Populated by pollSharedState(), which runs immediately on load. -->
+        <div class="section-label" id="recent-label">Last 10 refreshed</div>
+        <div class="recent-list" id="recent-list">
+            <div class="recent-empty">Loading…</div>
         </div>
 
         <div class="search">
@@ -190,12 +210,83 @@
         }
         renderSyncedAt(document.getElementById('synced-at').dataset.iso);
 
+        // "3 min ago" reads better than a clock time for a recently-refreshed
+        // list; the exact timestamp is kept in the row's tooltip.
+        function formatRelative(iso) {
+            // Guard falsy input explicitly: new Date(null) is the 1970 epoch,
+            // not an invalid date, so it would render as "20669 days ago".
+            if (!iso) return '';
+            const d = new Date(iso);
+            if (isNaN(d)) return '';
+            const secs = Math.floor((Date.now() - d.getTime()) / 1000);
+            if (secs < 60) return 'just now';
+            const mins = Math.floor(secs / 60);
+            if (mins < 60) return mins + (mins === 1 ? ' min ago' : ' mins ago');
+            const hours = Math.floor(mins / 60);
+            if (hours < 24) return hours + (hours === 1 ? ' hour ago' : ' hours ago');
+            const days = Math.floor(hours / 24);
+            return days + (days === 1 ? ' day ago' : ' days ago');
+        }
+
+        // --- LAST 10 REFRESHED ---
+        function renderRecent(recent) {
+            const list = document.getElementById('recent-list');
+            list.replaceChildren();
+
+            if (!recent || recent.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'recent-empty';
+                empty.textContent = 'No refreshes yet — refresh a report below and it will appear here.';
+                list.appendChild(empty);
+                return;
+            }
+
+            recent.forEach((item, i) => {
+                const row = document.createElement('div');
+                row.className = 'recent-row';
+                row.title = 'Refreshed ' + (formatTimestamp(item.refreshed_at) || 'unknown');
+
+                // textContent throughout: report and workspace names are data
+                // from Power BI, not markup we control.
+                const num = document.createElement('span');
+                num.className = 'recent-num';
+                num.textContent = (i + 1);
+
+                const name = document.createElement('span');
+                name.className = 'recent-name';
+                name.textContent = item.report_name;
+
+                const ws = document.createElement('span');
+                ws.className = 'recent-ws';
+                ws.textContent = item.workspace_name;
+
+                const time = document.createElement('span');
+                time.className = 'recent-time';
+                time.textContent = formatRelative(item.refreshed_at);
+
+                row.append(num, name, ws, time);
+
+                if (item.dashboard_url) {
+                    const link = document.createElement('a');
+                    link.className = 'recent-link';
+                    link.href = item.dashboard_url;
+                    link.target = '_blank';
+                    link.title = 'Open in Power BI';
+                    link.innerHTML = '<i class="ti ti-external-link" style="font-size:13px"></i>';
+                    row.appendChild(link);
+                }
+
+                list.appendChild(row);
+            });
+        }
+
         // --- STATE POLLING ---
         function pollSharedState() {
             fetch('/api/state')
                 .then(r => r.json())
                 .then(data => {
                     if (data.synced_at) renderSyncedAt(data.synced_at);
+                    renderRecent(data.recent);
 
                     // Warn when the list on screen might be out of date.
                     const staleBar = document.getElementById('stale-bar');

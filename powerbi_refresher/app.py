@@ -87,6 +87,7 @@ LOCK_TTL_SECONDS = int(os.getenv("LOCK_TTL_SECONDS", "2100"))  # 35 min
 
 SYNC_RETRY_SECONDS = 300  # after a failed report sync, retry in 5 minutes
 LOG_RETENTION_DAYS = 7
+RECENT_REFRESH_LIMIT = 10  # how many entries the "Last 10 refreshed" panel shows
 
 app = Flask(__name__)
 
@@ -197,6 +198,23 @@ def db():
         conn.close()
 
 
+def ensure_column(conn, table: str, column: str, definition: str) -> None:
+    """
+    Add a column to an existing table if it is not there already.
+
+    This is a deliberately minimal stand-in for schema migrations. The
+    CREATE TABLE statements below all say IF NOT EXISTS, which means that once
+    a database exists, editing a table definition has NO effect on it — so a
+    newly added column would be missing on every deployed database and every
+    query touching it would fail. Adding it explicitly here keeps old and new
+    databases in step.
+    """
+    existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        log.info("Migration: added %s.%s", table, column)
+
+
 def init_db() -> None:
     with db() as conn:
         # WAL lets readers and the writer work at the same time instead of
@@ -229,6 +247,9 @@ def init_db() -> None:
                    refreshed_at TEXT
                )"""
         )
+        # report_id was added after this table shipped, so existing databases
+        # need it applied separately — see ensure_column.
+        ensure_column(conn, "last_refresh", "report_id", "TEXT")
         # The report list is cached here rather than in a module-level variable
         # so that it survives a restart (the UI is populated instantly on boot)
         # and so every process sees the same data.
@@ -363,6 +384,52 @@ def get_report(report_id: str):
     with db() as conn:
         row = conn.execute("SELECT * FROM reports WHERE report_id = ?", (report_id,)).fetchone()
     return dict(row) if row else None
+
+
+def get_recent_refreshes(limit: int = RECENT_REFRESH_LIMIT) -> list:
+    """
+    The most recently refreshed reports, newest first, for the summary panel.
+
+    Only successful refreshes appear here — last_refresh is stamped when a
+    refresh completes, so a failed attempt never shows up as fresh data.
+    """
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT dataset_id, report_id, refreshed_at FROM last_refresh "
+            "ORDER BY refreshed_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+
+        # A query per row would be wasteful at scale, but `limit` is 10 — and it
+        # is far easier to follow than the equivalent join.
+        recent = []
+        for row in rows:
+            report = conn.execute(
+                "SELECT report_name, workspace_name, dashboard_url FROM reports "
+                "WHERE report_id = ?",
+                (row["report_id"],),
+            ).fetchone()
+
+            if report is None:
+                # Either this refresh predates us recording which report was
+                # clicked, or that report has since been deleted in Power BI.
+                # Fall back to any report backed by the same dataset.
+                report = conn.execute(
+                    "SELECT report_name, workspace_name, dashboard_url FROM reports "
+                    "WHERE dataset_id = ? ORDER BY report_name LIMIT 1",
+                    (row["dataset_id"],),
+                ).fetchone()
+
+            recent.append(
+                {
+                    "dataset_id": row["dataset_id"],
+                    "refreshed_at": row["refreshed_at"],
+                    "report_name": report["report_name"] if report else "Report no longer available",
+                    "workspace_name": report["workspace_name"] if report else "",
+                    "dashboard_url": report["dashboard_url"] if report else "",
+                }
+            )
+    return recent
 
 
 # ---------------------------------------------------------------------------
@@ -625,11 +692,12 @@ def run_refresh(report: dict, msg):
         if status == "Completed":
             with db() as conn:
                 conn.execute(
-                    f"""INSERT INTO last_refresh (dataset_id, refreshed_at)
-                        VALUES (?, {SQL_UTC_NOW})
+                    f"""INSERT INTO last_refresh (dataset_id, report_id, refreshed_at)
+                        VALUES (?, ?, {SQL_UTC_NOW})
                         ON CONFLICT(dataset_id) DO UPDATE
-                            SET refreshed_at = excluded.refreshed_at""",
-                    (dataset_id,),
+                            SET refreshed_at = excluded.refreshed_at,
+                                report_id    = excluded.report_id""",
+                    (dataset_id, report["report_id"]),
                 )
             log.info("Refresh completed for dataset %s", dataset_id)
             yield msg("✅ Refresh completed.", "success")
@@ -713,6 +781,7 @@ def get_state():
             "locks": locked_dataset_ids(),
             "logs": logs,
             "last_refreshes": last_refreshes,
+            "recent": get_recent_refreshes(),
             "synced_at": meta_get("last_sync_at"),
             "sync_error": meta_get("last_sync_error") or "",
         }
