@@ -622,7 +622,8 @@ def run_refresh(report: dict, msg):
     """
     Trigger the refresh and poll until it finishes, yielding SSE lines.
 
-    `msg` is a callback that logs the text and formats it as an SSE line.
+    `msg(text, msg_type="info", record=True)` is a callback that formats one SSE
+    line, writing it to the activity log unless `record=False`.
     """
     dataset_id = report["dataset_id"]
     refresh_url = (
@@ -676,18 +677,31 @@ def run_refresh(report: dict, msg):
             # A transient blip should not fail the whole refresh — the retry
             # adapter already tried a few times, so just report and keep going.
             log.warning("Poll failed for dataset %s: %s", dataset_id, exc)
-            yield msg(f"⚠️ Could not read status ({exc}) — still waiting...", "info")
+            # "poll-error" is not a status Power BI can return, so using it as
+            # the marker here cannot collide with a real one.
+            yield msg(
+                f"⚠️ Could not read status ({exc}) — still waiting...",
+                record=(last_status != "poll-error"),
+            )
+            last_status = "poll-error"
             continue
 
         row = find_our_refresh(rows, request_id, triggered_after)
-        if row is None:
-            yield msg("⏳ Status: Queued in Power BI...")
-            continue
+        status = "Queued in Power BI" if row is None else row.get("status", "Unknown")
 
-        status = row.get("status", "Unknown")
-        if status != last_status:
-            yield msg(f"⏳ Status: {status}...")
-            last_status = status
+        # Send a line on EVERY poll, but only record the changes.
+        #
+        # The send matters for two reasons. An SSE connection that writes
+        # nothing for minutes is what proxies and browsers drop, and a dropped
+        # connection shows the user "Failed" on a refresh that is running
+        # perfectly well. And a failed write is how this generator learns the
+        # browser has gone away — without it, a user who closes the tab leaves
+        # the dataset locked and a thread occupied until the poll deadline.
+        yield msg(f"⏳ Status: {status}...", record=(status != last_status))
+        last_status = status
+
+        if row is None:
+            continue
 
         if status == "Completed":
             with db() as conn:
@@ -807,35 +821,48 @@ def stream_refresh(report_id):
     """
     report = get_report(report_id)
 
-    def reject(text):
-        log.warning("Rejected refresh for report_id=%s: %s", report_id, text)
-        yield sse({"msg": text, "type": "error"})
-        yield SSE_DONE
-
-    if report is None:
-        return Response(
-            stream_with_context(reject("❌ Error: Report not found. Try syncing the list.")),
-            mimetype="text/event-stream",
-        )
-
-    if not try_acquire_lock(report["dataset_id"]):
-        return Response(
-            stream_with_context(reject("❌ System busy: this dataset is already refreshing.")),
-            mimetype="text/event-stream",
-        )
-
     def generate():
-        def msg(text, msg_type="info"):
-            db_log(text, msg_type)
+        def msg(text, msg_type="info", record=True):
+            """
+            Format one SSE line. `record=False` sends it to the browser without
+            writing it to the activity log — used for repeated status lines so a
+            long refresh does not fill the log with hundreds of identical rows.
+            """
+            if record:
+                db_log(text, msg_type)
             return sse({"msg": text, "type": msg_type})
+
+        def reject(text):
+            log.warning("Rejected refresh for report_id=%s: %s", report_id, text)
+            yield sse({"msg": text, "type": "error"})
+
+        if report is None:
+            yield from reject("❌ Error: Report not found. Try syncing the list.")
+            yield SSE_DONE
+            return
+
+        # The lock is taken INSIDE the generator, and released in the `finally`
+        # below, so the two always live in the same scope.
+        #
+        # It used to be taken in the view, before this generator existed. That
+        # looked equivalent but leaked: a generator closed before its first
+        # next() never runs its finally, so anything that asks for this URL
+        # without reading the body — HEAD, a link checker, a prefetcher —
+        # acquired the lock and never released it, blocking the dataset until
+        # the lock TTL expired 35 minutes later.
+        dataset_id = report["dataset_id"]
+        if not try_acquire_lock(dataset_id):
+            yield from reject("❌ System busy: this dataset is already refreshing.")
+            yield SSE_DONE
+            return
 
         try:
             yield from run_refresh(report, msg)
         except Exception as exc:  # noqa: BLE001 — last resort, so the UI always hears back
-            log.exception("Unexpected error refreshing dataset %s", report["dataset_id"])
+            log.exception("Unexpected error refreshing dataset %s", dataset_id)
             yield msg(f"❌ Unexpected error: {exc}", "error")
         finally:
-            release_lock(report["dataset_id"])
+            release_lock(dataset_id)
 
         # Sent on every path (success, failure, timeout) so the browser can
         # tell "finished" apart from "connection dropped".
