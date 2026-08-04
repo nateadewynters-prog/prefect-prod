@@ -140,26 +140,63 @@ MONEY_TOLERANCE = 0.01
 
 def _to_float(value) -> float:
     """
-    Turn '89,720.00 EUR' or '-595.00 EUR' into a float.
+    Turn '89,720.00 EUR' or '-595.00 EUR' into a float, or raise ValueError.
 
-    Drops thousands commas, then every character that isn't a digit, a minus
-    sign or a decimal point. That makes it indifferent to however the euro
-    sign happens to be encoded in the attachment.
+    Raises rather than returning 0.0, which is what this used to do. The
+    performance rows AND the Greek totals row are both read through this
+    function, so returning 0 on an unreadable cell zeroed both sides and the
+    money check passed on 0 == 0 - delivering wrong figures, with no alert.
 
-    This assumes comma-thousands / dot-decimal formatting, which is what the
-    feed uses. If the vendor switched to European formatting, the totals
-    reconciliation would fail rather than let wrong numbers through.
+    Also now handles European formatting, which the previous version explicitly
+    did not (it assumed comma-thousands / dot-decimal).
     """
     if value is None:
         return 0.0
-    cleaned = re.sub(r"[^0-9.\-]", "", str(value).replace(",", ""))
-    if cleaned in ("", "-", ".", "-."):
-        return 0.0
-    return float(cleaned)
+    if isinstance(value, bool):
+        # bool is a subclass of int, so it would otherwise become 1.0/0.0.
+        raise ValueError(f"Expected a number in a money column, got a boolean: {value!r}")
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    # Strip currency symbols and every space (including the non-breaking kind),
+    # leaving only digits and separators. Covers however the euro or lev sign
+    # happens to be encoded in the attachment.
+    clean = str(value)
+    for symbol in ("BGN", "EUR", "лв", "€", "£", "$"):
+        clean = clean.replace(symbol, "")
+    clean = re.sub(r"\s+", "", clean)
+    if clean in ("", "-", ".", "-."):
+        return 0.0                                          # a dash means nothing
+
+    # Work out what the separators mean before touching them. Guessing wrong is
+    # a 100x error: "89,720.00" is comma-thousands, but "1234,56" is a European
+    # decimal comma and blanket-stripping it turns 1234.56 into 123456.
+    if "," in clean and "." in clean:
+        if clean.rfind(",") > clean.rfind("."):
+            clean = clean.replace(".", "").replace(",", ".")  # 1.234,56
+        else:
+            clean = clean.replace(",", "")                    # 89,720.00
+    elif re.search(r",\d{2}$", clean):
+        clean = clean.replace(",", ".")                       # 1234,56
+    else:
+        clean = clean.replace(",", "")                        # 1,080
+
+    try:
+        return float(clean)
+    except ValueError:
+        raise ValueError(
+            f"Could not read a number from {value!r}. The source format has "
+            f"probably changed - check the file before trusting its figures."
+        ) from None
 
 
 def _to_int(value) -> int:
-    """Ticket counts are whole numbers. Route through _to_float for cleaning."""
+    """
+    Ticket counts are whole numbers.
+
+    Goes through _to_float so '1,080' works, and so an unreadable cell raises
+    here too rather than silently becoming 0.
+    """
     return int(round(_to_float(value)))
 
 

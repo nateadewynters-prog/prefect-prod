@@ -42,14 +42,27 @@ def download_from_html_link(html_body: str, output_path: str):
     # Navigate Ticketmaster redirects and download
     session = requests.Session()
     response = session.get(real_tm_url, allow_redirects=True)
-    
+    response.raise_for_status()
+
     tm_params = urllib.parse.parse_qs(urllib.parse.urlparse(response.url).query)
     target_url_param = tm_params.get('targetUrl')
     download_link = urllib.parse.unquote(target_url_param[0]) if target_url_param else response.url
-    
+
     file_response = session.get(download_link)
     file_response.raise_for_status()
-    
+
+    # An expired or unauthenticated link answers with a login or "report not
+    # ready" page and answers HTTP 200, so raise_for_status() sees nothing
+    # wrong. Left unchecked, that page is written under the report's real
+    # filename and a passthrough rule delivers it to the contractor as the
+    # day's sales figures.
+    content_type = file_response.headers.get('Content-Type', '')
+    if 'html' in content_type.lower():
+        raise ValueError(
+            f"Download returned a web page, not a report (Content-Type: "
+            f"{content_type}). The link has probably expired."
+        )
+
     # Save directly to the provided temp_path
     with open(output_path, 'wb') as f:
         f.write(file_response.content)

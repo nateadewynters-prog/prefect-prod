@@ -158,6 +158,19 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
             # Passthrough files AND parsed CSVs both go to the contractor via SFTP
             upload_to_sftp(local_file_path=csv_path, filename=csv_filename, test_mode=test_mode)
 
+        # 🏷️ Tag as soon as delivery is done, before the bookkeeping below. The
+        # email category is the only durable record that this report has been
+        # sent, so anything that throws between the SFTP upload and this line
+        # leaves the email unmarked and the next run delivers the same file
+        # again. tag_email can also return False without raising, so check it:
+        # reporting success on an untagged email guarantees a re-delivery.
+        if not graph.tag_email(msg_id, "sales_report_extracted"):
+            raise RuntimeError(
+                f"Delivered {r_name} but could not tag the email as extracted. "
+                f"Failing loudly - leaving it untagged would re-deliver the same "
+                f"file to the contractor on the next run."
+            )
+
         md_table = f"## Validation Result: {validation_result.status}\n\n**Message:** {validation_result.message}\n\n| Metric | Value |\n|---|---|\n"
         for k, v in validation_result.metrics.items(): 
             md_table += f"| {k} | {v} |\n"
@@ -171,8 +184,6 @@ def process_email(queued_sales_report, disable_notifications: bool = False):
             link_display = f"📁 {raw_link_md}  |  📊 [Processed CSV]({processed_url})"
         else:
             link_display = f"📁 {raw_link_md}"
-
-        graph.tag_email(msg_id, "sales_report_extracted")
 
         try:
             rule_loader.update_last_run(rule.get("_sp_item_id"))
@@ -308,6 +319,13 @@ if __name__ == "__main__":
     sales_extractor_flow.serve(
         name="sales-extractor-flow",
         cron="*/15 * * * *",
+        # One run at a time. A run currently takes ~4 of its 15 minutes, but the
+        # cost grows with the rule count and rules are added via SharePoint with
+        # no code change. Once a run overruns the interval, the next one starts
+        # alongside it, sees the same un-tagged emails and delivers every file
+        # to the contractor twice. This also makes a post-outage backlog of
+        # 'Late' runs drain one at a time instead of all at once.
+        limit=1,
         tags=["medallion-raw", "production"],
         description="Automated email extraction. Includes dynamic rule routing, lookup handling, SharePoint uploads, and SFTP delivery."
     )

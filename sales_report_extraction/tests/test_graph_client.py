@@ -58,3 +58,63 @@ def test_get_token_failure(mock_msal_class, mock_get_run_logger, mock_client):
     # Assert that our custom error message is present
     assert "Failed to acquire Graph Token" in str(exc_info.value)
     assert "Invalid client secret" in str(exc_info.value)
+
+# ---------------------------------------------------------------------------
+# 4. tag_email must ADD a tag, never replace the existing list
+# ---------------------------------------------------------------------------
+# Two rules can legitimately claim the same email (that is what FileNameKeyword
+# is for). If tagging one rule's outcome wiped the other's, that report would be
+# lost silently, so these tests pin the read-modify-write behaviour.
+@patch('src.graph_client.get_run_logger')
+@patch('src.graph_client.requests.patch')
+@patch('src.graph_client.requests.get')
+def test_tag_email_preserves_existing_categories(
+    mock_get, mock_patch, mock_logger, mock_client
+):
+    """An existing tag must survive; the new one is appended to it."""
+    mock_client._token = "fake-token"          # skip MSAL entirely
+
+    mock_get.return_value = MagicMock(
+        **{"json.return_value": {"categories": ["sales_report_failed"]},
+           "raise_for_status.return_value": None}
+    )
+    mock_patch.return_value = MagicMock(status_code=200)
+
+    assert mock_client.tag_email("MSG_1", "sales_report_extracted") is True
+
+    sent = mock_patch.call_args.kwargs["json"]
+    assert sent == {"categories": ["sales_report_failed", "sales_report_extracted"]}
+
+
+@patch('src.graph_client.get_run_logger')
+@patch('src.graph_client.requests.patch')
+@patch('src.graph_client.requests.get')
+def test_tag_email_on_untagged_email_sends_only_the_new_tag(
+    mock_get, mock_patch, mock_logger, mock_client
+):
+    """The common case: no categories yet, so the payload is just the new tag."""
+    mock_client._token = "fake-token"
+
+    mock_get.return_value = MagicMock(
+        **{"json.return_value": {}, "raise_for_status.return_value": None}
+    )
+    mock_patch.return_value = MagicMock(status_code=200)
+
+    assert mock_client.tag_email("MSG_2", "sales_report_extracted") is True
+    assert mock_patch.call_args.kwargs["json"] == {"categories": ["sales_report_extracted"]}
+
+
+@patch('src.graph_client.get_run_logger')
+@patch('src.graph_client.requests.patch')
+@patch('src.graph_client.requests.get')
+def test_tag_email_is_idempotent(mock_get, mock_patch, mock_logger, mock_client):
+    """Re-tagging an already-tagged email is a no-op, not a duplicate entry."""
+    mock_client._token = "fake-token"
+
+    mock_get.return_value = MagicMock(
+        **{"json.return_value": {"categories": ["sales_report_extracted"]},
+           "raise_for_status.return_value": None}
+    )
+
+    assert mock_client.tag_email("MSG_3", "sales_report_extracted") is True
+    mock_patch.assert_not_called()

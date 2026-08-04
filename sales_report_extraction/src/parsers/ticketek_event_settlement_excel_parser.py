@@ -1,25 +1,61 @@
 import pandas as pd
 import os
+import re
 from prefect import task, get_run_logger
 from src.models import ValidationResult
 
 def clean_currency(value):
-    if pd.isna(value) or value == '': return 0.0
-    if isinstance(value, (int, float)): return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value.replace('$', '').replace('£', '').replace(',', '').replace(' ', ''))
-        except: return 0.0
-    return 0.0
+    """
+    Turn a money cell into a float, or raise ValueError if it can't be read.
+
+    Raises rather than returning 0.0, which is what this used to do. The data
+    rows AND the 'Event Span Total' footer are both read through this function,
+    so returning 0 on an unreadable cell zeroed both sides and the totals check
+    passed on 0 == 0 - delivering wrong figures marked PASSED, with no alert.
+    """
+    if pd.isna(value) or value == '':
+        return 0.0
+    if isinstance(value, bool):
+        # bool is a subclass of int, so it would otherwise become 1.0/0.0.
+        raise ValueError(f"Expected a number in a money column, got a boolean: {value!r}")
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    # Strip currency symbols and every space (including the non-breaking kind),
+    # leaving only digits and separators.
+    clean = re.sub(r'\s+', '', str(value).replace('$', '').replace('£', ''))
+    if clean in ('', '-', '.', '-.'):
+        return 0.0                                          # a dash means nothing
+
+    # Work out what the separators mean before touching them. Guessing wrong is
+    # a 100x error: "1,234.56" is comma-thousands, but "1234,56" is a European
+    # decimal comma and blanket-stripping it turns 1234.56 into 123456.
+    if ',' in clean and '.' in clean:
+        if clean.rfind(',') > clean.rfind('.'):
+            clean = clean.replace('.', '').replace(',', '.')  # 1.234,56
+        else:
+            clean = clean.replace(',', '')                    # 1,234.56
+    elif re.search(r',\d{2}$', clean):
+        clean = clean.replace(',', '.')                       # 1234,56
+    else:
+        clean = clean.replace(',', '')                        # 1,080
+
+    try:
+        return float(clean)
+    except ValueError:
+        raise ValueError(
+            f"Could not read a number from {value!r}. The source format has "
+            f"probably changed - check the file before trusting its figures."
+        ) from None
 
 def clean_int(value):
-    if pd.isna(value) or value == '': return 0
-    if isinstance(value, (int, float)): return int(value)
-    if isinstance(value, str):
-        try:
-            return int(float(value.replace(',', '').replace(' ', '')))
-        except: return 0
-    return 0
+    """
+    Ticket counts are whole numbers.
+
+    Goes through clean_currency so '1,080' and '1080.0' both work, and so an
+    unreadable cell raises here too rather than silently becoming 0.
+    """
+    return int(round(clean_currency(value)))
 
 # Strict Data Contract
 EXPECTED_SCHEMA = {"Performance/Event Code", "Comps", "Paid Tickets", "Total Tickets", "Total Gross"}
