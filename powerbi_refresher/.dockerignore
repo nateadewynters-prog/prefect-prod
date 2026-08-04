@@ -1,0 +1,15 @@
+# Keep secrets and runtime state out of the image. `COPY . .` would otherwise
+# bake in whatever happens to be sitting in this folder at build time.
+.env
+*.db
+*.db-wal
+*.db-shm
+data/
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Docs are not needed at runtime
+CODE_REVIEW.md

@@ -119,6 +119,15 @@ services:
       - "8004:8004"
     volumes:
       - /opt/prefect/prod/.env:/app/.env:ro
+      # Without this mount the SQLite file lives inside the container and every
+      # rebuild wipes the refresh history. `data/*.db` is gitignored, so the
+      # deploy workflow's `git clean -fd` leaves it alone.
+      - ./data:/app/data
+    environment:
+      - DB_PATH=/app/data/refresher_state.db
+      # Timestamps are stored in UTC and converted by the browser; this only
+      # affects how the container's own log lines read in `docker logs`.
+      - TZ=Europe/London
     restart: unless-stopped
     logging:
       driver: "json-file"
