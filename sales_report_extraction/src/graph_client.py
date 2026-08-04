@@ -108,16 +108,40 @@ class GraphClient:
         logger.error(f"❌ {error_msg}")
         raise ValueError(error_msg)
 
+    def _get_categories(self, msg_id: str) -> list:
+        """Return the category tags currently on an email (empty list if none)."""
+        endpoint = f"{self.base_url}/users/{self.target_user}/messages/{msg_id}?$select=categories"
+        resp = requests.get(endpoint, headers=self.get_headers())
+        resp.raise_for_status()
+        return resp.json().get('categories', [])
+
     def tag_email(self, msg_id: str, tag_name: str) -> bool:
-        """Applies a category tag to an email in Microsoft Graph."""
+        """
+        Adds a category tag to an email, keeping any tags already on it.
+
+        Graph PATCH replaces the whole categories array, so we must read the
+        current list and append to it. Writing [tag_name] on its own would
+        wipe an existing tag - and when two rules claim the same email (which
+        FileNameKeyword exists to support), overwriting one rule's
+        "sales_report_failed" with the other's "sales_report_extracted" loses
+        that report for good: main.py treats "extracted" as a permanent skip
+        and reset_failed_emails only ever looks for "failed".
+        """
         logger = get_run_logger()
         endpoint = f"{self.base_url}/users/{self.target_user}/messages/{msg_id}"
-        payload = {"categories": [tag_name]}
-        
+
         # Add a simple retry loop for Exchange server conflicts
         for attempt in range(3):
+            # Read inside the loop, not before it: a 409/412 means something
+            # else changed the message, so a list fetched earlier is stale.
+            categories = self._get_categories(msg_id)
+            if tag_name in categories:
+                logger.info(f"🏷️ Email already tagged '{tag_name}'; nothing to do.")
+                return True
+
+            payload = {"categories": categories + [tag_name]}
             resp = requests.patch(endpoint, headers=self.get_headers(), json=payload)
-            
+
             if resp.status_code == 200:
                 logger.info(f"🏷️ Successfully tagged email with '{tag_name}'")
                 return True
