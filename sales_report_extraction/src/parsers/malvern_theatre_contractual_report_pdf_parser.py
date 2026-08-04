@@ -4,11 +4,59 @@ import os
 from prefect import task, get_run_logger
 from src.models import ValidationResult
 
-# Shared money/count parsing: raises on a cell it cannot read instead of
-# returning 0, so a supplier format change can no longer zero both the
-# extracted figures and the totals row they are checked against.
-# See src/parsers/_common.py.
-from src.parsers._common import to_float as parse_currency, to_int as parse_int
+def parse_currency(value_str):
+    """
+    Turn a money cell into a float, or raise ValueError if it can't be read.
+
+    Raises rather than returning 0.0, which is what this used to do. The
+    performance rows AND the '... Performances' summary line are both read
+    through this function, so returning 0 on an unreadable cell zeroed both
+    sides and the totals check passed on 0 == 0 - delivering wrong figures,
+    with no alert.
+    """
+    if not value_str:
+        return 0.0
+    if isinstance(value_str, bool):
+        # bool is a subclass of int, so it would otherwise become 1.0/0.0.
+        raise ValueError(f"Expected a number in a money column, got a boolean: {value_str!r}")
+    if isinstance(value_str, (int, float)):
+        return float(value_str)
+
+    # Strip currency symbols and every space (including the non-breaking kind),
+    # leaving only digits and separators.
+    clean = re.sub(r'\s+', '', str(value_str).replace('£', ''))
+    if clean in ('', '-', '.', '-.'):
+        return 0.0                                          # a dash means nothing
+
+    # Work out what the separators mean before touching them. Guessing wrong is
+    # a 100x error: "1,234.56" is comma-thousands, but "1234,56" is a European
+    # decimal comma and blanket-stripping it turns 1234.56 into 123456.
+    if ',' in clean and '.' in clean:
+        if clean.rfind(',') > clean.rfind('.'):
+            clean = clean.replace('.', '').replace(',', '.')  # 1.234,56
+        else:
+            clean = clean.replace(',', '')                    # 1,234.56
+    elif re.search(r',\d{2}$', clean):
+        clean = clean.replace(',', '.')                       # 1234,56
+    else:
+        clean = clean.replace(',', '')                        # 1,080
+
+    try:
+        return float(clean)
+    except ValueError:
+        raise ValueError(
+            f"Could not read a number from {value_str!r}. The source format has "
+            f"probably changed - check the file before trusting its figures."
+        ) from None
+
+def parse_int(value_str):
+    """
+    Ticket counts are whole numbers.
+
+    Goes through parse_currency so '1,080' and '1080.0' both work, and so an
+    unreadable cell raises here too rather than silently becoming 0.
+    """
+    return int(round(parse_currency(value_str)))
 
 # Strict Data Contract
 EXPECTED_SCHEMA = {"Day", "Date", "Time", "Production", "Total Capacity", "Sold", "Reserved", "Remaining", "Reserved Value", "Total Gross"}
