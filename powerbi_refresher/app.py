@@ -86,6 +86,9 @@ HTTP_TIMEOUT = 30  # seconds; applied to every single Power BI API call
 POLL_TIMEOUT_SECONDS = int(os.getenv("POLL_TIMEOUT_SECONDS", "1800"))  # 30 min
 LOCK_TTL_SECONDS = int(os.getenv("LOCK_TTL_SECONDS", "2100"))  # 35 min
 POLL_INTERVAL_SECONDS = 5  # how often to ask Power BI how a refresh is doing
+# How long to insist on an exact RequestId match before identifying our refresh
+# by its start time instead — see the fallback in run_refresh.
+REQUEST_ID_GRACE_SECONDS = 60
 
 # The gap between POLL_TIMEOUT and LOCK_TTL absorbs the worst-case overshoot of
 # a single poll pass — one token request plus one status request, each capped by
@@ -639,10 +642,16 @@ def parse_pbi_time(value):
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, TypeError, AttributeError):
         log.debug("Could not parse Power BI timestamp %r", value)
         return None
+    # Power BI should always include a UTC offset, but assume UTC when it does
+    # not: comparing a naive datetime against an aware one raises TypeError,
+    # which would surface to the user as a bare "Unexpected error".
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 def find_our_refresh(rows: list, request_id, triggered_after: datetime):
@@ -723,8 +732,10 @@ def run_refresh(report: dict, msg):
     if not request_id:
         log.warning("No RequestId header returned — falling back to start-time matching")
 
-    deadline = time.monotonic() + POLL_TIMEOUT_SECONDS
+    poll_start = time.monotonic()
+    deadline = poll_start + POLL_TIMEOUT_SECONDS
     last_status = None
+    warned_about_fallback = False
 
     while True:
         # Check the clock BEFORE sleeping and never sleep past the deadline.
@@ -758,6 +769,28 @@ def run_refresh(report: dict, msg):
             continue
 
         row = find_our_refresh(rows, request_id, triggered_after)
+
+        # Insisting on an exact RequestId match is right, but it must not be the
+        # only way we can ever identify our refresh. If Power BI hands back a
+        # RequestId that never turns up in the refresh history, matching only on
+        # it means polling "Queued" until the deadline and then reporting a
+        # refresh as untracked when it had in fact completed. After a short
+        # grace period, fall back to "a run that started after we triggered" —
+        # the same rule used when no RequestId is returned at all. The grace
+        # period is what stops this from mistaking a concurrent scheduled
+        # refresh for ours in the ordinary case.
+        if row is None and request_id and time.monotonic() - poll_start >= REQUEST_ID_GRACE_SECONDS:
+            row = find_our_refresh(rows, None, triggered_after)
+            if row is not None and not warned_about_fallback:
+                log.warning(
+                    "No refresh matching RequestId=%s appeared within %ds for dataset %s — "
+                    "identifying our refresh by start time instead",
+                    request_id,
+                    REQUEST_ID_GRACE_SECONDS,
+                    dataset_id,
+                )
+                warned_about_fallback = True
+
         status = "Queued in Power BI" if row is None else row.get("status", "Unknown")
 
         # Send a line on EVERY poll, but only record the changes.
