@@ -79,28 +79,46 @@ HTTP_TIMEOUT = 30  # seconds; applied to every single Power BI API call
 # These three values form a deliberate hierarchy — keep them in this order:
 #   POLL_TIMEOUT_SECONDS  we stop watching a refresh
 #   LOCK_TTL_SECONDS      a lock is assumed stale and can be taken over
-#   gunicorn --timeout    the worker is killed (set in the Dockerfile)
+#   GUNICORN_TIMEOUT      the worker is killed (set in the Dockerfile)
 # If the worker were killed first, the `finally` that releases the lock would
 # never run and the dataset would stay locked until someone restarted the
-# container. The TTL is the safety net for exactly that case.
-POLL_TIMEOUT_SECONDS = int(os.getenv("POLL_TIMEOUT_SECONDS", "1800"))  # 30 min
+# container. The TTL is the safety net for exactly that case. All three are
+# checked below, because a hierarchy nobody enforces is just a comment.
+POLL_TIMEOUT_SECONDS = int(os.getenv("POLL_TIMEOUT_SECONDS", "1500"))  # 25 min
 LOCK_TTL_SECONDS = int(os.getenv("LOCK_TTL_SECONDS", "2100"))  # 35 min
+GUNICORN_TIMEOUT = int(os.getenv("GUNICORN_TIMEOUT", "2400"))  # 40 min; see Dockerfile
 POLL_INTERVAL_SECONDS = 5  # how often to ask Power BI how a refresh is doing
 # How long to insist on an exact RequestId match before identifying our refresh
 # by its start time instead — see the fallback in run_refresh.
 REQUEST_ID_GRACE_SECONDS = 60
 
-# The gap between POLL_TIMEOUT and LOCK_TTL absorbs the worst-case overshoot of
-# a single poll pass — one token request plus one status request, each capped by
-# HTTP_TIMEOUT. Keep LOCK_TTL comfortably above POLL_TIMEOUT + 2 * HTTP_TIMEOUT
-# so a refresh can never outlive the lock it holds.
-# Checked rather than asserted: `python -O` strips assert statements, and this
-# is a real deployment constraint, not a debugging aid.
-if LOCK_TTL_SECONDS <= POLL_TIMEOUT_SECONDS + 2 * HTTP_TIMEOUT:
+# How far past POLL_TIMEOUT a refresh can possibly run.
+#
+# Be careful with this sum — an earlier version of it was wrong. `timeout` in
+# requests is not a total budget: it applies separately to connecting and to
+# reading, so ONE attempt can spend 2 * HTTP_TIMEOUT. A refresh makes up to
+# three such calls before polling begins (a token request, which MSAL retries
+# once, plus the trigger POST) and up to three more on every poll pass. Hence
+# six worst-case calls, 360s at the default HTTP_TIMEOUT.
+#
+# This arithmetic only holds because the calls made while holding a lock go
+# through `http_no_retry` — see build_session. Retrying them would multiply
+# every term here by the retry count.
+LOCK_HEADROOM_SECONDS = 6 * 2 * HTTP_TIMEOUT
+
+# Checked rather than asserted: `python -O` strips assert statements, and these
+# are real deployment constraints, not debugging aids.
+if LOCK_TTL_SECONDS <= POLL_TIMEOUT_SECONDS + LOCK_HEADROOM_SECONDS:
     raise SystemExit(
         f"Refusing to start — LOCK_TTL_SECONDS ({LOCK_TTL_SECONDS}) must be greater than "
-        f"POLL_TIMEOUT_SECONDS ({POLL_TIMEOUT_SECONDS}) + {2 * HTTP_TIMEOUT}s of HTTP headroom, "
-        "or a refresh could outlive the lock protecting its dataset."
+        f"POLL_TIMEOUT_SECONDS ({POLL_TIMEOUT_SECONDS}) + {LOCK_HEADROOM_SECONDS}s of HTTP "
+        "headroom, or a refresh could outlive the lock protecting its dataset."
+    )
+if LOCK_TTL_SECONDS >= GUNICORN_TIMEOUT:
+    raise SystemExit(
+        f"Refusing to start — LOCK_TTL_SECONDS ({LOCK_TTL_SECONDS}) must be less than "
+        f"GUNICORN_TIMEOUT ({GUNICORN_TIMEOUT}). If gunicorn kills the worker first, the "
+        "cleanup that releases the dataset lock never runs."
     )
 
 SYNC_RETRY_SECONDS = 300  # after a failed report sync, retry in 5 minutes
@@ -123,50 +141,45 @@ def utc_now_iso() -> str:
 # ---------------------------------------------------------------------------
 # 2. HTTP SESSION
 # ---------------------------------------------------------------------------
-def build_session() -> requests.Session:
+def build_session(retry: bool) -> requests.Session:
     """
-    One shared Session with automatic retries for throttling and transient
-    server errors. Power BI returns 429 with a Retry-After header when the
-    tenant is being hammered; urllib3 honours that header for us.
+    Build a Session, with or without automatic retries.
 
-    Note: Retry's default `allowed_methods` deliberately excludes POST, so the
-    refresh trigger is NEVER retried automatically. That is what we want — a
-    retried POST would start a second refresh on the same dataset.
+    Retries are right for report discovery: Power BI answers 429 with a
+    Retry-After header when the tenant is busy, and a sync that gives up loses
+    the whole report list until the next attempt.
+
+    They are wrong for anything done while holding a dataset lock. urllib3
+    honours Retry-After verbatim and retries GET by default, so a single status
+    call can take several times its own timeout — which makes the time a refresh
+    holds its lock unbounded in practice. The poll loop already retries once
+    every POLL_INTERVAL_SECONDS and tolerates a failed poll, so it needs no help.
+
+    (POST is excluded from retries either way: a retried trigger would start a
+    second refresh on the same dataset.)
     """
-    retry = Retry(
-        total=3,
-        backoff_factor=1,  # 0s, 1s, 2s between attempts
-        status_forcelist=(429, 500, 502, 503, 504),
-        respect_retry_after_header=True,
-        raise_on_status=False,
-    )
     session = requests.Session()
-    session.mount("https://", HTTPAdapter(max_retries=retry))
+    if retry:
+        session.mount(
+            "https://",
+            HTTPAdapter(
+                max_retries=Retry(
+                    total=3,
+                    backoff_factor=1,  # 0s, 1s, 2s between attempts
+                    status_forcelist=(429, 500, 502, 503, 504),
+                    respect_retry_after_header=True,
+                    raise_on_status=False,
+                )
+            ),
+        )
     return session
 
 
-http = build_session()
-
-
-class TimeoutSession(requests.Session):
-    """
-    A Session that applies a default timeout to every request.
-
-    MSAL creates its own Session when we do not give it one, and that Session
-    has NO timeout — so a hung Azure endpoint would block the calling thread
-    indefinitely. Gunicorn's --timeout does not help here: it cannot interrupt a
-    thread that is already blocked inside a socket read. That matters because
-    the refresh poll loop asks for a token on every pass, and a thread stuck
-    there holds the dataset lock past its TTL.
-    """
-
-    def __init__(self, timeout: int):
-        super().__init__()
-        self.timeout = timeout
-
-    def request(self, *args, **kwargs):
-        kwargs.setdefault("timeout", self.timeout)
-        return super().request(*args, **kwargs)
+# Used for report discovery, where a transient failure costs the whole sync.
+http = build_session(retry=True)
+# Used for everything done while holding a dataset lock, where a slow call costs
+# more than a failed one. See LOCK_HEADROOM_SECONDS.
+http_no_retry = build_session(retry=False)
 
 
 # ---------------------------------------------------------------------------
@@ -194,8 +207,13 @@ def get_msal_app() -> msal.ConfidentialClientApplication:
                 CLIENT_ID,
                 authority=f"https://login.microsoftonline.com/{TENANT_ID}",
                 client_credential=CLIENT_SECRET,
-                # Without this MSAL builds an untimed Session of its own.
-                http_client=TimeoutSession(HTTP_TIMEOUT),
+                # Without a timeout MSAL will wait on a hung Azure endpoint for
+                # ever, and gunicorn cannot interrupt a thread that is already
+                # blocked in a socket read. Use MSAL's own `timeout` rather than
+                # supplying an http_client: passing a client makes MSAL skip the
+                # branch where it mounts its own retry adapter, so a custom
+                # client silently loses token-request retries.
+                timeout=HTTP_TIMEOUT,
             )
     return _msal_app
 
@@ -402,8 +420,11 @@ def release_lock(dataset_id: str, token: str) -> bool:
         )
         released = conn.total_changes > before
     if not released:
+        # Usually a takeover, but the same branch covers a double release or an
+        # unknown dataset, so do not claim more than we know.
         log.warning(
-            "Not releasing lock on dataset %s — it was taken over by another refresh",
+            "Lock on dataset %s was not released: no lock matching our token "
+            "(already released, or taken over by another refresh)",
             dataset_id,
         )
     return released
@@ -718,7 +739,9 @@ def run_refresh(report: dict, msg):
     triggered_after = datetime.now(timezone.utc).replace(microsecond=0)
 
     try:
-        trigger = http.post(refresh_url, headers=headers, json={}, timeout=HTTP_TIMEOUT)
+        trigger = http_no_retry.post(
+            refresh_url, headers=headers, json={}, timeout=HTTP_TIMEOUT
+        )
         trigger.raise_for_status()
     except requests.RequestException as exc:
         log.exception("Failed to trigger refresh for dataset %s", dataset_id)
@@ -750,7 +773,7 @@ def run_refresh(report: dict, msg):
         try:
             # $top=5 rather than 1, so a concurrent or scheduled refresh on the
             # same dataset cannot push ours out of view.
-            poll = http.get(
+            poll = http_no_retry.get(
                 f"{refresh_url}?$top=5", headers=pbi_headers(), timeout=HTTP_TIMEOUT
             )
             poll.raise_for_status()

@@ -28,8 +28,16 @@ HEALTHCHECK --interval=60s --timeout=10s --start-period=15s --retries=3 \
 # Threads are generous because each in-progress refresh holds one thread open
 # for the life of its SSE stream.
 #
-# --timeout must stay ABOVE the app's POLL_TIMEOUT_SECONDS (default 1800) and
-# LOCK_TTL_SECONDS (default 2100). If gunicorn killed the worker first, the
+# The worker timeout must stay ABOVE the app's LOCK_TTL_SECONDS, which in turn
+# stays above POLL_TIMEOUT_SECONDS. If gunicorn killed the worker first, the
 # cleanup that releases the dataset lock would never run.
-CMD ["gunicorn", "--workers", "1", "--threads", "16", "--worker-class", "gthread", \
-     "--bind", "0.0.0.0:8004", "--timeout", "2400", "--access-logfile", "-", "app:app"]
+#
+# It is set here as an environment variable and referenced in the command below
+# so there is ONE source of truth: app.py reads the same variable and refuses to
+# start if the ordering is wrong. Hard-coding it in both places let them drift.
+ENV GUNICORN_TIMEOUT=2400
+
+# Shell form so $GUNICORN_TIMEOUT is expanded; `exec` keeps gunicorn as PID 1 so
+# it still receives SIGTERM directly from `docker stop`.
+CMD exec gunicorn --workers 1 --threads 16 --worker-class gthread \
+     --bind 0.0.0.0:8004 --timeout $GUNICORN_TIMEOUT --access-logfile - app:app
