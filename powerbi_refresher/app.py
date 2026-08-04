@@ -28,6 +28,7 @@ import os
 import sqlite3
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
@@ -84,6 +85,20 @@ HTTP_TIMEOUT = 30  # seconds; applied to every single Power BI API call
 # container. The TTL is the safety net for exactly that case.
 POLL_TIMEOUT_SECONDS = int(os.getenv("POLL_TIMEOUT_SECONDS", "1800"))  # 30 min
 LOCK_TTL_SECONDS = int(os.getenv("LOCK_TTL_SECONDS", "2100"))  # 35 min
+POLL_INTERVAL_SECONDS = 5  # how often to ask Power BI how a refresh is doing
+
+# The gap between POLL_TIMEOUT and LOCK_TTL absorbs the worst-case overshoot of
+# a single poll pass — one token request plus one status request, each capped by
+# HTTP_TIMEOUT. Keep LOCK_TTL comfortably above POLL_TIMEOUT + 2 * HTTP_TIMEOUT
+# so a refresh can never outlive the lock it holds.
+# Checked rather than asserted: `python -O` strips assert statements, and this
+# is a real deployment constraint, not a debugging aid.
+if LOCK_TTL_SECONDS <= POLL_TIMEOUT_SECONDS + 2 * HTTP_TIMEOUT:
+    raise SystemExit(
+        f"Refusing to start — LOCK_TTL_SECONDS ({LOCK_TTL_SECONDS}) must be greater than "
+        f"POLL_TIMEOUT_SECONDS ({POLL_TIMEOUT_SECONDS}) + {2 * HTTP_TIMEOUT}s of HTTP headroom, "
+        "or a refresh could outlive the lock protecting its dataset."
+    )
 
 SYNC_RETRY_SECONDS = 300  # after a failed report sync, retry in 5 minutes
 LOG_RETENTION_DAYS = 7
@@ -130,6 +145,27 @@ def build_session() -> requests.Session:
 http = build_session()
 
 
+class TimeoutSession(requests.Session):
+    """
+    A Session that applies a default timeout to every request.
+
+    MSAL creates its own Session when we do not give it one, and that Session
+    has NO timeout — so a hung Azure endpoint would block the calling thread
+    indefinitely. Gunicorn's --timeout does not help here: it cannot interrupt a
+    thread that is already blocked inside a socket read. That matters because
+    the refresh poll loop asks for a token on every pass, and a thread stuck
+    there holds the dataset lock past its TTL.
+    """
+
+    def __init__(self, timeout: int):
+        super().__init__()
+        self.timeout = timeout
+
+    def request(self, *args, **kwargs):
+        kwargs.setdefault("timeout", self.timeout)
+        return super().request(*args, **kwargs)
+
+
 # ---------------------------------------------------------------------------
 # 3. AUTH
 # ---------------------------------------------------------------------------
@@ -155,6 +191,8 @@ def get_msal_app() -> msal.ConfidentialClientApplication:
                 CLIENT_ID,
                 authority=f"https://login.microsoftonline.com/{TENANT_ID}",
                 client_credential=CLIENT_SECRET,
+                # Without this MSAL builds an untimed Session of its own.
+                http_client=TimeoutSession(HTTP_TIMEOUT),
             )
     return _msal_app
 
@@ -250,6 +288,8 @@ def init_db() -> None:
         # report_id was added after this table shipped, so existing databases
         # need it applied separately — see ensure_column.
         ensure_column(conn, "last_refresh", "report_id", "TEXT")
+        # Likewise for the lock ownership token — see try_acquire_lock.
+        ensure_column(conn, "locks", "lock_token", "TEXT")
         # The report list is cached here rather than in a module-level variable
         # so that it survives a restart (the UI is populated instantly on boot)
         # and so every process sees the same data.
@@ -266,8 +306,9 @@ def init_db() -> None:
         # Simple key/value store for sync bookkeeping (last_sync_at, last_sync_error).
         conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
 
-        # Any lock still set at boot is left over from a previous run.
-        conn.execute("UPDATE locks SET is_locked = 0")
+        # Any lock still set at boot is left over from a previous run. Clear the
+        # tokens too, so a stale one can never match a later release.
+        conn.execute("UPDATE locks SET is_locked = 0, locked_at = NULL, lock_token = NULL")
 
     log.info("Database ready at %s", DB_PATH)
 
@@ -307,9 +348,10 @@ def meta_get(key: str):
 
 
 # --- locks -----------------------------------------------------------------
-def try_acquire_lock(dataset_id: str) -> bool:
+def try_acquire_lock(dataset_id: str):
     """
-    Take the lock for a dataset, returning True only if we actually got it.
+    Take the lock for a dataset. Returns an ownership token, or None if the
+    lock is already held by someone else.
 
     This is one atomic statement on purpose. Checking "is it locked?" and then
     separately setting the lock leaves a gap where two clicks a few
@@ -318,29 +360,50 @@ def try_acquire_lock(dataset_id: str) -> bool:
     A lock older than LOCK_TTL_SECONDS is treated as stale and can be taken
     over — that covers the case where a worker was killed before it could
     release its lock.
+
+    The token is what makes that takeover safe. Pass it to release_lock, which
+    only clears the lock if the token still matches. Without it, a caller whose
+    lock had gone stale and been taken over by someone else would release the
+    NEW holder's lock on its way out, letting a third refresh start while the
+    second was still running.
+    """
+    token = uuid.uuid4().hex
+    with db() as conn:
+        before = conn.total_changes
+        conn.execute(
+            f"""INSERT INTO locks (dataset_id, is_locked, locked_at, lock_token)
+                VALUES (?, 1, {SQL_UTC_NOW}, ?)
+                ON CONFLICT(dataset_id) DO UPDATE
+                    SET is_locked = 1, locked_at = {SQL_UTC_NOW}, lock_token = excluded.lock_token
+                    WHERE locks.is_locked = 0
+                       OR locks.locked_at <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)""",
+            (dataset_id, token, f"-{LOCK_TTL_SECONDS} seconds"),
+        )
+        # total_changes only moves if a row was actually inserted or updated,
+        # which tells us whether the WHERE clause above let us in.
+        return token if conn.total_changes > before else None
+
+
+def release_lock(dataset_id: str, token: str) -> bool:
+    """
+    Release a lock we hold. Returns False if the token no longer matches, which
+    means our lock went stale and someone else legitimately took it over — in
+    that case the other holder's lock is deliberately left alone.
     """
     with db() as conn:
         before = conn.total_changes
         conn.execute(
-            f"""INSERT INTO locks (dataset_id, is_locked, locked_at)
-                VALUES (?, 1, {SQL_UTC_NOW})
-                ON CONFLICT(dataset_id) DO UPDATE
-                    SET is_locked = 1, locked_at = {SQL_UTC_NOW}
-                    WHERE locks.is_locked = 0
-                       OR locks.locked_at <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)""",
-            (dataset_id, f"-{LOCK_TTL_SECONDS} seconds"),
+            "UPDATE locks SET is_locked = 0, locked_at = NULL, lock_token = NULL "
+            "WHERE dataset_id = ? AND lock_token = ?",
+            (dataset_id, token),
         )
-        # total_changes only moves if a row was actually inserted or updated,
-        # which tells us whether the WHERE clause above let us in.
-        return conn.total_changes > before
-
-
-def release_lock(dataset_id: str) -> None:
-    with db() as conn:
-        conn.execute(
-            "UPDATE locks SET is_locked = 0, locked_at = NULL WHERE dataset_id = ?",
-            (dataset_id,),
+        released = conn.total_changes > before
+    if not released:
+        log.warning(
+            "Not releasing lock on dataset %s — it was taken over by another refresh",
+            dataset_id,
         )
+    return released
 
 
 def locked_dataset_ids() -> list:
@@ -663,8 +726,16 @@ def run_refresh(report: dict, msg):
     deadline = time.monotonic() + POLL_TIMEOUT_SECONDS
     last_status = None
 
-    while time.monotonic() < deadline:
-        time.sleep(5)
+    while True:
+        # Check the clock BEFORE sleeping and never sleep past the deadline.
+        # Testing the deadline only at the top of the loop made POLL_TIMEOUT a
+        # lower bound rather than a limit: a slow pass could run well past it,
+        # and that is what allowed a refresh to outlive its own lock TTL.
+        # Overshoot is now capped by one bounded HTTP call.
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(POLL_INTERVAL_SECONDS, remaining))
         try:
             # $top=5 rather than 1, so a concurrent or scheduled refresh on the
             # same dataset cannot push ours out of view.
@@ -851,7 +922,8 @@ def stream_refresh(report_id):
         # acquired the lock and never released it, blocking the dataset until
         # the lock TTL expired 35 minutes later.
         dataset_id = report["dataset_id"]
-        if not try_acquire_lock(dataset_id):
+        lock_token = try_acquire_lock(dataset_id)
+        if lock_token is None:
             yield from reject("❌ System busy: this dataset is already refreshing.")
             yield SSE_DONE
             return
@@ -862,7 +934,8 @@ def stream_refresh(report_id):
             log.exception("Unexpected error refreshing dataset %s", dataset_id)
             yield msg(f"❌ Unexpected error: {exc}", "error")
         finally:
-            release_lock(dataset_id)
+            # Only releases if we still hold it — see release_lock.
+            release_lock(dataset_id, lock_token)
 
         # Sent on every path (success, failure, timeout) so the browser can
         # tell "finished" apart from "connection dropped".
