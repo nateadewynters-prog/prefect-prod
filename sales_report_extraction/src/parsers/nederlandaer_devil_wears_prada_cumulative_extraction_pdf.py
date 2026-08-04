@@ -1,27 +1,18 @@
-import re
 import os
 import pdfplumber
 from prefect import task, get_run_logger
 from src.models import ValidationResult
 
-def parse_currency(value_str):
-    if not value_str: return 0.0
-    clean = re.sub(r'[£,\s]', '', str(value_str))
-    if '.' in clean and clean.count('.') > 1:
-        parts = clean.split('.')
-        clean = f"{parts[0]}.{parts[1][:2]}"
-    try:
-        return float(clean)
-    except ValueError:
-        return 0.0
-
-def parse_int(value_str):
-    if not value_str: return 0
-    clean = re.sub(r'[,\s]', '', str(value_str))
-    try:
-        return int(clean)
-    except ValueError:
-        return 0
+# Shared money/count parsing: raises on a cell it cannot read instead of
+# returning 0, so a supplier format change can no longer zero both the
+# extracted figures and the totals row they are checked against.
+# See src/parsers/_common.py.
+#
+# Note this drops the old "more than one dot" fallback, which turned an
+# ambiguous "1.234.56" into 1.23 - a silently wrong figure. Multiple dots with
+# no comma now raise, because pdfplumber producing them means two columns have
+# been merged and every figure on that row is suspect.
+from src.parsers._common import to_float as parse_currency, to_int as parse_int
 
 @task(name="Parse Nederlander Prada Cumulative PDF")
 def nederlandaer_devil_wears_prada_cumulative_extraction_pdf(file_path: str) -> tuple:

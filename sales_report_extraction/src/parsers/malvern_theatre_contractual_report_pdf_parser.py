@@ -4,21 +4,11 @@ import os
 from prefect import task, get_run_logger
 from src.models import ValidationResult
 
-def parse_currency(value_str):
-    if not value_str: return 0.0
-    clean = value_str.replace('£', '').replace(',', '').strip()
-    try:
-        return float(clean)
-    except ValueError:
-        return 0.0
-
-def parse_int(value_str):
-    if not value_str: return 0
-    clean = value_str.replace(',', '').strip()
-    try:
-        return int(clean)
-    except ValueError:
-        return 0
+# Shared money/count parsing: raises on a cell it cannot read instead of
+# returning 0, so a supplier format change can no longer zero both the
+# extracted figures and the totals row they are checked against.
+# See src/parsers/_common.py.
+from src.parsers._common import to_float as parse_currency, to_int as parse_int
 
 # Strict Data Contract
 EXPECTED_SCHEMA = {"Day", "Date", "Time", "Production", "Total Capacity", "Sold", "Reserved", "Remaining", "Reserved Value", "Total Gross"}

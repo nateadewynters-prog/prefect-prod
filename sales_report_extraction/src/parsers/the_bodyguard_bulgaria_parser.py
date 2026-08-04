@@ -138,29 +138,14 @@ DATE_PATTERN = re.compile(r"^\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}$")
 MONEY_TOLERANCE = 0.01
 
 
-def _to_float(value) -> float:
-    """
-    Turn '89,720.00 EUR' or '-595.00 EUR' into a float.
-
-    Drops thousands commas, then every character that isn't a digit, a minus
-    sign or a decimal point. That makes it indifferent to however the euro
-    sign happens to be encoded in the attachment.
-
-    This assumes comma-thousands / dot-decimal formatting, which is what the
-    feed uses. If the vendor switched to European formatting, the totals
-    reconciliation would fail rather than let wrong numbers through.
-    """
-    if value is None:
-        return 0.0
-    cleaned = re.sub(r"[^0-9.\-]", "", str(value).replace(",", ""))
-    if cleaned in ("", "-", ".", "-."):
-        return 0.0
-    return float(cleaned)
-
-
-def _to_int(value) -> int:
-    """Ticket counts are whole numbers. Route through _to_float for cleaning."""
-    return int(round(_to_float(value)))
+# Shared money/count parsing: raises on a cell it cannot read instead of
+# returning 0, so a supplier format change can no longer zero both the
+# extracted figures and the totals row they are checked against.
+# See src/parsers/_common.py.
+#
+# The shared version also handles European formatting, which this parser's
+# docstring previously called out as unsupported.
+from src.parsers._common import to_float as _to_float, to_int as _to_int
 
 
 def _is_performance_row(row) -> bool:

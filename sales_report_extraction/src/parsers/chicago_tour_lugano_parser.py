@@ -150,31 +150,14 @@ def _cell(row: tuple, columns: dict, key: str):
     return row[idx]
 
 
-def _to_int(value) -> int:
-    """Coerce a cell to int, tolerating thousands separators and blanks."""
-    if value is None or value == "":
-        return 0
-    if isinstance(value, (int, float)):
-        return int(value)
-    clean = re.sub(r"[^\d\-]", "", str(value))
-    try:
-        return int(clean)
-    except ValueError:
-        return 0
-
-
-def _to_float(value) -> float:
-    """Coerce a cell to float, stripping currency symbols and separators."""
-    if value is None or value == "":
-        return 0.0
-    if isinstance(value, (int, float)):
-        return float(value)
-    clean = str(value).replace("CHF", "").replace("£", "").replace("€", "")
-    clean = clean.replace(",", "").replace("'", "").strip()
-    try:
-        return float(clean)
-    except ValueError:
-        return 0.0
+# Shared money/count parsing: raises on a cell it cannot read instead of
+# returning 0, so a supplier format change can no longer zero both the
+# extracted figures and the totals row they are checked against.
+# See src/parsers/_common.py.
+#
+# This also fixes the old _to_int, which stripped the decimal point with a
+# regex: the string "1,080.50" became 108050 rather than 1080.
+from src.parsers._common import to_float as _to_float, to_int as _to_int
 
 
 def _format_time(value) -> str:

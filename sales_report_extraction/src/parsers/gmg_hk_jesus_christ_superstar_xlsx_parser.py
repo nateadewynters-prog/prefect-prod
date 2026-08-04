@@ -4,26 +4,11 @@ import pandas as pd
 from prefect import task, get_run_logger
 from src.models import ValidationResult
 
-def clean_to_float(value):
-    """Helper to handle strings, commas, and currency symbols."""
-    if pd.isna(value):
-        return 0.0
-    clean_str = str(value).replace(',', '').replace('$', '').strip()
-    try:
-        return float(clean_str)
-    except ValueError:
-        return 0.0
-
-def clean_to_int(value):
-    """Helper to handle strings, commas, and convert to whole integers."""
-    if pd.isna(value):
-        return 0
-    clean_str = str(value).replace(',', '').replace('$', '').strip()
-    try:
-        # Cast to float first to safely handle strings like "100.0", then to int
-        return int(float(clean_str))
-    except ValueError:
-        return 0
+# Shared money/count parsing: raises on a cell it cannot read instead of
+# returning 0, so a supplier format change can no longer zero both the
+# extracted figures and the totals row they are checked against.
+# See src/parsers/_common.py.
+from src.parsers._common import to_float as clean_to_float, to_int as clean_to_int
 
 @task(name="Parse GMG HK JCS ZIP/XLSX")
 def extract_gmg_jcs_data(file_path):

@@ -3,23 +3,11 @@ import os
 from prefect import task, get_run_logger
 from src.models import ValidationResult
 
-def clean_currency(value):
-    if pd.isna(value) or value == '': return 0.0
-    if isinstance(value, (int, float)): return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value.replace('$', '').replace('£', '').replace(',', '').replace(' ', ''))
-        except: return 0.0
-    return 0.0
-
-def clean_int(value):
-    if pd.isna(value) or value == '': return 0
-    if isinstance(value, (int, float)): return int(value)
-    if isinstance(value, str):
-        try:
-            return int(float(value.replace(',', '').replace(' ', '')))
-        except: return 0
-    return 0
+# Shared money/count parsing: raises on a cell it cannot read instead of
+# returning 0, so a supplier format change can no longer zero both the
+# extracted figures and the totals row they are checked against.
+# See src/parsers/_common.py.
+from src.parsers._common import to_float as clean_currency, to_int as clean_int
 
 # Strict Data Contract
 EXPECTED_SCHEMA = {"Performance/Event Code", "Comps", "Paid Tickets", "Total Tickets", "Total Gross"}
