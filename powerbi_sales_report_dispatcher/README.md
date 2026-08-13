@@ -56,11 +56,45 @@ SQL_PASSWORD_BILOGIN=your_password
 ```
 
 ### Show Configuration
-Individual show details (Workspace IDs, Report IDs, etc.) are currently defined in the `SHOWS_CONFIG` list within `app.py`.
+Individual show details (Workspace IDs, Report IDs, etc.) are defined in the `SHOWS_CONFIG` list within `config.py`.
 
 ---
 
-## 4. Deployment
+## 4. Module Layout
+
+The app is split by responsibility, mirroring `powerbi_media_report_dispatcher`
+so both tools read the same way.
+
+| File | Holds |
+|------|-------|
+| `config.py` | Settings, `SHOWS_CONFIG`, `STAGES` — **the file you normally edit** |
+| `state.py` | SQLite: locks, logs, dispatch history (and the column migrations) |
+| `services/auth.py` | Azure AD tokens (Power BI + Graph scopes) |
+| `services/sql.py` | Sales metrics from SQL Server (`Legacy` / `TransactLive` router) |
+| `services/powerbi.py` | Dataset refresh, report export, PDF→PNG preview |
+| `services/email.py` | Email HTML builder + MS Graph send |
+| `pipeline.py` | The dispatch job and the shared SSE/lock plumbing |
+| `routes.py` | HTTP endpoints, as a Blueprint |
+| `app.py` | Thin entrypoint — builds the app, inits the DB, registers routes |
+
+### Where does X live?
+- *Change a recipient or add a show* → `config.py`
+- *Change a log message or the order of pipeline steps* → `pipeline.py`
+- *Change the email wording* → `services/email.py`
+- *Add an endpoint* → `routes.py`
+
+Two things are a silent contract with `templates/dispatcher.html`: the route
+URLs (`/api/state`, `/api/history`, `/query/<id>`, `/preview/<id>`,
+`/stream/<id>`) and the stage ids in `config.STAGES`. Changing either without
+updating the template breaks the UI without raising an error.
+
+The polling loops for the dataset refresh and the report export deliberately
+stay in `pipeline.py` rather than moving into `services/powerbi.py`: each poll
+yields a `⏳ ... Status:` line to the live log, and only a generator can do that.
+
+---
+
+## 5. Deployment
 
 The service is managed via the root `docker-compose.yml`.
 
@@ -76,11 +110,11 @@ The service is managed via the root `docker-compose.yml`.
 
 ---
 
-## 5. Development & Troubleshooting
+## 6. Development & Troubleshooting
 
 ### Adding New Shows
 To add a new show to the dispatcher:
-1. Locate `SHOWS_CONFIG` in `app.py`.
+1. Locate `SHOWS_CONFIG` in `config.py`.
 2. Add a new dictionary with the required `id`, `show_name`, `show_id`, `db_type` (`Legacy` or `TransactLive`), `pbi_workspace_id`, `pbi_report_id`, `pbi_dataset_id`, `dashboard_url` and `recipients`.
 3. Rebuild the container.
 
