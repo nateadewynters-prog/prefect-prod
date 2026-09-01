@@ -89,6 +89,22 @@ SHOWS_CONFIG = [
         "dashboard_url": "https://app.powerbi.com/groups/67ad38b6-3981-401a-9032-2d0807b5f8d6/reports/051c3e87-5bdf-4dda-8885-7103201d9a67/2af7b29d9a85004eabc5?experience=power-bi",
         "recipients": BASE_RECIPIENTS + ["k.eastham@dewynters.com", "f.carpenter@dewynters.com"],
     },
+    {
+        "id": "6", "code": "MM", "show_name": "Mamma Mia",
+        "gbq_name": "Mamma Mia",
+        "workspace_id": "4900e0ac-9477-4fc1-a82c-6ddc35546023",
+        "report_id": "797242f0-1167-43b1-a114-ca9a7aceff43",
+        "dashboard_url": "https://app.powerbi.com/groups/4900e0ac-9477-4fc1-a82c-6ddc35546023/reports/797242f0-1167-43b1-a114-ca9a7aceff43/2af7b29d9a85004eabc5?experience=power-bi",
+        "recipients": ["a.cameron@dewynters.com"],
+    },
+    {
+        "id": "7", "code": "MRTM", "show_name": "Moulin Rouge! The Musical",
+        "gbq_name": "Moulin Rouge! The Musical",
+        "workspace_id": "d8e48a79-0972-4f4e-a6da-891f284f7953",
+        "report_id": "657dd6a8-aa4e-403a-bc70-d6947b87e56e",
+        "dashboard_url": "https://app.powerbi.com/groups/d8e48a79-0972-4f4e-a6da-891f284f7953/reports/657dd6a8-aa4e-403a-bc70-d6947b87e56e/2af7b29d9a85004eabc5?experience=power-bi",
+        "recipients": ["a.cameron@dewynters.com"],
+    },
 ]
 
 # The fixed pipeline. The `id` values must match the `stage` tags used in
