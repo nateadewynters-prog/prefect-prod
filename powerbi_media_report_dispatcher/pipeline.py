@@ -2,7 +2,8 @@
 pipeline.py — the step-by-step jobs, streamed live to the browser as SSE.
 
 Two jobs live here:
-  run_dispatch  auth → BigQuery → export PPTX → export PNG → email
+  run_dispatch  auth → BigQuery → export PPTX → export PNG →
+                SharePoint backup → email
   run_refresh   auth → trigger a Power BI dataset refresh
 
 Both are generator functions: they `yield` one Server-Sent Event per step so
@@ -36,6 +37,7 @@ from services.bigquery import get_gbq_metrics
 from services.powerbi import (powerbi_export, pdf_first_page_to_png,
                               find_dataset_id, trigger_refresh, poll_refresh_status)
 from services.email import build_email_html, send_graph_email
+from services.sharepoint import backup_pdf
 
 # Every SSE stream ends with exactly this line; the front-end closes the
 # EventSource when it sees "[DONE]".
@@ -112,7 +114,8 @@ def guarded_stream(show_id: str, kind: str) -> Response:
 
 
 def run_dispatch(show_id: str):
-    """Full dispatch: auth, BigQuery, PPTX + PNG export, email, record history."""
+    """Full dispatch: auth, BigQuery, PPTX + PNG export, PDF backup, email,
+    record history."""
     current_stage, msg = _stage_logger()
 
     try:
@@ -180,7 +183,25 @@ def run_dispatch(show_id: str):
             return
         yield msg("✅ Preview ready.", "success")
 
-        # 5. EMAIL --------------------------------------------------------
+        # 5. BACKUP PDF TO SHAREPOINT -------------------------------------
+        # The PDF above is exported for the preview and otherwise thrown away,
+        # so archiving it here costs nothing extra. Deliberately best-effort:
+        # this is a backup, and a SharePoint outage must never stop the report
+        # reaching its recipients — so we log the failure and carry on to the
+        # email rather than returning.
+        current_stage["name"] = "sharepoint"
+        yield msg("☁️ Backing up PDF to SharePoint...")
+        try:
+            web_url = backup_pdf(graph_token, config["show_name"], pdf_bytes,
+                                 datetime.now(),
+                                 log=lambda t: db_log(t, "info", "sharepoint"))
+            yield msg(f"✅ PDF backed up to SharePoint: {web_url}", "success")
+        except Exception as e:
+            # "info" not "error": the run hasn't failed, only the archive copy.
+            yield msg(f"⚠️ SharePoint backup failed — sending the report anyway. "
+                      f"({str(e)})", "info")
+
+        # 6. EMAIL --------------------------------------------------------
         current_stage["name"] = "email"
         yield msg("📧 Dispatching email via MS Graph...")
         try:
