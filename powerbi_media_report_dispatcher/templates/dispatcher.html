@@ -123,12 +123,13 @@
     </div>
 
     <script>
-        // Stage ids must match the stage tags in app.py.
+        // Stage ids must match STAGES in config.py and the tags in pipeline.py.
         const DISPATCH_STAGES = [
             { id: 'auth',        label: 'Authenticating' },
             { id: 'bigquery',    label: 'Fetching BigQuery data' },
             { id: 'export_pptx', label: 'Exporting PPTX' },
             { id: 'export_png',  label: 'Rendering preview' },
+            { id: 'sharepoint',  label: 'Backing up PDF' },
             { id: 'email',       label: 'Dispatching email' },
         ];
         const REFRESH_STAGES = [
