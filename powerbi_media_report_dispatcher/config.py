@@ -33,6 +33,18 @@ PROJECT_ID = os.getenv("GBQ_PROJECT_ID", "dewynters")
 GBQ_TABLE = ("dewynters.GBQ_Dewynters_MAD_Dashboard_All_Shows"
              ".GBQ_Dewynters_MAD_Dashboard_All_Shows")
 
+# SharePoint PDF archive. We write to the same site the sales extraction uses
+# (dewyntersltd.sharepoint.com/sites/SALESREPORTING, via the site id already in
+# the shared .env), so the media tool needs no new secret. Set
+# SHAREPOINT_MEDIA_SITE_ID in .env to send the backups to a different site
+# instead — nothing else has to change.
+SHAREPOINT_SITE_ID = (os.getenv("SHAREPOINT_MEDIA_SITE_ID")
+                      or os.getenv("SHAREPOINT_SALES_REPORTING_SITE_ID"))
+
+# The folder chain the PDFs are filed under, relative to the root of the site's
+# default document library. Each show gets its own folder beneath the last one.
+SHAREPOINT_PDF_PATH = ("PDF Reports", "Media PDF Reports")
+
 # Where the shared SQLite state lives (locks / logs / history). In Docker this
 # is set to /app/data/media_dispatcher_state.db — it must stay distinct from
 # the sales dispatcher's DB (different schema, and shared locks would make the
@@ -109,7 +121,7 @@ SHOWS_CONFIG = [
 
 # The fixed pipeline. The `id` values must match the `stage` tags used in
 # pipeline.py and the STAGES list in dispatcher.html.
-STAGES = ["auth", "bigquery", "export_pptx", "export_png", "email"]
+STAGES = ["auth", "bigquery", "export_pptx", "export_png", "sharepoint", "email"]
 
 
 def get_config(show_id: str) -> dict | None:
