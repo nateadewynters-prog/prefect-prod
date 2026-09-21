@@ -20,8 +20,7 @@ Doc ID output mapping:
   Gross Potential          <- blank (not supplied)
   Capacity                 <- blank (not supplied)
   Gross                    <- Total Amount
-  Paid Tickets             <- Sold Ticket
-  Total Tickets            <- Total Ticket
+  Tickets Sold             <- Sold Ticket
   Comps                    <- Com. Ticket
   Reserved Gross           <- blank (not supplied)
   Reserved Tickets         <- 0 (not supplied; hard-coded rather than blank)
@@ -46,7 +45,7 @@ EXPECTED_RAW_COLUMNS = {
 # Doc ID output contract
 EXPECTED_SCHEMA = {
     "Performance Date / Time", "Gross Potential", "Capacity", "Gross",
-    "Paid Tickets", "Total Tickets", "Comps", "Reserved Gross", "Reserved Tickets"
+    "Tickets Sold", "Comps", "Reserved Gross", "Reserved Tickets"
 }
 
 # Matches the leading "17 Aug 2027 19:30" in a labelled round like
@@ -112,8 +111,7 @@ def mrwt_bkk_daily_report_xlsx_parser(file_path):
             "Gross Potential": "",
             "Capacity": "",
             "Gross": float(row['Total Amount']),
-            "Paid Tickets": int(row['Sold Ticket']),
-            "Total Tickets": int(row['Total Ticket']),
+            "Tickets Sold": int(row['Sold Ticket']),
             "Comps": int(row['Com. Ticket']),
             "Reserved Gross": "",
             "Reserved Tickets": 0,
@@ -130,21 +128,17 @@ def mrwt_bkk_daily_report_xlsx_parser(file_path):
     logger.info(f"✅ Schema validation passed. Extracted {len(extracted_rows)} performance rows.")
 
     # --- DYNAMIC VALIDATION AGAINST THE SUMMARY ROW ---
-    calc_paid = sum(r["Paid Tickets"] for r in extracted_rows)
-    calc_total = sum(r["Total Tickets"] for r in extracted_rows)
+    calc_sold = sum(r["Tickets Sold"] for r in extracted_rows)
     calc_comps = sum(r["Comps"] for r in extracted_rows)
     calc_gross = sum(r["Gross"] for r in extracted_rows)
 
-    rep_paid = int(summary_row['Sold Ticket'])
-    rep_total = int(summary_row['Total Ticket'])
+    rep_sold = int(summary_row['Sold Ticket'])
     rep_comps = int(summary_row['Com. Ticket'])
     rep_gross = float(summary_row['Total Amount'])
 
     failures = []
-    if calc_paid != rep_paid:
-        failures.append(f"Paid Tickets mismatch — extracted {calc_paid}, report states {rep_paid}")
-    if calc_total != rep_total:
-        failures.append(f"Total Tickets mismatch — extracted {calc_total}, report states {rep_total}")
+    if calc_sold != rep_sold:
+        failures.append(f"Tickets Sold mismatch — extracted {calc_sold}, report states {rep_sold}")
     if calc_comps != rep_comps:
         failures.append(f"Comps mismatch — extracted {calc_comps}, report states {rep_comps}")
     if abs(calc_gross - rep_gross) > 0.01:
@@ -152,10 +146,8 @@ def mrwt_bkk_daily_report_xlsx_parser(file_path):
 
     metrics = {
         "Performances extracted": len(extracted_rows),
-        "Paid Tickets": calc_paid,
-        "Reported Paid Tickets": rep_paid,
-        "Total Tickets": calc_total,
-        "Reported Total Tickets": rep_total,
+        "Tickets Sold": calc_sold,
+        "Reported Tickets Sold": rep_sold,
         "Comps": calc_comps,
         "Reported Comps": rep_comps,
         "Gross": f"{calc_gross:,.2f}",
