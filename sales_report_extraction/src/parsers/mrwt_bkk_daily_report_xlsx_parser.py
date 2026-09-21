@@ -24,7 +24,7 @@ Doc ID output mapping:
   Total Tickets            <- Total Ticket
   Comps                    <- Com. Ticket
   Reserved Gross           <- blank (not supplied)
-  Reserved Tickets         <- blank (not supplied)
+  Reserved Tickets         <- 0 (not supplied; hard-coded rather than blank)
 """
 
 import os
@@ -116,7 +116,7 @@ def mrwt_bkk_daily_report_xlsx_parser(file_path):
             "Total Tickets": int(row['Total Ticket']),
             "Comps": int(row['Com. Ticket']),
             "Reserved Gross": "",
-            "Reserved Tickets": "",
+            "Reserved Tickets": 0,
         }
         for _, row in data_df.iterrows()
     ]
