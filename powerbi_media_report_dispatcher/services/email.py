@@ -7,14 +7,14 @@ attaches the PPTX and the inline PNG and posts to the Graph sendMail endpoint.
 """
 
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 
 from config import SENDER_EMAIL
 
 
-def build_email_html(config: dict, metrics: dict, date_range: str) -> str:
+def build_email_html(config: dict, metrics: dict, date_range: str, frequency: str = "weekly") -> str:
     # NOTE: ROAS is a ratio (revenue ÷ spend). We show it with a £ sign to match
     # the house style the recipients are used to from the original scripts,
     # i.e. "£3.42" reads as "£3.42 back per £1 spent".
@@ -22,7 +22,7 @@ def build_email_html(config: dict, metrics: dict, date_range: str) -> str:
     <html>
       <body style="font-family: Calibri, sans-serif; font-size: 11pt; color: #000000;">
         <p>Dear All,</p>
-        <p>Please find attached your weekly digital media report for {config['show_name']}.</p>
+        <p>Please find attached your {frequency} digital media report for {config['show_name']}.</p>
         <p>You can find a link to the dashboard <a href="{config['dashboard_url']}">here</a>.</p>
         <p><b>{date_range}</b></p>
         <ul style="list-style-type: disc; margin-top: 0; margin-bottom: 0;">
@@ -39,7 +39,16 @@ def build_email_html(config: dict, metrics: dict, date_range: str) -> str:
 
 
 def send_graph_email(config: dict, html_body: str, pptx_bytes: bytes,
-                     png_bytes: bytes, date_range: str, graph_token: str) -> None:
+                     png_bytes: bytes, date_range: str, graph_token: str,
+                     frequency: str = "weekly") -> None:
+    if frequency == "monthly":
+        file_date_tag = date_range.replace(" ", "")
+    else:
+        today = datetime.now()
+        last_monday = today - timedelta(days=today.weekday() + 7)
+        last_sunday = last_monday + timedelta(days=6)
+        file_date_tag = f"{last_monday:%d%m%y}-{last_sunday:%d%m%y}"
+    
     payload = {
         "message": {
             "subject": f"{config['show_name']} - Digital Media Report - {date_range}",
@@ -48,7 +57,7 @@ def send_graph_email(config: dict, html_body: str, pptx_bytes: bytes,
             "attachments": [
                 {
                     "@odata.type": "#microsoft.graph.fileAttachment",
-                    "name": f"{config['code']}_Digital_Media_Report_{datetime.now():%Y%m%d}.pptx",
+                    "name": f"{config['code']}_Digital_Media_Report_{file_date_tag}.pptx",
                     "contentType": "application/vnd.openxmlformats-officedocument."
                                    "presentationml.presentation",
                     "contentBytes": base64.b64encode(pptx_bytes).decode(),

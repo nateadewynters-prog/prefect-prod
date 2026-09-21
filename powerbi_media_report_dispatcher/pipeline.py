@@ -44,9 +44,16 @@ from services.sharepoint import backup_pdf
 SSE_DONE = "data: [DONE]\n\n"
 
 
-def get_date_range() -> str:
-    """Last week's Monday–Sunday, e.g. 'Monday 7th July - Sunday 13th July'."""
+def get_date_range(frequency: str = "weekly") -> str:
+    """Last week's Monday–Sunday (e.g. 'Monday 7th July - Sunday 13th July'),
+    or last calendar month (e.g. 'July 2026') for monthly shows."""
     today = datetime.now()
+
+    if frequency == "monthly":
+        first_this_month = today.replace(day=1)
+        last_day_prev_month = first_this_month - timedelta(days=1)
+        return last_day_prev_month.strftime("%B %Y")
+
     last_monday = today - timedelta(days=today.weekday() + 7)
     last_sunday = last_monday + timedelta(days=6)
 
@@ -56,7 +63,6 @@ def get_date_range() -> str:
         return d.strftime(f"%A {day}{suffix} %B")
 
     return f"{with_suffix(last_monday)} - {with_suffix(last_sunday)}"
-
 
 def _sse(payload: dict) -> str:
     """Format one Server-Sent Event: literally `data: {json}\\n\\n`."""
@@ -130,7 +136,7 @@ def run_dispatch(show_id: str):
 
         yield msg(f"========== NEW DISPATCH: {config['show_name'].upper()} ==========",
                   "separator")
-        date_range = get_date_range()
+        date_range = get_date_range(config.get("frequency", "weekly"))
         yield msg(f"🚀 Starting {config['show_name']} — {date_range}")
 
         start_time = time.time()
@@ -148,7 +154,7 @@ def run_dispatch(show_id: str):
         current_stage["name"] = "bigquery"
         yield msg("🛰️ Fetching spend / revenue from BigQuery...")
         try:
-            metrics = get_gbq_metrics(config["gbq_name"])
+            metrics = get_gbq_metrics(config["gbq_name"], config.get("frequency", "weekly"))
         except Exception as e:
             yield msg(f"❌ BigQuery error: {str(e)}", "error")
             return
@@ -190,12 +196,13 @@ def run_dispatch(show_id: str):
         # reaching its recipients — so we log the failure and carry on to the
         # email rather than returning.
         current_stage["name"] = "sharepoint"
-        yield msg("☁️ Backing up PDF to SharePoint...")
+        yield msg("☁️ Backing up PPTX to SharePoint...")
         try:
-            web_url = backup_pdf(graph_token, config["show_name"], pdf_bytes,
-                                 datetime.now(),
+            web_url = backup_pdf(graph_token, config["show_name"], config["code"],
+                                 pptx_bytes, datetime.now(), date_range,
+                                 config.get("frequency", "weekly"),
                                  log=lambda t: db_log(t, "info", "sharepoint"))
-            yield msg(f"✅ PDF backed up to SharePoint: {web_url}", "success")
+            yield msg(f"✅ PPTX backed up to SharePoint: {web_url}", "success")
         except Exception as e:
             # "info" not "error": the run hasn't failed, only the archive copy.
             yield msg(f"⚠️ SharePoint backup failed — sending the report anyway. "
@@ -205,9 +212,9 @@ def run_dispatch(show_id: str):
         current_stage["name"] = "email"
         yield msg("📧 Dispatching email via MS Graph...")
         try:
-            html_body = build_email_html(config, metrics, date_range)
+            html_body = build_email_html(config, metrics, date_range, config.get("frequency", "weekly"))
             send_graph_email(config, html_body, pptx_bytes, png_bytes,
-                             date_range, graph_token)
+                date_range, graph_token, config.get("frequency", "weekly"))
         except Exception as e:
             yield msg(f"❌ Graph API error: {str(e)}", "error")
             return

@@ -122,7 +122,8 @@ def _upload(token: str, path: str, data: bytes, log=None) -> str:
     return resp.json().get("webUrl", "")
 
 
-def backup_pdf(token: str, show_name: str, pdf_bytes: bytes, run_date,
+def backup_pdf(token: str, show_name: str, show_code: str, pdf_bytes: bytes,
+               run_date, date_range: str, frequency: str = "weekly",
                log=None) -> str:
     """File one report PDF under its show's folder. Returns the SharePoint URL.
 
@@ -142,5 +143,13 @@ def backup_pdf(token: str, show_name: str, pdf_bytes: bytes, run_date,
     for level in (*SHAREPOINT_PDF_PATH, show_folder):
         path = _ensure_folder(token, path, level)
 
-    filename = f"{run_date:%Y-%m-%d} - {show_folder}.pdf"
+    if frequency == "monthly":
+        file_date_tag = date_range.replace(" ", "")
+    else:
+        from datetime import timedelta
+        last_monday = run_date - timedelta(days=run_date.weekday() + 7)
+        last_sunday = last_monday + timedelta(days=6)
+        file_date_tag = f"{last_monday:%d%m%y}-{last_sunday:%d%m%y}"
+
+    filename = f"{show_code}_Digital_Media_Report_{file_date_tag}.pptx"
     return _upload(token, f"{path}/{filename}", pdf_bytes, log=log)

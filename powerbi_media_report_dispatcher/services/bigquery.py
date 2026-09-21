@@ -11,12 +11,24 @@ from google.cloud import bigquery
 from config import PROJECT_ID, GBQ_TABLE
 
 
-def get_gbq_metrics(gbq_name: str) -> dict:
-    """Last week's spend / revenue / ROAS for one show, with a source breakdown.
-
-    Uses a parameterised query so the show name can't break the SQL.
+def get_gbq_metrics(gbq_name: str, frequency: str = "weekly") -> dict:
+    """Last week's (or last month's) spend / revenue / ROAS for one show,
+    with a source breakdown. Uses a parameterised query so the show name
+    can't break the SQL.
     """
     client = bigquery.Client(project=PROJECT_ID)
+
+    if frequency == "monthly":
+        date_filter = """
+          AND Date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH)
+          AND Date <  DATE_TRUNC(CURRENT_DATE(), MONTH)
+        """
+    else:
+        date_filter = """
+          AND Date >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY)), INTERVAL 1 WEEK)
+          AND Date <= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY)), INTERVAL 1 DAY)
+        """
+
     query = f"""
         SELECT MAD_Media_Source AS source,
                SUM(MAD_All_Spend)   AS spend,
@@ -24,9 +36,8 @@ def get_gbq_metrics(gbq_name: str) -> dict:
         FROM `{GBQ_TABLE}`
         WHERE MAD_Show_Name = @show
           AND MAD_Media_Source IN ('Meta', 'Google Ads', 'Programmatic Spend',
-                                    'Programmatic', 'TikTok', 'Pinterest')
-          AND Date >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY)), INTERVAL 1 WEEK)
-          AND Date <= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), WEEK(MONDAY)), INTERVAL 1 DAY)
+                                    'Programmatic', 'TikTok')
+          {date_filter}
         GROUP BY MAD_Media_Source
     """
     job_config = bigquery.QueryJobConfig(query_parameters=[

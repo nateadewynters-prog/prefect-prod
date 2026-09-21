@@ -49,7 +49,7 @@ def api_metrics(show_id):
     if not config:
         return {"error": "Show not found"}, 404
     try:
-        m = get_gbq_metrics(config["gbq_name"])
+        m = get_gbq_metrics(config["gbq_name"], config.get("frequency", "weekly"))
         rows = [{"Metric": b["source"],
                  "Value": f"£{b['spend']:,.0f} spend · £{b['revenue']:,.0f} rev"}
                 for b in m["breakdown"]]
@@ -67,8 +67,8 @@ def preview_email(show_id):
     if not config:
         return "Show not found", 404
     try:
-        metrics = get_gbq_metrics(config["gbq_name"])
-        return build_email_html(config, metrics, get_date_range())
+        metrics = get_gbq_metrics(config["gbq_name"], config.get("frequency", "weekly"))
+        return build_email_html(config, metrics, get_date_range(config.get("frequency", "weekly")), config.get("frequency", "weekly"))
     except Exception as e:
         return f"Error building preview: {str(e)}", 500
 

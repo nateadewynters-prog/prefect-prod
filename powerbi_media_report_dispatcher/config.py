@@ -112,6 +112,7 @@ SHOWS_CONFIG = [
     {
         "id": "7", "code": "MRTM", "show_name": "Moulin Rouge! The Musical",
         "gbq_name": "Moulin Rouge! The Musical",
+        "frequency": "monthly",
         "workspace_id": "d8e48a79-0972-4f4e-a6da-891f284f7953",
         "report_id": "657dd6a8-aa4e-403a-bc70-d6947b87e56e",
         "dashboard_url": "https://app.powerbi.com/groups/d8e48a79-0972-4f4e-a6da-891f284f7953/reports/657dd6a8-aa4e-403a-bc70-d6947b87e56e/2af7b29d9a85004eabc5?experience=power-bi",
