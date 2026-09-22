@@ -89,9 +89,14 @@ def mrwt_bkk_daily_report_xlsx_parser(file_path):
         logger.error(f"❌ {error_msg}")
         raise ValueError(error_msg)
 
-    # The 'SUMMARY' row plays the same role a PDF's stated totals row does —
-    # split it off before building performance records.
-    summary_mask = df['Round'].astype(str).str.strip().str.upper() == 'SUMMARY'
+    # The SUMMARY row plays the same role a PDF's stated totals row does —
+    # split it off before building performance records. The vendor's export
+    # isn't consistent about which column carries the 'SUMMARY' label (seen
+    # in both 'Round' and 'Performance' across different files), so check both.
+    summary_mask = (
+        df['Round'].astype(str).str.strip().str.upper().eq('SUMMARY')
+        | df['Performance'].astype(str).str.strip().str.upper().eq('SUMMARY')
+    )
     if not summary_mask.any():
         error_msg = f"No 'SUMMARY' row found in {filename}. Cannot validate totals."
         logger.error(f"❌ {error_msg}")
