@@ -118,6 +118,22 @@ SHOWS_CONFIG = [
         "dashboard_url": "https://app.powerbi.com/groups/d8e48a79-0972-4f4e-a6da-891f284f7953/reports/657dd6a8-aa4e-403a-bc70-d6947b87e56e/2af7b29d9a85004eabc5?experience=power-bi",
         "recipients": ["a.cameron@dewynters.com"],
     },
+    {
+        "id": "8", "code": "SIX", "show_name": "Six",
+        "gbq_name": "Six",
+        "workspace_id": "c36e8cd3-b912-497f-a5d0-6aa1a32e05af",
+        "report_id": "52d740ac-874d-48fd-a78d-be32ba526aa0",
+        "dashboard_url": "https://app.powerbi.com/groups/c36e8cd3-b912-497f-a5d0-6aa1a32e05af/reports/52d740ac-874d-48fd-a78d-be32ba526aa0/2af7b29d9a85004eabc5?experience=power-bi",
+        "recipients": ["a.cameron@dewynters.com"],
+    },
+    {
+        "id": "9", "code": "PTGW", "show_name": "The Play That Goes Wrong",
+        "gbq_name": "The Play That Goes Wrong",
+        "workspace_id": "c36e8cd3-b912-497f-a5d0-6aa1a32e05af",
+        "report_id": "f3036dd3-fbb9-47fd-814e-dbee1c259b61",
+        "dashboard_url": "https://app.powerbi.com/groups/c36e8cd3-b912-497f-a5d0-6aa1a32e05af/reports/f3036dd3-fbb9-47fd-814e-dbee1c259b61/2af7b29d9a85004eabc5?experience=power-bi",
+        "recipients": ["a.cameron@dewynters.com"],
+    },
 ]
 
 # The fixed pipeline. The `id` values must match the `stage` tags used in
