@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocID Tool - BISCUIT</title>
+    <title>DocID Tool - B.A.S.E.</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <link href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator_semanticui.min.css" rel="stylesheet">
@@ -130,16 +130,6 @@
                     }));
                 },
 
-                // Dropdowns are rebuilt here rather than in ajaxResponse, which
-                // is a transform hook and should not touch the DOM.
-                dataLoaded: function(data){
-                    populateDropdowns(data);
-                },
-
-                dataLoadError: function(error){
-                    showError("Could not load DocID data — the service may be unable to reach SQL. Try Resync, and check the service logs if it persists.");
-                },
-
                 columns: [
                     { title: "Show Name", field: "showName", widthGrow: 2 },
                     { title: "Theatre Name", field: "theatreName", widthGrow: 2 },
@@ -151,6 +141,26 @@
                     { title: "Theatre ID", field: "theatreId", hozAlign: "right", cssClass: "font-mono font-bold", sorter: "number" },
                     { title: "DocType ID", field: "docId", hozAlign: "right", cssClass: "font-mono font-bold", sorter: "number" }
                 ]
+            });
+
+            // Registered with table.on(), NOT as constructor options. Tabulator 6
+            // hands its external event bus the options object but never reads it:
+            // the only path into the handler list is on(). A `dataLoaded:` key in
+            // the config is therefore silently ignored, populateDropdowns never
+            // ran, and all three selects kept nothing but their "All ..." option
+            // — a dropdown with one entry looks like one that will not open.
+            // ajaxResponse is unaffected (the Ajax module reads that straight off
+            // options), which is why the table itself filled normally.
+            //
+            // Subscribed immediately after construction, so both are in place
+            // well before the initial ajax request comes back, and they fire
+            // again on every table.setData() from Resync.
+            table.on("dataLoaded", function(data){
+                populateDropdowns(data);
+            });
+
+            table.on("dataLoadError", function(error){
+                showError("Could not load DocID data — the service may be unable to reach SQL. Try Resync, and check the service logs if it persists.");
             });
 
             // Master Filter Logic

@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-The **Service Homepage** (branded **B.I.S.C.U.I.T** in the page itself) acts as the central entry point for all internal reporting and data tools. It provides a clean, unified dashboard for navigating between the various microservices hosted on this server.
+The **Service Homepage** (branded **B.A.S.E.** in the page itself) acts as the central entry point for all internal reporting and data tools. It provides a clean, unified dashboard for navigating between the various microservices hosted on this server.
 
 ### Key Features
 
@@ -16,6 +16,7 @@ The **Service Homepage** (branded **B.I.S.C.U.I.T** in the page itself) acts as 
 - **Dynamic Routing:** Uses simple JavaScript to redirect users based on the current hostname and specific service ports.
 - **Responsive UI:** Styled with Tailwind CSS for a modern, mobile-friendly experience.
 - **Live Status Pills:** The header shows London weather (Open-Meteo) and the next UK bank holiday (GOV.UK). These, and the Tailwind CDN, require outbound internet access from the browser.
+- **Light / Dark Mode:** A header toggle switches themes. It defaults to the operating system preference and remembers an explicit choice in `localStorage` under the key `base-theme`. The theme is applied by an inline script in `<head>` so there is no flash of the wrong theme on load.
 - **Quick Links:** Immediate access to:
   - **🔍 DocID Tool (8003):** SQL Reference mapping.
   - **📊 Sales Dispatcher (8002):** PBI Automation tool.
@@ -24,6 +25,10 @@ The **Service Homepage** (branded **B.I.S.C.U.I.T** in the page itself) acts as 
   - **📋 Sales Reporting Master List:** SharePoint lists (Power Automate and Python).
   - **✅ Sales Reports Check List:** SharePoint workbook.
   - **🎫 Basecamp Execution Board:** Task tracking.
+  - **✨ Claude Skills Library:** SharePoint folder of Claude Skills and artefacts (Insights2 site).
+  - **🌿 Breathe:** HR portal.
+  - **⏱️ Chase:** Chase resource and job management.
+  - **🪑 Skedda:** Desk and room booking.
   - **🎟️ Dave's Front End:** Legacy and Transactional Azure sites (Development and Production).
   - **🧠 Prefect Server (4200):** Orchestration dashboard.
   - **🐳 Portainer (9000):** Container management.
@@ -45,6 +50,7 @@ To add a new service to the hub:
 1. Edit `homepage/index.html`.
 2. Add a new `div` card following the existing pattern.
 3. Use the `gotoService('PORT_NUMBER')` function for the click handler, or `gotoUrl('FULL_URL')` for an external link.
+4. Copy the `dark:` classes from a neighbouring card. Tailwind is configured with `darkMode: 'class'`, so a card without them stays white in dark mode rather than inheriting anything.
 
 ### Style Modifications
 The page utilizes Tailwind CSS utility classes. Significant changes to layout can be made directly in `index.html`.

@@ -3,9 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>B.I.S.C.U.I.T</title>
+    <title>B.A.S.E.</title>
+
+    <!-- Theme is resolved before the stylesheet loads and before first paint,
+         so a dark-mode user never sees a white flash on navigation. Anything
+         that depends on the <body> element must stay out of this block. -->
+    <script>
+        (function () {
+            var KEY = 'base-theme';
+            var saved = null;
+            // localStorage throws outright in a locked-down or private
+            // profile, which would abort the script and leave the page
+            // permanently light. Treat it as "no preference stored".
+            try { saved = localStorage.getItem(KEY); } catch (e) { saved = null; }
+            var dark = saved
+                ? saved === 'dark'
+                : window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (dark) { document.documentElement.classList.add('dark'); }
+        })();
+    </script>
+    <style>
+        /* Paints the correct backdrop for the gap between this file parsing and
+           the Tailwind CDN generating its classes. Matches slate-50/slate-950. */
+        html { background-color: #f8fafc; }
+        html.dark { background-color: #020617; }
+    </style>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+        // 'class' rather than the default 'media': the toggle below has to be
+        // able to override the OS setting, which the media strategy cannot do.
+        tailwind.config = { darkMode: 'class' };
+
         function gotoService(port) {
             window.location.href = window.location.protocol + '//' + window.location.hostname + ':' + port;
         }
@@ -14,14 +43,14 @@
         }
     </script>
 </head>
-<body class="bg-slate-50 text-slate-800 p-6 md:p-12 font-sans min-h-screen selection:bg-blue-500 selection:text-white">
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 p-6 md:p-12 font-sans min-h-screen selection:bg-blue-500 selection:text-white transition-colors duration-200">
     <div class="max-w-6xl mx-auto">
-        
+
         <!-- Dashboard Top Bar -->
-        <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-12 pb-6 border-b border-slate-200">
+        <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-12 pb-6 border-b border-slate-200 dark:border-slate-800">
             <div>
-                <h1 class="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-2">
-                    B.I.S.C.U.I.T
+                <h1 class="text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    B.A.S.E.
                 </h1>
             </div>
 
@@ -29,99 +58,116 @@
             <div class="flex flex-col sm:flex-row items-stretch gap-3">
 
                 <!-- London Weather Monitor -->
-                <div class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm backdrop-blur-sm bg-white/80">
+                <div class="bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm backdrop-blur-sm">
                     <span id="wx-icon" class="text-2xl">🌡️</span>
                     <div class="text-left">
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">London</p>
-                        <p id="wx-desc" class="text-xs font-bold text-slate-700">Loading…</p>
-                        <p id="wx-feels" class="text-[10px] text-slate-400"></p>
+                        <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">London</p>
+                        <p id="wx-desc" class="text-xs font-bold text-slate-700 dark:text-slate-200">Loading…</p>
+                        <p id="wx-feels" class="text-[10px] text-slate-400 dark:text-slate-500"></p>
                     </div>
-                    <div class="border-l border-slate-100 pl-3 text-right">
-                        <p id="wx-temp" class="text-lg font-black text-blue-600">—</p>
+                    <div class="border-l border-slate-100 dark:border-slate-800 pl-3 text-right">
+                        <p id="wx-temp" class="text-lg font-black text-blue-600 dark:text-blue-400">—</p>
                     </div>
                 </div>
 
                 <!-- Sleek Integrated Bank Holiday Monitor -->
-                <div class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm backdrop-blur-sm bg-white/80">
+                <div class="bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm backdrop-blur-sm">
                     <span class="text-2xl animate-pulse">🏖️</span>
                     <div class="text-left">
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Next Bank Holiday</p>
-                        <p id="bh-name" class="text-xs font-bold text-slate-700">Loading…</p>
-                        <p id="bh-date" class="text-[10px] text-slate-400"></p>
+                        <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Next Bank Holiday</p>
+                        <p id="bh-name" class="text-xs font-bold text-slate-700 dark:text-slate-200">Loading…</p>
+                        <p id="bh-date" class="text-[10px] text-slate-400 dark:text-slate-500"></p>
                     </div>
-                    <div class="border-l border-slate-100 pl-3 text-right">
-                        <p id="bh-days" class="text-lg font-black text-blue-600">—</p>
+                    <div class="border-l border-slate-100 dark:border-slate-800 pl-3 text-right">
+                        <p id="bh-days" class="text-lg font-black text-blue-600 dark:text-blue-400">—</p>
                     </div>
                 </div>
+
+                <!-- Theme Toggle. The two icons swap on the `dark` class alone,
+                     so the button never needs its own JS state kept in sync. -->
+                <button id="theme-toggle" type="button" aria-label="Switch between light and dark mode"
+                        class="bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 shadow-sm backdrop-blur-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                    <span class="text-xl dark:hidden">🌙</span>
+                    <span class="text-xl hidden dark:inline">☀️</span>
+                    <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                        <span class="dark:hidden">Dark</span>
+                        <span class="hidden dark:inline">Light</span>
+                    </span>
+                </button>
 
             </div>
         </header>
 
         <!-- Section: Reporting & Data Tools -->
         <section class="mb-12">
-            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Reporting & Data Tools
+            <h2 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Reporting &amp; Data Tools
             </h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                
-                <div onclick="gotoService('8003')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+
+                <div onclick="gotoService('8003')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
                     <div class="text-2xl group-hover:scale-110 transition-transform duration-150">🔍</div>
-                    <h3 class="font-bold text-slate-700 transition-colors">DocID Tool</h3>
+                    <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">DocID Tool</h3>
                 </div>
 
                 <!-- Dispatcher: hover to reveal Sales / Media split -->
-                <div class="group relative bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl shadow-sm hover:shadow-md transition-all duration-150 overflow-hidden min-h-[68px]">
+                <div class="group relative bg-white dark:bg-slate-900 border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl shadow-sm hover:shadow-md transition-all duration-150 overflow-hidden min-h-[68px]">
                     <!-- Default state -->
                     <div class="flex items-center gap-4 p-4 transition-opacity duration-150 group-hover:opacity-0">
                         <div class="text-2xl transition-transform duration-150">📊</div>
-                        <h3 class="font-bold text-slate-700 transition-colors">Dispatcher</h3>
+                        <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Dispatcher</h3>
                     </div>
                     <!-- Hover state: two options side by side -->
-                    <div class="absolute inset-0 flex bg-white opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150">
-                        <div onclick="gotoService('8002')" class="flex-1 flex items-center justify-center gap-2 px-2 border-r border-slate-200/80 hover:bg-slate-50 cursor-pointer transition-colors">
+                    <div class="absolute inset-0 flex bg-white dark:bg-slate-900 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150">
+                        <div onclick="gotoService('8002')" class="flex-1 flex items-center justify-center gap-2 px-2 border-r border-slate-200/80 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
                             <span class="text-xl">📊</span>
-                            <span class="font-bold text-slate-700 text-sm text-center">Sales Dispatcher</span>
+                            <span class="font-bold text-slate-700 dark:text-slate-200 text-sm text-center">Sales Dispatcher</span>
                         </div>
-                        <div onclick="gotoService('8005')" class="flex-1 flex items-center justify-center gap-2 px-2 hover:bg-slate-50 cursor-pointer transition-colors">
+                        <div onclick="gotoService('8005')" class="flex-1 flex items-center justify-center gap-2 px-2 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
                             <span class="text-xl">🎬</span>
-                            <span class="font-bold text-slate-700 text-sm text-center">Media Dispatcher</span>
+                            <span class="font-bold text-slate-700 dark:text-slate-200 text-sm text-center">Media Dispatcher</span>
                         </div>
                     </div>
                 </div>
 
-                <div onclick="gotoService('8004')" class="group flex items-center gap-4 bg-white border-l-4 border-l-yellow-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                <div onclick="gotoService('8004')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-yellow-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
                     <div class="text-2xl group-hover:scale-110 transition-transform duration-150">🔄</div>
-                    <h3 class="font-bold text-slate-700 transition-colors">Power BI Refresher</h3>
+                    <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Power BI Refresher</h3>
                 </div>
 
                 <!-- Sales Reporting Master List: hover to reveal Power Automate / Python split -->
-                <div class="group relative bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl shadow-sm hover:shadow-md transition-all duration-150 overflow-hidden min-h-[68px]">
+                <div class="group relative bg-white dark:bg-slate-900 border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl shadow-sm hover:shadow-md transition-all duration-150 overflow-hidden min-h-[68px]">
                     <!-- Default state -->
                     <div class="flex items-center gap-4 p-4 transition-opacity duration-150 group-hover:opacity-0">
                         <div class="text-2xl transition-transform duration-150">📋</div>
-                        <h3 class="font-bold text-slate-700 transition-colors">Sales Reporting Master List</h3>
+                        <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Sales Reporting Master List</h3>
                     </div>
                     <!-- Hover state: two options side by side -->
-                    <div class="absolute inset-0 flex bg-white opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150">
-                        <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation/AllItems.aspx')" class="flex-1 flex items-center justify-center gap-2 px-2 border-r border-slate-200/80 hover:bg-slate-50 cursor-pointer transition-colors">
+                    <div class="absolute inset-0 flex bg-white dark:bg-slate-900 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150">
+                        <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation/AllItems.aspx')" class="flex-1 flex items-center justify-center gap-2 px-2 border-r border-slate-200/80 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
                             <span class="text-xl">⚡</span>
-                            <span class="font-bold text-slate-700 text-sm text-center">Power Automate List</span>
+                            <span class="font-bold text-slate-700 dark:text-slate-200 text-sm text-center">Power Automate List</span>
                         </div>
-                        <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation%20%20Python/AllItems.aspx')" class="flex-1 flex items-center justify-center gap-2 px-2 hover:bg-slate-50 cursor-pointer transition-colors">
+                        <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/sites/SALESREPORTING/Lists/Sales%20Reporting%20%20Master%20List%20%20Automation%20%20Python/AllItems.aspx')" class="flex-1 flex items-center justify-center gap-2 px-2 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
                             <span class="text-xl">🐍</span>
-                            <span class="font-bold text-slate-700 text-sm text-center">Python List</span>
+                            <span class="font-bold text-slate-700 dark:text-slate-200 text-sm text-center">Python List</span>
                         </div>
                     </div>
                 </div>
 
-                <div onclick="gotoUrl('https://dewyntersltd-my.sharepoint.com/:x:/g/personal/n_cannock_dewynters_com/IQAVF6BMcnOnQ7TFTKPaku6XAe8X43toYCYTARTispcciO8?rtime=YPk5hOTC3kg')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                <div onclick="gotoUrl('https://dewyntersltd-my.sharepoint.com/:x:/g/personal/n_cannock_dewynters_com/IQAVF6BMcnOnQ7TFTKPaku6XAe8X43toYCYTARTispcciO8?rtime=YPk5hOTC3kg')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
                     <div class="text-2xl group-hover:scale-110 transition-transform duration-150">✅</div>
-                    <h3 class="font-bold text-slate-700 transition-colors">Sales Reports Check List</h3>
+                    <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Sales Reports Check List</h3>
                 </div>
 
-                <div onclick="gotoUrl('https://3.basecamp.com/3792728/buckets/36092792/card_tables/9563110703')" class="group flex items-center gap-4 bg-white border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                <div onclick="gotoUrl('https://3.basecamp.com/3792728/buckets/36092792/card_tables/9563110703')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
                     <div class="text-2xl group-hover:scale-110 transition-transform duration-150">🎫</div>
-                    <h3 class="font-bold text-slate-700 transition-colors">Basecamp Execution Board</h3>
+                    <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Basecamp Execution Board</h3>
+                </div>
+
+                <div onclick="gotoUrl('https://dewyntersltd.sharepoint.com/:f:/s/Insights2/IgDojlkzJHJPRaS_ynqwo_yqAX_SEZPIgvKhrkvvB1_P3i4?e=TRoIjt')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-blue-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">✨</div>
+                    <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Claude Skills Library</h3>
                 </div>
 
             </div>
@@ -129,45 +175,45 @@
 
         <!-- Section: Dave's Front End Environments -->
         <section class="mb-12">
-            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <h2 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                 <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Dave's Front End
             </h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                 <!-- Dev Column -->
-                <div class="bg-slate-100/60 border border-slate-200/60 rounded-2xl p-5">
+                <div class="bg-slate-100/60 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-5">
                     <div class="flex items-center gap-2 mb-4">
                         <span class="text-base">🧪</span>
-                        <h3 class="text-xs font-bold text-amber-700 uppercase tracking-wider">Development</h3>
+                        <h3 class="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">Development</h3>
                     </div>
                     <div class="flex flex-col gap-3">
-                        <div onclick="gotoUrl('https://dewynterstickettestnew.azurewebsites.net/')" class="group flex items-center gap-4 bg-white border-l-4 border-l-amber-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                        <div onclick="gotoUrl('https://dewynterstickettestnew.azurewebsites.net/')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-amber-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-sm hover:shadow-md">
                             <div class="text-2xl group-hover:scale-110 transition-transform">🎟️</div>
-                            <h4 class="font-bold text-slate-700 transition-colors">Test Legacy Front End</h4>
+                            <h4 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Test Legacy Front End</h4>
                         </div>
 
-                        <div onclick="gotoUrl('https://dewynterstransaction-b4dubaere4bvg8cv.uksouth-01.azurewebsites.net/')" class="group flex items-center gap-4 bg-white border-l-4 border-l-amber-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                        <div onclick="gotoUrl('https://dewynterstransaction-b4dubaere4bvg8cv.uksouth-01.azurewebsites.net/')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-amber-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-sm hover:shadow-md">
                             <div class="text-2xl group-hover:scale-110 transition-transform">🗄️</div>
-                            <h4 class="font-bold text-slate-700 transition-colors">Test Transactional Front End</h4>
+                            <h4 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Test Transactional Front End</h4>
                         </div>
                     </div>
                 </div>
 
                 <!-- Prod Column -->
-                <div class="bg-slate-100/60 border border-slate-200/60 rounded-2xl p-5">
+                <div class="bg-slate-100/60 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-5">
                     <div class="flex items-center gap-2 mb-4">
                         <span class="text-base">🚀</span>
-                        <h3 class="text-xs font-bold text-emerald-700 uppercase tracking-wider">Production</h3>
+                        <h3 class="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Production</h3>
                     </div>
                     <div class="flex flex-col gap-3">
-                        <div onclick="gotoUrl('https://dewynterstickets.azurewebsites.net/')" class="group flex items-center gap-4 bg-white border-l-4 border-l-emerald-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                        <div onclick="gotoUrl('https://dewynterstickets.azurewebsites.net/')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-emerald-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-sm hover:shadow-md">
                             <div class="text-2xl group-hover:scale-110 transition-transform">🎟️</div>
-                            <h4 class="font-bold text-slate-700 transition-colors">Legacy Front End</h4>
+                            <h4 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Legacy Front End</h4>
                         </div>
 
-                        <div onclick="gotoUrl('https://dewynterstransactionlive.azurewebsites.net/')" class="group flex items-center gap-4 bg-white border-l-4 border-l-emerald-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all cursor-pointer shadow-sm hover:shadow-md">
+                        <div onclick="gotoUrl('https://dewynterstransactionlive.azurewebsites.net/')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-emerald-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-sm hover:shadow-md">
                             <div class="text-2xl group-hover:scale-110 transition-transform">🗄️</div>
-                            <h4 class="font-bold text-slate-700 transition-colors">Transactional Front End</h4>
+                            <h4 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Transactional Front End</h4>
                         </div>
                     </div>
                 </div>
@@ -176,29 +222,83 @@
         </section>
 
         <!-- Section: System Management -->
-        <section class="mb-16">
-            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+        <section class="mb-12">
+            <h2 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                 <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span> System Management
             </h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                
-                <div onclick="gotoService('4200')" class="group flex items-center gap-4 bg-white border-l-4 border-l-purple-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+
+                <div onclick="gotoService('4200')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-purple-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
                     <div class="text-2xl group-hover:scale-110 transition-transform">🧠</div>
-                    <h3 class="font-bold text-slate-700 transition-colors">Prefect Server</h3>
+                    <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Prefect Server</h3>
                 </div>
 
-                <div onclick="gotoService('9000')" class="group flex items-center gap-4 bg-white border-l-4 border-l-emerald-500 border-y border-r border-slate-200/80 rounded-xl p-4 hover:bg-slate-50 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                <div onclick="gotoService('9000')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-emerald-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
                     <div class="text-2xl group-hover:scale-110 transition-transform">🐳</div>
-                    <h3 class="font-bold text-slate-700 transition-colors">Portainer</h3>
+                    <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Portainer</h3>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Section: Dewynters Links -->
+        <section class="mb-16">
+            <h2 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span> Dewynters Links
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                <div onclick="gotoUrl('https://hr.breathehr.com/')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-teal-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">🌿</div>
+                    <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Breathe</h3>
+                </div>
+
+                <div onclick="gotoUrl('https://r4e.chasesoftware.biz/layout.aspx')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-teal-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">⏱️</div>
+                    <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Chase</h3>
+                </div>
+
+                <div onclick="gotoUrl('https://dewynters.skedda.com/booking')" class="group flex items-center gap-4 bg-white dark:bg-slate-900 border-l-4 border-l-teal-500 border-y border-r border-slate-200/80 dark:border-slate-800 rounded-xl p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-md">
+                    <div class="text-2xl group-hover:scale-110 transition-transform duration-150">🪑</div>
+                    <h3 class="font-bold text-slate-700 dark:text-slate-200 transition-colors">Skedda</h3>
                 </div>
 
             </div>
         </section>
 
         <!-- Footer -->
-        <footer class="pt-8 border-t border-slate-200 text-center text-[10px] font-bold text-slate-400 tracking-widest">
+        <footer class="pt-8 border-t border-slate-200 dark:border-slate-800 text-center text-[10px] font-bold text-slate-400 dark:text-slate-600 tracking-widest">
             INTERNAL OPERATIONS TOOLS &bull; DEWYNTERS &bull; 2026
         </footer>
+
+        <!-- Theme Toggle -->
+        <script>
+            (function () {
+                var KEY = 'base-theme';
+                var root = document.documentElement;
+                var media = window.matchMedia('(prefers-color-scheme: dark)');
+
+                function save(value) {
+                    // Same reasoning as the head script: a browser that refuses
+                    // storage should still get a working toggle, just one that
+                    // does not survive a reload.
+                    try { localStorage.setItem(KEY, value); } catch (e) {}
+                }
+
+                document.getElementById('theme-toggle').addEventListener('click', function () {
+                    var dark = root.classList.toggle('dark');
+                    save(dark ? 'dark' : 'light');
+                });
+
+                // Follow the OS only until someone picks a side explicitly —
+                // after that their choice wins, including across a reload.
+                media.addEventListener('change', function (e) {
+                    var chosen = null;
+                    try { chosen = localStorage.getItem(KEY); } catch (err) { chosen = null; }
+                    if (!chosen) { root.classList.toggle('dark', e.matches); }
+                });
+            })();
+        </script>
 
         <!-- Bank Holiday Data Fetcher -->
         <script>
