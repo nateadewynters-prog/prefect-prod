@@ -2,6 +2,14 @@
 # dispatcher we do NOT need the Microsoft ODBC driver. Keeps the image small.
 FROM python:3.11-slim-bookworm
 
+# Container defaults to UTC with no tzdata installed. Set this so SQLite's
+# datetime('now','localtime') in state.py matches Europe/London (BST/GMT),
+# not UTC — otherwise every "Sent at HH:MM" on the board is an hour out
+# during BST.
+ENV TZ=Europe/London
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY requirements.txt .

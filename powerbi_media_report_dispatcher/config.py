@@ -89,8 +89,8 @@ SHOWS_CONFIG = [
         "id": "4", "code": "FRA", "show_name": "Frameless",
         "gbq_name": "Frameless",
         "workspace_id": "26b77406-bb46-4a03-a8bd-416757804e59",
-        "report_id": "03e8cf8c-2cbf-4aaf-bb74-0fc73687307a",
-        "dashboard_url": "https://app.powerbi.com/groups/26b77406-bb46-4a03-a8bd-416757804e59/reports/03e8cf8c-2cbf-4aaf-bb74-0fc73687307a/2af7b29d9a85004eabc5?experience=power-bi",
+        "report_id": "6f105331-9000-4ff4-9699-982885318042",
+        "dashboard_url": "https://app.powerbi.com/groups/26b77406-bb46-4a03-a8bd-416757804e59/reports/6f105331-9000-4ff4-9699-982885318042/2af7b29d9a85004eabc5?experience=power-bi",
         "recipients": BASE_RECIPIENTS + ["f.carpenter@dewynters.com"],
     },
     {
