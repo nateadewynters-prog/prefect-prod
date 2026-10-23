@@ -22,8 +22,8 @@ Doc 514 mapping:
   Paid Tickets             <- Verkocht
   Total Tickets            <- Paid Tickets + Comps
   Comps                    <- Vrijkaart
-  Reserved Gross           <- blank
-  Reserved Tickets         <- Totaal gereserveerde tickets
+  Reserved Gross           <- 0 (not supplied by this report)
+  Reserved Tickets         <- Totaal gereserveerde tickets (0 if column absent)
 """
 
 import os
@@ -40,11 +40,16 @@ from src.models import ValidationResult
 # ---------------------------------------------------------------------------
 
 # Source header text -> internal key. Matched case-insensitively, whitespace trimmed.
-_SOURCE_HEADERS = {
-    "date":     "Datum/tijd Evenement",
-    "paid":     "Verkocht",
-    "gross":    "Verkocht ticketbedrag",
-    "comps":    "Vrijkaart",
+# Required: the parser fails loudly if any of these are missing.
+_REQUIRED_HEADERS = {
+    "date":  "Datum/tijd Evenement",
+    "paid":  "Verkocht",
+    "gross": "Verkocht ticketbedrag",
+    "comps": "Vrijkaart",
+}
+
+# Optional: mapped when present, otherwise the output column defaults to 0.
+_OPTIONAL_HEADERS = {
     "reserved": "Totaal gereserveerde tickets",
 }
 
@@ -111,7 +116,7 @@ def _find_header_row(rows: list[tuple]) -> tuple[int, dict]:
     Locate the header row and return (row_index, {internal_key: col_index}).
     Raises ValueError naming any required headers that are missing.
     """
-    date_label = _norm(_SOURCE_HEADERS["date"])
+    date_label = _norm(_REQUIRED_HEADERS["date"])
 
     for i, row in enumerate(rows):
         normalised = [_norm(v) for v in row]
@@ -119,12 +124,17 @@ def _find_header_row(rows: list[tuple]) -> tuple[int, dict]:
             continue
 
         col_map, missing = {}, []
-        for key, label in _SOURCE_HEADERS.items():
+        for key, label in _REQUIRED_HEADERS.items():
             target = _norm(label)
             if target in normalised:
                 col_map[key] = normalised.index(target)
             else:
                 missing.append(label)
+
+        for key, label in _OPTIONAL_HEADERS.items():
+            target = _norm(label)
+            if target in normalised:
+                col_map[key] = normalised.index(target)
 
         if missing:
             raise ValueError(
@@ -134,9 +144,14 @@ def _find_header_row(rows: list[tuple]) -> tuple[int, dict]:
         return i, col_map
 
     raise ValueError(
-        f"Could not find the column header row containing '{_SOURCE_HEADERS['date']}'. "
+        f"Could not find the column header row containing '{_REQUIRED_HEADERS['date']}'. "
         f"Check that this is a RAI Amsterdam SUMMARY report."
     )
+
+
+def _optional_int(row: tuple, cols: dict, key: str) -> int:
+    """Read an optional column as int, defaulting to 0 when the column isn't in the file."""
+    return _to_int(row[cols[key]]) if key in cols else 0
 
 
 def _extract_performance_record(row: tuple, cols: dict) -> dict:
@@ -152,8 +167,8 @@ def _extract_performance_record(row: tuple, cols: dict) -> dict:
         "Paid Tickets":            paid,
         "Total Tickets":           paid + comps,
         "Comps":                   comps,
-        "Reserved Gross":          None,
-        "Reserved Tickets":        _to_int(row[cols["reserved"]]),
+        "Reserved Gross":          0.0,   # not supplied by this report
+        "Reserved Tickets":        _optional_int(row, cols, "reserved"),
     }
 
 
@@ -181,7 +196,7 @@ def _validate(extracted: list[dict], totals_row: tuple | None, cols: dict, logge
     reported = {
         "Paid Tickets":     _to_int(totals_row[cols["paid"]]),
         "Comps":            _to_int(totals_row[cols["comps"]]),
-        "Reserved Tickets": _to_int(totals_row[cols["reserved"]]),
+        "Reserved Tickets": _optional_int(totals_row, cols, "reserved"),
         "Gross":            round(_to_float(totals_row[cols["gross"]]), 2),
     }
 
@@ -246,7 +261,7 @@ def mama_mia_tour_amsterdam_xlsx_parser(file_path: str) -> tuple[list[dict], Val
     if not performance_rows:
         raise ValueError(
             f"No performance rows found in {filename}. "
-            f"Expected datetime values under '{_SOURCE_HEADERS['date']}' after row {header_idx}."
+            f"Expected datetime values under '{_REQUIRED_HEADERS['date']}' after row {header_idx}."
         )
 
     logger.info(f"   Found {len(performance_rows)} performance rows")
