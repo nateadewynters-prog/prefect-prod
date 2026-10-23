@@ -19,10 +19,9 @@ Doc 514 mapping:
   Gross Potential          <- blank
   Capacity                 <- blank
   Gross                    <- Verkocht ticketbedrag
-  Paid Tickets             <- Verkocht
-  Total Tickets            <- Paid Tickets + Comps
+  Tickets Sold             <- Verkocht
   Comps                    <- Vrijkaart
-  Reserved Gross           <- 0 (not supplied by this report)
+  Reserved Gross           <- 0.0 (not supplied by this report)
   Reserved Tickets         <- Totaal gereserveerde tickets (0 if column absent)
 """
 
@@ -56,14 +55,13 @@ _OPTIONAL_HEADERS = {
 # The totals row is identified by this string in the date/time column
 _TOTALS_MARKER = "totaal"
 
-# Strict Data Contract — Doc 514, in output column order
+# Strict Data Contract — Doc 514, in output column order (matches e.g. Waitress Salford 514)
 EXPECTED_SCHEMA = [
     "Performance Date / Time",
     "Gross Potential",
     "Capacity",
     "Gross",
-    "Paid Tickets",
-    "Total Tickets",
+    "Tickets Sold",
     "Comps",
     "Reserved Gross",
     "Reserved Tickets",
@@ -164,10 +162,9 @@ def _extract_performance_record(row: tuple, cols: dict) -> dict:
         "Gross Potential":         None,
         "Capacity":                None,
         "Gross":                   _to_float(row[cols["gross"]]),
-        "Paid Tickets":            paid,
-        "Total Tickets":           paid + comps,
+        "Tickets Sold":            paid,
         "Comps":                   comps,
-        "Reserved Gross":          0.0,   # not supplied by this report
+        "Reserved Gross":          0.0,   # not supplied by this report; matches Doc 514
         "Reserved Tickets":        _optional_int(row, cols, "reserved"),
     }
 
@@ -175,7 +172,7 @@ def _extract_performance_record(row: tuple, cols: dict) -> dict:
 def _validate(extracted: list[dict], totals_row: tuple | None, cols: dict, logger) -> ValidationResult:
     """Compare extracted sums against the report's own 'Totaal' row."""
     calc = {
-        "Paid Tickets":     sum(r["Paid Tickets"] for r in extracted),
+        "Tickets Sold":     sum(r["Tickets Sold"] for r in extracted),
         "Comps":            sum(r["Comps"] for r in extracted),
         "Reserved Tickets": sum(r["Reserved Tickets"] for r in extracted),
         "Gross":            round(sum(r["Gross"] for r in extracted), 2),
@@ -183,7 +180,7 @@ def _validate(extracted: list[dict], totals_row: tuple | None, cols: dict, logge
 
     metrics = {
         "Performances extracted": len(extracted),
-        "Calculated Paid Tickets": calc["Paid Tickets"],
+        "Calculated Tickets Sold": calc["Tickets Sold"],
         "Calculated Comps":        calc["Comps"],
         "Calculated Gross":        f"€{calc['Gross']:,.2f}",
     }
@@ -194,18 +191,18 @@ def _validate(extracted: list[dict], totals_row: tuple | None, cols: dict, logge
         return ValidationResult(status="UNVALIDATED", message=message, metrics=metrics)
 
     reported = {
-        "Paid Tickets":     _to_int(totals_row[cols["paid"]]),
+        "Tickets Sold":     _to_int(totals_row[cols["paid"]]),
         "Comps":            _to_int(totals_row[cols["comps"]]),
         "Reserved Tickets": _optional_int(totals_row, cols, "reserved"),
         "Gross":            round(_to_float(totals_row[cols["gross"]]), 2),
     }
 
-    metrics["Reported Paid Tickets"] = reported["Paid Tickets"]
+    metrics["Reported Tickets Sold"] = reported["Tickets Sold"]
     metrics["Reported Comps"]        = reported["Comps"]
     metrics["Reported Gross"]        = f"€{reported['Gross']:,.2f}"
 
     failures = []
-    for key in ("Paid Tickets", "Comps", "Reserved Tickets"):
+    for key in ("Tickets Sold", "Comps", "Reserved Tickets"):
         if calc[key] != reported[key]:
             failures.append(f"{key} mismatch — extracted {calc[key]:,}, report states {reported[key]:,}")
     if abs(calc["Gross"] - reported["Gross"]) >= 0.01:
